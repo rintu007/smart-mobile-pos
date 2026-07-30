@@ -1,0 +1,12 @@
+{
+  "name": "@smart-pos/contracts",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Generated TypeScript/Dart types from docs/11-api/openapi.yaml — never hand-edited, never committed (see docs/08-folder-structure/shared-contracts.md). This package holds only the generation config; generated output is gitignored.",
+  "scripts": {
+    "generate:ts": "openapi-typescript ../../docs/11-api/openapi.yaml -o ./generated/typescript/index.d.ts"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.5.0"
+  }
+}

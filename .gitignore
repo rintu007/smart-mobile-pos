@@ -1,0 +1,45 @@
+# Secrets — never committed, per docs/12-security/secrets-management.md
+.env
+.env.local
+.env.*.local
+
+# Node / pnpm
+node_modules/
+.pnpm-store/
+dist/
+.next/
+out/
+*.tsbuildinfo
+npm-debug.log*
+pnpm-debug.log*
+
+# Prisma
+apps/web/prisma/dev.db
+apps/web/prisma/dev.db-journal
+
+# Generated API contracts — always regenerated from docs/11-api/openapi.yaml, never committed
+# (docs/08-folder-structure/shared-contracts.md)
+packages/contracts/generated/
+
+# Flutter / Dart (apps/mobile) — per docs/08-folder-structure/monorepo-layout.md
+apps/mobile/.dart_tool/
+apps/mobile/.flutter-plugins
+apps/mobile/.flutter-plugins-dependencies
+apps/mobile/.packages
+apps/mobile/build/
+apps/mobile/.pub-cache/
+apps/mobile/**/*.g.dart
+apps/mobile/**/*.freezed.dart
+
+# Local databases (device-side Drift/SQLite, dev artifacts only)
+*.sqlite
+*.sqlite-journal
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Claude Code local tooling state — not project source
+.claude/

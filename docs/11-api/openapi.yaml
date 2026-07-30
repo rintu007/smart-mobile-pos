@@ -1,0 +1,590 @@
+# SmartPOS X — OpenAPI specification (Phase 11 — API Design)
+#
+# Status: Draft. Source of truth for generated clients, per shared-contracts.md
+# (docs/08-folder-structure/shared-contracts.md) — NOT committed as generated code; Dart/TypeScript
+# clients are generated FROM this file at build time, per that document's decision.
+#
+# Scope note: this file specifies every V1 endpoint's shape in full for the core transactional
+# path (auth/device registration, products, stock movements, sales, returns, settings, sync).
+# List/CRUD endpoints that repeat an already-fully-specified pattern (categories, units, customers —
+# see docs/11-api/endpoints/*.md for their prose specification) are represented here by one fully
+# worked example (products) rather than mechanically duplicated per resource; the remaining
+# resources are added to this file module-by-module during Phase 18, in the same order modules are
+# implemented, per this project's "one module at a time" rule — this file is not left to silently
+# imply endpoints exist that endpoints/*.md does not also describe in prose.
+
+openapi: 3.0.3
+info:
+  title: SmartPOS X API
+  version: "1.0.0"
+  description: >
+    The mobile-client and web-application API contract. See docs/11-api/api-principles.md for the
+    conventions (versioning, idempotency, pagination, error envelope) this specification follows.
+servers:
+  - url: https://api.smartposx.example/api/v1
+    description: Production (placeholder host — actual domain set at Phase 18/OD-02 hosting decision)
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: auth
+  - name: catalogue
+  - name: inventory
+  - name: sales
+  - name: returns
+  - name: settings
+  - name: sync
+
+paths:
+  /auth/register-device:
+    post:
+      tags: [auth]
+      summary: Register or refresh this installation's device record
+      operationId: registerDevice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_device_id]
+              properties:
+                client_device_id:
+                  type: string
+                  description: Generated fresh per install, never from a stable hardware identifier.
+      responses:
+        "200":
+          description: Device registered or refreshed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Device"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+
+  /products:
+    get:
+      tags: [catalogue]
+      summary: List products
+      operationId: listProducts
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: category_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: barcode
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Paginated product list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Product" }
+                  next_cursor:
+                    type: string
+                    nullable: true
+    post:
+      tags: [catalogue]
+      summary: Create a product (idempotent via client-generated id)
+      operationId: createProduct
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductCreateRequest" }
+      responses:
+        "201":
+          description: Product created (or already existed for this id — idempotent replay)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /products/{id}:
+    get:
+      tags: [catalogue]
+      summary: Get a product by id
+      operationId: getProduct
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+      responses:
+        "200":
+          description: Product
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /products/{id}/stock-balance:
+    get:
+      tags: [inventory]
+      summary: Server-computed current stock balance (SUM of stock_movements.quantity_delta)
+      operationId: getProductStockBalance
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+      responses:
+        "200":
+          description: Derived balance
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  product_id: { type: string, format: uuid }
+                  balance: { type: string, description: "NUMERIC(14,3), signed decimal string" }
+
+  /stock-movements:
+    post:
+      tags: [inventory]
+      summary: Record an opening or adjustment stock movement (never sale/return — those are server-generated)
+      operationId: createStockMovement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StockMovementCreateRequest" }
+      responses:
+        "201":
+          description: Movement recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StockMovement" }
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /sales:
+    post:
+      tags: [sales]
+      summary: Complete a sale (idempotent via client-generated id)
+      operationId: createSale
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SaleCreateRequest" }
+      responses:
+        "201":
+          description: Sale completed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sale" }
+        "409":
+          description: TRADING_DAY_NOT_OPEN or PRICE_MISMATCH — see docs/11-api/error-catalogue.md
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /sales/{id}:
+    get:
+      tags: [sales]
+      summary: Get a sale, with line_items and payments embedded
+      operationId: getSale
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+      responses:
+        "200":
+          description: Sale
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sale" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /returns:
+    post:
+      tags: [returns]
+      summary: Create a return (auto-approved below threshold, pending_approval above it)
+      operationId: createReturn
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReturnCreateRequest" }
+      responses:
+        "201":
+          description: Return created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Return" }
+
+  /returns/{id}/approve:
+    post:
+      tags: [returns]
+      summary: Approve a pending return (state transition, idempotent via client_operation_id)
+      operationId: approveReturn
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_operation_id]
+              properties:
+                client_operation_id: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Return approved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Return" }
+        "409":
+          description: RETURN_ALREADY_DECIDED
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /settings:
+    get:
+      tags: [settings]
+      summary: Get shop settings (role-shaped response — see docs/11-api/endpoints/settings.md)
+      operationId: getSettings
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShopSettings" }
+    patch:
+      tags: [settings]
+      summary: Update shop settings — Owner only, NOT offline-queueable
+      operationId: updateSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - type: object
+                  required: [client_operation_id]
+                  properties:
+                    client_operation_id: { type: string, format: uuid }
+                - $ref: "#/components/schemas/ShopSettingsPartial"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ShopSettings" }
+
+  /sync/push:
+    post:
+      tags: [sync]
+      summary: Push a batch of queued offline operations
+      operationId: syncPush
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                operations:
+                  type: array
+                  items: { $ref: "#/components/schemas/SyncOperation" }
+      responses:
+        "200":
+          description: Per-operation results, one per submitted operation, same order
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items: { $ref: "#/components/schemas/SyncOperationResult" }
+
+  /sync/pull:
+    get:
+      tags: [sync]
+      summary: Pull changes for one entity type since a cursor
+      operationId: syncPull
+      parameters:
+        - name: entity_type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [products, categories, units, customers, user_store_roles, shop_settings, sync_rejections, stock_movements, sales]
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated change feed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: {}
+                  next_cursor:
+                    type: string
+                    nullable: true
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Supabase Auth-issued JWT with a tenant_id custom claim injected via the Custom Access Token
+        Hook — see docs/11-api/authentication.md.
+
+  parameters:
+    EntityId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string, nullable: true }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, default: 50, maximum: 200 }
+
+  responses:
+    Unauthenticated:
+      description: UNAUTHENTICATED, TOKEN_EXPIRED, or DEVICE_REVOKED
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    NotFound:
+      description: NOT_FOUND
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    ValidationFailed:
+      description: VALIDATION_FAILED
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    Conflict:
+      description: A 409-class error — see docs/11-api/error-catalogue.md for the specific code
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  schemas:
+    ErrorEnvelope:
+      type: object
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, description: "Stable code — see docs/11-api/error-catalogue.md. Clients never parse message." }
+            message: { type: string }
+            details: { type: object, nullable: true }
+
+    Device:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        client_device_id: { type: string }
+        last_seen_at: { type: string, format: date-time, nullable: true }
+        revoked_at: { type: string, format: date-time, nullable: true }
+
+    Product:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        category_id: { type: string, format: uuid }
+        unit_id: { type: string, format: uuid }
+        name: { type: string }
+        sku: { type: string, nullable: true }
+        barcode: { type: string, nullable: true }
+        hsn_sac_code: { type: string, nullable: true }
+        price_minor_units: { type: integer, description: "Integer minor units — never a decimal. ADR-0006." }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    ProductCreateRequest:
+      type: object
+      required: [id, category_id, unit_id, name, price_minor_units]
+      properties:
+        id: { type: string, format: uuid, description: "Client-generated; doubles as the idempotency key." }
+        category_id: { type: string, format: uuid }
+        unit_id: { type: string, format: uuid }
+        name: { type: string }
+        sku: { type: string, nullable: true }
+        barcode: { type: string, nullable: true }
+        hsn_sac_code: { type: string, nullable: true }
+        price_minor_units: { type: integer }
+
+    StockMovement:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        product_id: { type: string, format: uuid }
+        store_id: { type: string, format: uuid }
+        quantity_delta: { type: string, description: "NUMERIC(14,3) signed decimal string" }
+        movement_type: { type: string, enum: [opening, sale, return, adjustment] }
+        reason_code: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        created_by: { type: string, format: uuid }
+        device_id: { type: string, format: uuid }
+
+    StockMovementCreateRequest:
+      type: object
+      required: [id, product_id, quantity_delta, movement_type]
+      properties:
+        id: { type: string, format: uuid }
+        product_id: { type: string, format: uuid }
+        quantity_delta: { type: string }
+        movement_type: { type: string, enum: [opening, adjustment], description: "sale/return are server-generated only" }
+        reason_code: { type: string, nullable: true, description: "Required when movement_type = adjustment" }
+
+    SaleLineItem:
+      type: object
+      properties:
+        product_id: { type: string, format: uuid }
+        quantity: { type: string }
+        unit_price_minor_units: { type: integer }
+        line_tax_minor_units: { type: integer }
+        line_total_minor_units: { type: integer }
+
+    SalePayment:
+      type: object
+      properties:
+        method: { type: string, enum: [cash, card, other] }
+        amount_minor_units: { type: integer }
+
+    Sale:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [draft, held, completed, cancelled] }
+        provisional_invoice_number: { type: string }
+        canonical_invoice_number: { type: integer, nullable: true }
+        subtotal_minor_units: { type: integer }
+        tax_total_minor_units: { type: integer }
+        discount_total_minor_units: { type: integer }
+        grand_total_minor_units: { type: integer }
+        line_items:
+          type: array
+          items: { $ref: "#/components/schemas/SaleLineItem" }
+        payments:
+          type: array
+          items: { $ref: "#/components/schemas/SalePayment" }
+        completed_at: { type: string, format: date-time, nullable: true }
+
+    SaleCreateRequest:
+      type: object
+      required: [id, store_id, trading_day_id, provisional_invoice_number, line_items, payments]
+      properties:
+        id: { type: string, format: uuid }
+        store_id: { type: string, format: uuid }
+        trading_day_id: { type: string, format: uuid }
+        customer_id: { type: string, format: uuid, nullable: true }
+        provisional_invoice_number: { type: string }
+        line_items:
+          type: array
+          items:
+            type: object
+            required: [product_id, quantity, client_unit_price_minor_units]
+            properties:
+              product_id: { type: string, format: uuid }
+              quantity: { type: string }
+              client_unit_price_minor_units:
+                type: integer
+                description: "Used only to detect client/server disagreement — never persisted as-is. See api-principles.md §7."
+        payments:
+          type: array
+          items: { $ref: "#/components/schemas/SalePayment" }
+        client_computed_grand_total_minor_units:
+          type: integer
+          description: "Verification-only, per api-principles.md §7 — never trusted as the stored total."
+
+    Return:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        original_sale_id: { type: string, format: uuid }
+        status: { type: string, enum: [initiated, pending_approval, approved, completed, rejected] }
+        refund_total_minor_units: { type: integer }
+        completed_at: { type: string, format: date-time, nullable: true }
+
+    ReturnCreateRequest:
+      type: object
+      required: [id, original_sale_id, line_items]
+      properties:
+        id: { type: string, format: uuid }
+        original_sale_id: { type: string, format: uuid }
+        line_items:
+          type: array
+          items:
+            type: object
+            required: [original_sale_line_item_id, quantity]
+            properties:
+              original_sale_line_item_id: { type: string, format: uuid }
+              quantity: { type: string }
+
+    ShopSettings:
+      type: object
+      properties:
+        tax_mode: { type: string, enum: [standard, composition, unregistered] }
+        pricing_mode: { type: string, enum: [inclusive, exclusive] }
+        rounding_rule: { type: string }
+        currency_code: { type: string }
+        discount_auto_approval_threshold_minor_units: { type: integer, description: "Manager/Owner only field — omitted for Cashier callers" }
+        return_auto_approval_threshold_minor_units: { type: integer, description: "Manager/Owner only field — omitted for Cashier callers" }
+        printer_config: { type: object, nullable: true }
+        receipt_template_config: { type: object, nullable: true }
+
+    ShopSettingsPartial:
+      type: object
+      description: "Any subset of ShopSettings' writable fields; only changed fields need be included."
+      properties:
+        tax_mode: { type: string, enum: [standard, composition, unregistered] }
+        pricing_mode: { type: string, enum: [inclusive, exclusive] }
+        rounding_rule: { type: string }
+        currency_code: { type: string }
+        discount_auto_approval_threshold_minor_units: { type: integer }
+        return_auto_approval_threshold_minor_units: { type: integer }
+        printer_config: { type: object, nullable: true }
+        receipt_template_config: { type: object, nullable: true }
+
+    SyncOperation:
+      type: object
+      required: [type, client_operation_id, payload]
+      properties:
+        type:
+          type: string
+          enum: [product.create, category.create, unit.create, customer.create, stock_movement.create, trading_day.open, trading_day.close, sale.create, return.create, return.approve, return.reject]
+        client_operation_id: { type: string, format: uuid }
+        payload: { type: object, description: "Same request body shape as the equivalent direct endpoint — see sync-api.md §1." }
+
+    SyncOperationResult:
+      type: object
+      properties:
+        client_operation_id: { type: string, format: uuid }
+        status: { type: string, enum: [accepted, rejected] }
+        entity_id: { type: string, format: uuid, nullable: true }
+        error:
+          type: object
+          nullable: true
+          properties:
+            code: { type: string }
+            message: { type: string }

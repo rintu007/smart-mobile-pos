@@ -1,0 +1,74 @@
+// Sprint 01 scope only: `tenants` and `users`, the two tables the Custom Access Token Hook
+// (docs/11-api/authentication.md §1) needs to resolve `tenant_id` at token-mint time.
+// The remaining 20 tables in docs/07-database/schema-server.md are added module-by-module in
+// later sprints, per docs/17-sprints/backlog.md — this file is not the full schema yet, by design.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+/// The top-level tenant-isolation boundary. One row per business account.
+/// docs/07-database/schema-server.md — Context 1, `tenants`. Tier 1 (soft delete).
+model Tenant {
+  id            String    @id @db.Uuid
+  name          String
+  deactivatedAt DateTime? @map("deactivated_at") @db.Timestamptz
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  // `createdBy` intentionally has no FK to `users` here in Prisma's declarative schema: a brand
+  // new tenant and its first user are created in the same transaction, before either row exists
+  // for the other to reference (`tenants.created_by` -> `users.id`, `users.tenant_id` ->
+  // `tenants.id`). Postgres resolves this cleanly with `DEFERRABLE INITIALLY DEFERRED` foreign
+  // keys, checked at COMMIT rather than per-statement — Prisma's schema DSL has no keyword for
+  // this, so the constraint itself is added via a hand-edited follow-up migration once a real
+  // database exists (`prisma migrate dev --create-only`, then add the FK with DEFERRABLE by hand).
+  // Found during Sprint 01 implementation, not anticipated in Phase 07 — worth an ADR once the
+  // first real migration lands.
+  createdBy     String    @map("created_by") @db.Uuid
+
+  users  User[]
+  stores Store[]
+
+  @@map("tenants")
+}
+
+/// A physical outlet. V1 creates exactly one per tenant, never shown in the UI.
+/// docs/07-database/schema-server.md — Context 1, `stores`. Tier 1.
+model Store {
+  id            String    @id @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  name          String
+  address       String?
+  deactivatedAt DateTime? @map("deactivated_at") @db.Timestamptz
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  createdBy     String    @map("created_by") @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user   User   @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@map("stores")
+}
+
+/// An application user, linked to a Supabase Auth identity via `authUserId`.
+/// docs/07-database/schema-server.md — Context 1, `users`. Tier 1.
+model User {
+  id            String    @id @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  authUserId    String    @unique @map("auth_user_id") @db.Uuid
+  displayName   String    @map("display_name")
+  deactivatedAt DateTime? @map("deactivated_at") @db.Timestamptz
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  createdBy     String    @map("created_by") @db.Uuid
+
+  tenant       Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  storesOwned  Store[]
+
+  @@index([tenantId])
+  @@map("users")
+}
