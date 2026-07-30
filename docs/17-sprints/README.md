@@ -1,6 +1,6 @@
 # Phase 17 — Sprint Planning
 
-> **Status:** 🔵 In review — all 5 deliverables drafted; Sprint 01 planned and ready for Phase 18 kickoff
+> **Status:** 🔵 In review — all 5 deliverables drafted; Sprint 01 underway (repository scaffold complete, live Supabase provisioning pending)
 > **Version:** 0.1.0
 > **Last updated:** 2026-07-31
 > **Owner:** Product Manager / CTO
@@ -19,7 +19,7 @@
 | [`sprint-cadence.md`](sprint-cadence.md) | 2-week sprints; every ceremony kept or dropped with its reason tied to the resolved solo/10–20hrs reality | 🔵 In review |
 | [`sprint-template.md`](sprint-template.md) | Explicit capacity-check section; checkbox-based (not %-based) defect/doc reservation | 🔵 In review |
 | [`backlog.md`](backlog.md) | M0 fully decomposed into 11 estimated, dependency-ordered items (18.5 person-days, confirming Phase 16's estimate) | 🔵 In review |
-| [`sprint-01.md`](sprint-01.md) | The one sprint authored in full, ready for Phase 18 kickoff — later sprints authored just-in-time | 🔵 In review |
+| [`sprint-01.md`](sprint-01.md) | Repository scaffold + Auth wiring — in progress, code complete and verified locally | 🟡 In progress |
 | [`retrospective-log.md`](retrospective-log.md) | Format fixed; deliberately empty pending Sprint 01's actual close | 🔵 In review |
 
 ## Exit criteria

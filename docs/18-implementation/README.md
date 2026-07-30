@@ -1,8 +1,8 @@
 # Phase 18 — Implementation
 
-> **Status:** ⚪ Not started
-> **Version:** 0.0.0
-> **Last updated:** 2026-07-28
+> **Status:** 🟡 In progress — Sprint 01 underway (repository scaffold)
+> **Version:** 0.1.0
+> **Last updated:** 2026-07-31
 > **Owner:** CTO / All engineering roles
 
 ## Charter
@@ -69,3 +69,16 @@ The [Definition of Done](../00-governance/definition-of-done.md), in full. There
   the reasoning. The documentation is the source of truth; silent divergence ends that.
 - **Every implementation-time decision of consequence becomes an ADR.** If you had to think about
   it for more than ten minutes, someone will have to think about it again later.
+
+## Where things stand
+
+Sprint 01 ([docs/17-sprints/sprint-01.md](../17-sprints/sprint-01.md)) is the repository/tooling
+scaffold that precedes the first module in the loop above — not a module itself, so it is not held
+to the 13-step loop or the full Definition of Done. See
+[implementation-log.md](implementation-log.md) for what has actually landed.
+
+## Change Log
+
+| Version | Date | Change |
+| --- | --- | --- |
+| 0.1.0 | 2026-07-31 | Status moved to in-progress: Sprint 01 (repository scaffold, Supabase Auth wiring) underway. |

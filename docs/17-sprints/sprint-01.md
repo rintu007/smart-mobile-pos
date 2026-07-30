@@ -1,8 +1,8 @@
 # Sprint 01
 
-> **Dates:** To be set at Phase 18 kickoff (2 weeks, per [sprint-cadence.md](sprint-cadence.md))
+> **Dates:** Started 2026-07-31
 > **Milestone:** M0 — Walking Skeleton
-> **Status:** Planned
+> **Status:** In Progress — repository scaffold and Auth-wiring code complete and verified locally; live Supabase provisioning still pending (founder action, see [implementation-log.md](../18-implementation/implementation-log.md))
 
 The one sprint this phase authors in full, per this document set's own "authored at planning, not
 batch-authored ahead of time" convention — Sprint 02 is written once Sprint 01 actually closes.
@@ -55,10 +55,14 @@ allocated below rather than left as unaccounted slack.
 Only the boxes this sprint's narrow scope can actually satisfy, per
 [definition-of-done.md](../00-governance/definition-of-done.md) — explicitly **not** claiming the
 full module checklist for a two-item slice:
-- [ ] Schema documented / migration applied (the minimal `users`/`tenants`/`stores` tables)
-- [ ] Authentication enforced server-side (there is no client-side-only auth path to accidentally rely on)
-- [ ] Tests pass in CI on a clean checkout
-- [ ] No secret, token, or key written to logs
+- [x] Schema documented (`prisma/schema.prisma`, `tenants`/`users`) — [ ] migration **applied**
+      still pending a real database (no Supabase project exists yet)
+- [x] Authentication enforced server-side — `src/core/auth/session.ts` is the only path that
+      resolves a session; no client-side-only auth exists to accidentally rely on
+- [x] Tests pass **locally** on a clean `pnpm install` (lint, typecheck, 2 unit tests, build all
+      verified) — [ ] **in CI** still pending a GitHub remote to actually run `pr.yml` against
+- [x] No secret, token, or key written to logs — none exist yet to leak; the build uses only
+      placeholder env values, per `.github/workflows/pr.yml`'s own comment
 
 ## Demo script
 
