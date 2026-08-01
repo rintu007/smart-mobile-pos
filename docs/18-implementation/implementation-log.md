@@ -2,7 +2,7 @@
 
 > **Status:** 🟡 In progress
 > **Phase:** 18 — Implementation
-> **Version:** 0.4.0
+> **Version:** 0.5.0
 > **Last updated:** 2026-08-01
 > **Owner:** CTO / All engineering roles
 
@@ -205,6 +205,35 @@ per [backlog.md](../17-sprints/backlog.md) item 3 — the `tenants`/`stores` sig
 planned next, following this same phase's standing rule against batch-authoring future sprints ahead
 of time.
 
+## 2026-08-01 — Sprint 02 planning: closing a real specification gap before writing code
+
+Before starting Sprint 02's actual implementation, planning surfaced that
+[docs/README.md](../README.md)'s non-negotiable rule #1 ("no implementation begins before its
+module specification is approved") had already been violated by Sprint 01 — real Authentication-
+module code (hook, `users` schema, RLS) was live against a real database with no
+`modules/authentication/specification.md` ever having existed. Rather than let Sprint 02 repeat
+that gap for Company & Store Setup, both specifications were authored now:
+[authentication/specification.md](../modules/authentication/specification.md) (retroactive — catches
+the document up to what Sprint 01 actually built, honestly marking device
+registration/revocation as specified but not implemented) and
+[company-store-setup/specification.md](../modules/company-store-setup/specification.md)
+(prospective — drives Sprint 02 itself). Also found and fixed: Phase 11 never specified how the
+very first `tenants`/`stores`/`users` rows get created — `authentication.md`'s issuance flow starts
+from "already signed in," and the only existing endpoint (`POST /users/invite`) is for inviting
+*additional* users to an *existing* tenant. Added a full `POST /api/v1/onboarding` contract to
+[identity.md](../11-api/endpoints/identity.md), including the non-obvious behaviour that the access
+token from the initial Supabase `signUp` call does **not** carry `tenant_id` until the client
+explicitly refreshes its session after onboarding completes (the hook only runs at mint/refresh,
+and minting happened before these rows existed).
+
+Also found and fixed a real ambiguity in [modules/README.md](../modules/README.md)'s own Rule 2
+("only one module 🔨 at a time"): Phase 18's README already calls the entire M0 walking skeleton
+"the first module... it touches every architectural layer," which by design spans multiple Registry
+rows (Authentication, Company & Store Setup, Products, POS, Sync) simultaneously — a real
+inconsistency between two already-approved documents, not a new decision. Resolved by amending
+Rule 2 with a named, dated exception: during M0, "one module" means M0 itself; the exception ends
+once M0 closes.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -214,3 +243,4 @@ of time.
 | 0.2.0 | 2026-08-01 | Live Supabase project connected; direct-connection IPv6 issue diagnosed and worked around via pooler; the transaction-mode-pooler `db execute` hang traced to a CLI-specific incompatibility, not a real connectivity problem (confirmed via actual `PrismaClient`); schema migration applied with the hand-edited deferrable circular-FK fix; Custom Access Token Hook function applied — both verified live. Dashboard hook wiring is the only thing left blocking the demo script. |
 | 0.3.0 | 2026-08-01 | Founder wired the Dashboard hook; demo script run end-to-end and passed (JWT `tenant_id` claim correct, cross-tenant read denied). Two real findings surfaced and fixed: the hook function needed `security definer` (500 on sign-in otherwise), and `ON DELETE RESTRICT` silently cannot be deferred in Postgres even when marked `DEFERRABLE INITIALLY DEFERRED` (fixed via a follow-up migration, changed to `NO ACTION`). RLS enabled on `tenants`/`users`. Branch protection and Vercel connection are the only two remaining founder actions. |
 | 0.4.0 | 2026-08-01 | `gh` CLI installed and authenticated; repo visibility resolved (public, since GitHub free tier blocks branch protection on private repos); branch protection applied to `main`; PR #1 opened, found and fixed two real CI-only gaps (missing `packageManager` pin, `next-env.d.ts` eslint false-positive), passed all checks, merged. Sprint 01 fully closed. |
+| 0.5.0 | 2026-08-01 | Sprint 02 planning found and closed a real specification gap predating it: no approved module specification existed for Authentication (despite live Sprint 01 code) or Company & Store Setup, and Phase 11 never specified the signup/onboarding endpoint. All three written/added; `modules/README.md`'s Rule 2 amended with a named M0 exception after finding it contradicted Phase 18's own "M0 is the first module" framing. |

@@ -1,8 +1,8 @@
 # Module Registry
 
 > **Status:** 🔵 In review
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-28
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-01
 > **Owner:** CTO
 
 The operational tracker for every business module. The strategic rationale for the ordering lives
@@ -20,8 +20,8 @@ sections defined in [Documentation Standards](../00-governance/documentation-sta
 
 | Module | Slice | Spec | Build | Depends on |
 | --- | --- | --- | --- | --- |
-| Authentication | V1 | ⚪ | ⚪ | — |
-| Company & Store Setup | V1 | ⚪ | ⚪ | Authentication |
+| Authentication | V1 | 🟢 [spec](authentication/specification.md) | 🔨 (sign-in, hook, `users` RLS, partial session resolution live; device registration/revocation not yet built) | — |
+| Company & Store Setup | V1 | 🟢 [spec](company-store-setup/specification.md) | ⚪ (Sprint 02, not yet started) | Authentication |
 | Roles & Permissions | V1 | ⚪ | ⚪ | Authentication |
 | Audit Log | V1 | ⚪ | ⚪ | Authentication |
 | Categories | V1 | ⚪ | ⚪ | Store Setup |
@@ -60,6 +60,26 @@ Restaurant module · Salon module · Analytics · Accountant role & accounting e
 ## Rules
 
 1. A module enters 🔨 only when its specification is 🟢.
-2. Only **one** module is 🔨 at any time.
+2. Only **one** module is 🔨 at any time — **with one named exception**, added 2026-08-01 after
+   Sprint 01/02 actually reached this point: [Phase 18's README](../18-implementation/README.md)
+   itself calls the whole M0 walking skeleton "the first module... it touches every architectural
+   layer" — a cross-cutting slice through Authentication, Company & Store Setup, Products, Stock
+   Ledger, POS, and Sync **by design**, per [milestones.md — M0](../16-milestones/milestones.md#m0--walking-skeleton).
+   That was true from Phase 16 onward but never reconciled against this rule's original wording
+   until it actually mattered. Resolution, not a workaround: for the duration of M0, this rule's
+   "one module" means *M0 itself*, not each individual row below — rows touched by M0's backlog
+   ([17-sprints/backlog.md](../17-sprints/backlog.md)) progress to 🔨 together, each only as far as
+   M0's own scope needs (Sprint 01 explicitly built only two of Authentication's evaluation-order
+   steps, for example — see [its specification](authentication/specification.md)), and each is
+   honestly *not* ✅ until its **full** Definition of Done is met, which for most rows below happens
+   well after M0 closes. Once M0 is done, this exception ends and Rule 2 governs literally again —
+   M1 onward builds one row at a time, no exception needed.
 3. A module reaches ✅ only when every Definition of Done box is ticked.
 4. This table is updated in the same pull request as the work it describes.
+
+## Change Log
+
+| Version | Date | Change |
+| --- | --- | --- |
+| 0.1.0 | 2026-07-28 | Initial registry: V1–V4 module lists, all rows ⚪, four operating rules fixed. |
+| 0.2.0 | 2026-08-01 | Authentication and Company & Store Setup specifications authored and approved (the former retroactively, catching up to Sprint 01's already-live code). Rule 2 amended with the M0 walking-skeleton exception — a real ambiguity between this rule and Phase 18's own "M0 is the first module" framing, found and fixed rather than silently worked around. |
