@@ -35,6 +35,20 @@ building ahead of need.
 | `PATCH /products/{id}` | Manager, Owner | Yes — queued | State-transition | Changing `price_minor_units` does **not** retroactively touch any `sale_line_items.unit_price_minor_units` — those are immutable snapshots, per [schema-server.md](../../07-database/schema-server.md). |
 | `DELETE /products/{id}` | Manager, Owner | Yes — queued | State-transition | Soft delete; a product with `stock_movements` history is never hard-deletable, matching the `ON DELETE RESTRICT` at the schema layer. |
 
+### M0's actual first implementation is smaller than this section's full shape
+
+**Correction, found while planning Sprint 04 (2026-08-01):** [backlog.md item 5](../../17-sprints/backlog.md#1-m0--walking-skeleton-fully-decomposed)
+scopes M0's `POST /products` to "name, price only — no barcode/category yet," and
+[backlog.md's M1 row](../../17-sprints/backlog.md#2-m1m4--module-grain-only-decomposed-when-reached)
+lists Categories and Units as M1 scope, not M0 — meaning `category_id`/`unit_id` can't be required
+inputs yet either, since neither table exists until M1 builds them. This section below describes the
+full V1 endpoint shape (still the correct target, and still what `PATCH`/later milestones grow into),
+not what Sprint 04 actually builds. M0's real request/response is documented in
+[products/specification.md](../../modules/products/specification.md) instead — only
+`name`/`price_minor_units`, no `category_id`/`unit_id`/`sku`/`barcode`/`hsn_sac_code`. Those fields
+become required/accepted once M1 lands; this endpoint's shape grows in place then, the same pattern
+already used for `stores`' `PATCH` deferral in Sprint 02.
+
 ### Request/response shape — `POST /products` (representative; others follow the same field set)
 
 **Request**
@@ -86,3 +100,4 @@ every subsequent endpoint document, only its one deviation (if any) is called ou
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial catalogue endpoint set: categories, units, products. product_variants deliberately has no endpoint yet. |
+| 0.1.1 | 2026-08-01 | Correction found planning Sprint 04: this document's `POST /products` shape is the full V1 contract, but backlog.md scopes M0 to name/price only and defers Categories/Units to M1 — noted inline rather than narrowing this section, since it's still the correct eventual shape. |

@@ -1,7 +1,7 @@
 # Module Registry
 
 > **Status:** 🔵 In review
-> **Version:** 0.3.0
+> **Version:** 0.4.0
 > **Last updated:** 2026-08-01
 > **Owner:** CTO
 
@@ -26,7 +26,7 @@ sections defined in [Documentation Standards](../00-governance/documentation-sta
 | Audit Log | V1 | ⚪ | ⚪ | Authentication |
 | Categories | V1 | ⚪ | ⚪ | Store Setup |
 | Units | V1 | ⚪ | ⚪ | Store Setup |
-| Products | V1 | ⚪ | ⚪ | Categories, Units |
+| Products | V1 | 🟢 [spec](products/specification.md) | 🔨 (`POST /api/v1/products` live, name/price only; `GET`/`PATCH`/`DELETE`, category/unit, and the mobile write path all deferred) | Categories, Units *(named exception — see spec §1: M0's minimal slice doesn't wait on either, per the M0 exception below)* |
 | Inventory — Stock Ledger | V1 | ⚪ | ⚪ | Products |
 | Customers (basic) | V1 | ⚪ | ⚪ | Store Setup |
 | POS | V1 | ⚪ | ⚪ | Products, Stock Ledger, Customers |
@@ -84,3 +84,4 @@ Restaurant module · Salon module · Analytics · Accountant role & accounting e
 | 0.1.0 | 2026-07-28 | Initial registry: V1–V4 module lists, all rows ⚪, four operating rules fixed. |
 | 0.2.0 | 2026-08-01 | Authentication and Company & Store Setup specifications authored and approved (the former retroactively, catching up to Sprint 01's already-live code). Rule 2 amended with the M0 walking-skeleton exception — a real ambiguity between this rule and Phase 18's own "M0 is the first module" framing, found and fixed rather than silently worked around. |
 | 0.3.0 | 2026-08-01 | Company & Store Setup moved to 🔨: `POST /api/v1/onboarding` implemented and demoed against real infrastructure (Sprint 02). |
+| 0.4.0 | 2026-08-01 | Products specification authored and approved; moved to 🔨: `POST /api/v1/products` implemented and demoed live (Sprint 04). Specification explicitly names the gap against its listed "Categories, Units" dependency and against FR-032/FR-035 — M0's minimal slice is name/price only, not the full V1 shape. |
