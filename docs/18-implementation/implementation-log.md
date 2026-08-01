@@ -2,7 +2,7 @@
 
 > **Status:** 🟡 In progress
 > **Phase:** 18 — Implementation
-> **Version:** 0.5.0
+> **Version:** 0.6.0
 > **Last updated:** 2026-08-01
 > **Owner:** CTO / All engineering roles
 
@@ -234,6 +234,43 @@ inconsistency between two already-approved documents, not a new decision. Resolv
 Rule 2 with a named, dated exception: during M0, "one module" means M0 itself; the exception ends
 once M0 closes.
 
+## 2026-08-01 — Sprint 02: `POST /api/v1/onboarding` built and demoed live
+
+**What landed:** `src/modules/identity/{schema,repository,service}.ts` and
+`app/api/v1/onboarding/route.ts`, per [company-store-setup/specification.md](../modules/company-store-setup/specification.md) —
+the layering `Route Handler → service → repository → Prisma` per
+[backend-structure.md §2](../08-folder-structure/backend-structure.md#2-the-layering-rule-concretely).
+RLS enabled on `stores` (`supabase/sql/003_rls_stores.sql`), applied live. A new
+`requireAuthenticatedUser` in `src/core/auth/session.ts` — deliberately does not require a
+`tenant_id` claim, since onboarding's entire purpose is to be callable by an identity that doesn't
+have one yet; `requireSession` (which does require it) would incorrectly reject exactly the
+callers this endpoint needs to serve. 6 unit tests for the service layer (`vi.mock`-ed repository),
+covering the create path, same-IDs idempotent retry, rejected second attempt, and the concurrent
+double-submission race (`P2002` on `auth_user_id` translated to `ALREADY_ONBOARDED`).
+
+**A real bug, found only by running against the live database, not by inspection:** the repository
+originally inserted `tenant`, `store`, `user` in that order — correct for the tenant↔user
+*deferred* circular pair, but `stores.created_by → users.id` is an ordinary, non-deferred foreign
+key. Inserting `store` before `user` existed failed immediately with `stores_created_by_fkey`,
+twice (once in the actual repository code, once again in the demo script's own separate fixture for
+a second tenant, which had the identical bug independently). Fixed by reordering to
+tenant → user → store — the general lesson, now worth carrying forward: **only the specific pair a
+deferred constraint was written for is actually deferred; every other FK into the same set of
+tables still enforces normal insert-order requirements**, and that has to be reasoned about
+per-constraint, not assumed to follow from "this table participates in a deferred relationship
+somewhere."
+
+**Demo script run 2026-08-01, all 6 steps passed** against the real database and a real Supabase
+Auth identity: onboarding creates exactly one tenant/store/user; the post-onboarding session
+refresh carries the correct `tenant_id` claim; a same-IDs replay is a true no-op; a second distinct
+attempt from the same identity is rejected with `ALREADY_ONBOARDED`; a cross-tenant `stores` read
+is denied by the new RLS policy. Verified via a direct call into the same transaction the Route
+Handler uses (the HTTP-layer wrapper itself — Zod parsing, auth, response shaping — is thin and
+already typechecked/linted/build-verified), the same "prove the part that can actually break, not
+the part the type system already guarantees" approach Sprint 01 used.
+
+**What's blocked on the founder, not on more design work:** nothing.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -244,3 +281,4 @@ once M0 closes.
 | 0.3.0 | 2026-08-01 | Founder wired the Dashboard hook; demo script run end-to-end and passed (JWT `tenant_id` claim correct, cross-tenant read denied). Two real findings surfaced and fixed: the hook function needed `security definer` (500 on sign-in otherwise), and `ON DELETE RESTRICT` silently cannot be deferred in Postgres even when marked `DEFERRABLE INITIALLY DEFERRED` (fixed via a follow-up migration, changed to `NO ACTION`). RLS enabled on `tenants`/`users`. Branch protection and Vercel connection are the only two remaining founder actions. |
 | 0.4.0 | 2026-08-01 | `gh` CLI installed and authenticated; repo visibility resolved (public, since GitHub free tier blocks branch protection on private repos); branch protection applied to `main`; PR #1 opened, found and fixed two real CI-only gaps (missing `packageManager` pin, `next-env.d.ts` eslint false-positive), passed all checks, merged. Sprint 01 fully closed. |
 | 0.5.0 | 2026-08-01 | Sprint 02 planning found and closed a real specification gap predating it: no approved module specification existed for Authentication (despite live Sprint 01 code) or Company & Store Setup, and Phase 11 never specified the signup/onboarding endpoint. All three written/added; `modules/README.md`'s Rule 2 amended with a named M0 exception after finding it contradicted Phase 18's own "M0 is the first module" framing. |
+| 0.6.0 | 2026-08-01 | Sprint 02 implemented and demoed live: `POST /api/v1/onboarding`, RLS on `stores`, 6 unit tests, all 6 demo steps passed against the real database. Found and fixed a real row-ordering bug (`stores_created_by_fkey` is an ordinary FK, not part of the deferred pair) on first contact with live data. |

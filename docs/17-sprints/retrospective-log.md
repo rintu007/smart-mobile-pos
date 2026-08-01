@@ -38,6 +38,28 @@ sprint from Sprint 02 onward opens at least one real PR before claiming that box
 **Did the last change help?** N/A — this is the first retrospective; nothing to check yet. Sprint
 02's retrospective is where this gets checked against reality.
 
+---
+
+### Sprint 02 retrospective — 2026-08-01
+
+**What surprised us:** the change from Sprint 01's retrospective *did* help — Sprint 02 opened a
+real PR and ran CI before claiming that box, no repeat of "verified locally" masquerading as
+"CI-ready." But a new, different surprise showed up on first contact with live data: a mental model
+that "the tenant↔user circular FK pair is handled by `DEFERRABLE INITIALLY DEFERRED`" quietly
+generalized, while writing the onboarding transaction, into "this set of three related tables is
+safe to insert in any order" — which is false. `stores.created_by → users.id` is an ordinary,
+non-deferred FK; inserting `store` before `user` failed immediately. The deferred fix was correct
+and narrow; the mistake was letting that narrowness blur in memory a few days later while writing
+new code against the same tables.
+
+**What we're changing:** when a migration adds a `DEFERRABLE` constraint, the constraint's own SQL
+comment (already this project's convention) states plainly which *specific* other FKs into the same
+tables are *not* deferred, not just what the deferred pair itself is — so the next piece of code
+touching those tables has the boundary written down next to the thing that could be mistaken for a
+blanket exemption, not just in a changelog entry that's easy to forget having read.
+
+**Did the last change help?** Sprint 03's retrospective is where this one gets checked.
+
 ## Entry format
 
 ```markdown
