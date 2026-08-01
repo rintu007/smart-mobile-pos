@@ -2,7 +2,7 @@
 
 > **Status:** 🟡 In progress
 > **Phase:** 18 — Implementation
-> **Version:** 0.1.0
+> **Version:** 0.1.1
 > **Last updated:** 2026-07-31
 > **Owner:** CTO / All engineering roles
 
@@ -65,14 +65,19 @@ silently absorbed):**
   physical reference device and [OD-06](../01-vision/open-decisions.md)'s capacity answer. Sprint
   01's demo script (sign up a real user, inspect the JWT, attempt a cross-tenant read) cannot be
   run end-to-end until this exists.
-- **No GitHub remote exists yet** — branch protection, required status checks, and the PR-preview
-  deployment described in [repository-setup.md](../15-github-project/repository-setup.md) and
-  [cd-workflows.md](../15-github-project/cd-workflows.md) all require a real GitHub repository to
-  push to, which is a founder action (creating/authorising it), not something performed from
-  within this environment.
+- ~~No GitHub remote exists yet~~ — **resolved 2026-07-31.** Founder created
+  [github.com/rintu007/smart-mobile-pos](https://github.com/rintu007/smart-mobile-pos); both local
+  commits pushed to `main`. **Still outstanding, and still a founder action:** branch protection and
+  required status checks ([repository-setup.md §2](../15-github-project/repository-setup.md#2-branch-protection-on-main))
+  are GitHub repository *settings*, not something pushable via `git` — `gh` CLI is not installed in
+  this environment either, so this is configured once directly in the repository's Settings →
+  Branches page (or by installing and authenticating `gh` first). The PR-preview deployment
+  ([cd-workflows.md](../15-github-project/cd-workflows.md)) similarly needs the repo connected to a
+  Vercel project, not yet done.
 
 ## Change Log
 
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-31 | First entry: Sprint 01 repository scaffold and Auth wiring, verified locally; the circular-FK finding and the packageManager-guess lesson recorded; three founder-blocked items named precisely. |
+| 0.1.1 | 2026-07-31 | GitHub remote blocker resolved — repo created and both commits pushed to `main`; branch protection and Vercel connection remain as the two still-outstanding founder actions. |
