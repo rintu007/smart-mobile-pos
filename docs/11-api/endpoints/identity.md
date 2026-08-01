@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 11 — API Design
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-30
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-01
 > **Owner:** Principal Next.js Engineer
 > **Approved by:** _pending_
 
@@ -12,6 +12,64 @@ Covers `stores`, `users`, `user_store_roles`, `devices`, `audit_log`
 ([error envelope](../error-catalogue.md), [pagination](../api-principles.md#4-pagination--cursor-only),
 [idempotency](../api-principles.md#3-idempotency--two-mechanisms-matched-to-two-kinds-of-mutation))
 apply as stated in [api-principles.md](../api-principles.md); not repeated per row below.
+
+---
+
+## Onboarding
+
+**This section closes a real gap found at Phase 18 implementation time**: [authentication.md](../authentication.md)'s
+issuance flow starts from "App→Auth: Sign in," implicitly assuming a `tenants`/`stores`/`users` row
+already exists — but nothing in Phase 11 originally specified how the *first* tenant, store, and
+user actually get created. [WF-001](../../06-workflows/sales-workflows.md#wf-001--shop-onboarding)
+already covers this at the workflow level ("Create account & verify," step 2) and
+[FR-001](../../03-functional-requirements/functional-requirements.md) fixes its budget and
+connectivity requirement; this is that step's concrete API contract.
+
+| Method & path | Permission | Offline | Idempotent | Notes |
+| --- | --- | --- | --- | --- |
+| `POST /api/v1/onboarding` | Any authenticated Supabase Auth identity with **no existing `public.users` row** | No — [FR-001](../../03-functional-requirements/functional-requirements.md) requires connectivity for this one step | Creation mechanism (client-generated `tenant_id`/`store_id`/`user_id`) | Creates exactly one `tenants` row, one `stores` row, and one `users` row, atomically, per [ADR-0003](../../adr/ADR-0003-multi-outlet-modelled-from-day-one.md)'s "create tenant → create default store → attach user" sequence. |
+
+**Sequence:**
+1. The client has already completed a normal Supabase Auth `signUp` (email/password or OTP,
+   [authentication.md §1](../authentication.md#1-why-supabase-auth-issues-the-token-not-a-second-one-from-our-api))
+   and holds a valid access token. That token's `tenant_id` claim is absent at this point — the
+   Custom Access Token Hook found nothing in `public.users` for this `auth_user_id` yet, which is
+   expected and not an error.
+2. The client calls `POST /api/v1/onboarding` with the new access token, a client-generated
+   `tenant_id`, `store_id`, and `user_id` (all UUIDv4, per [ADR-0007](../../adr/ADR-0007-client-generated-uuid-primary-keys.md)),
+   plus `tenant_name`, `store_name`, `store_address` (optional), and `display_name`.
+3. The server verifies no `public.users` row exists for this `auth_user_id` yet, then inserts all
+   three rows in one transaction — `tenants.created_by` and `users.tenant_id` are the same
+   circular-bootstrapping pair documented in
+   [implementation-log.md](../../18-implementation/implementation-log.md)'s 2026-08-01 entries,
+   resolved the same way (`DEFERRABLE INITIALLY DEFERRED`, `ON DELETE NO ACTION`).
+4. The response body returns the three created rows. **The access token the client is still holding
+   does not yet carry the `tenant_id` claim** — the hook only runs at mint/refresh, and minting
+   happened in step 1, before these rows existed. The client must refresh its session
+   (`supabase.auth.refreshSession()` or equivalent) immediately after a successful response to
+   obtain a token that actually carries `tenant_id`; every subsequent tenant-scoped request depends
+   on this refresh having happened.
+5. **No `user_store_roles` row is created here.** Roles & Permissions
+   ([modules/README.md](../../modules/README.md)) is a separate, not-yet-built module — the
+   signing-up user is not yet formally an "Owner" in any enforceable sense, since nothing enforces
+   role checks until that module exists. This is a deliberate, named scope boundary, not an
+   oversight: per [docs/README.md](../../README.md)'s "one module at a time" rule, Roles &
+   Permissions is built when its own turn in the module order comes up, not folded into this one
+   because it happens to be convenient right now.
+
+**Retry behaviour:** a retry with the *same* `tenant_id`/`store_id`/`user_id` (e.g. a client that
+never received the first response) is a normal idempotent replay — `INSERT ... ON CONFLICT (id) DO
+NOTHING`, per [api-principles.md §3](../api-principles.md#3-idempotency--two-mechanisms-matched-to-two-kinds-of-mutation).
+A *second, distinct* onboarding attempt from an identity that already has a `public.users` row
+(different generated IDs, same `auth_user_id`) is a different logical operation, not a retry of the
+first — rejected outright with `ALREADY_ONBOARDED`, per `users.auth_user_id`'s own `UNIQUE`
+constraint, rather than silently merged or treated as equivalent to the first call.
+
+## Errors specific to onboarding
+
+| Code | HTTP | Cause |
+| --- | --- | --- |
+| `ALREADY_ONBOARDED` | 409 | This `auth_user_id` already has a `public.users` row — see Retry behaviour above. |
 
 ---
 
@@ -51,9 +109,11 @@ apply as stated in [api-principles.md](../api-principles.md); not repeated per r
 | --- | --- | --- |
 | `DEVICE_REVOKED` | 401 | See [authentication.md §4](../authentication.md#4-device-binding-and-revocation--checked-on-every-request-not-only-at-token-mint). |
 | `LAST_OWNER_CANNOT_BE_REMOVED` | 409 | `PATCH /users/{id}/role` or `DELETE /users/{id}` would leave the tenant with zero active Owners — rejected outright, since that is an unrecoverable lockout, not a business choice to allow. |
+| `ALREADY_ONBOARDED` | 409 | See the Onboarding section above. |
 
 ## Change Log
 
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial identity/device/audit endpoint set. |
+| 0.2.0 | 2026-08-01 | Added the Onboarding section (`POST /api/v1/onboarding`) — a genuine gap found at Phase 18 implementation time: nothing in this phase previously specified how the very first tenant/store/user rows are created, only the sign-in flow for an identity that already has them. |

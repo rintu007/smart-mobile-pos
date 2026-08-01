@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 11 — API Design
-> **Version:** 0.1.1
-> **Last updated:** 2026-07-31
+> **Version:** 0.1.2
+> **Last updated:** 2026-08-01
 > **Owner:** Principal Next.js Engineer
 > **Approved by:** _pending_
 
@@ -47,7 +47,7 @@ single complete list, not a duplicate source of truth — module documents link 
 
 | Code | Module |
 | --- | --- |
-| `LAST_OWNER_CANNOT_BE_REMOVED` | [identity.md](endpoints/identity.md) |
+| `LAST_OWNER_CANNOT_BE_REMOVED`, `ALREADY_ONBOARDED` | [identity.md](endpoints/identity.md) |
 | `CATEGORY_IN_USE`, `BARCODE_ALREADY_ASSIGNED`, `UNIT_FRACTIONAL_FLAG_LOCKED` | [catalogue.md](endpoints/catalogue.md) |
 | `ADJUSTMENT_REASON_REQUIRED`, `DIRECT_SALE_MOVEMENT_FORBIDDEN` | [inventory.md](endpoints/inventory.md) |
 | `CUSTOMER_IDENTIFIER_REQUIRED`, `PHONE_ALREADY_ASSIGNED` | [customers.md](endpoints/customers.md) |
@@ -61,3 +61,4 @@ single complete list, not a duplicate source of truth — module documents link 
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial catalogue: 9 cross-cutting codes, sync/financial-integrity codes, index of module-specific codes. |
 | 0.1.1 | 2026-07-31 | Added `SETTINGS_CONFLICT` (defined by Phase 13's conflict-resolution policy) to the module-specific index — changelog corrected to actually reflect this, since the code had already been added to the table without a version bump. |
+| 0.1.2 | 2026-08-01 | Added `ALREADY_ONBOARDED` (defined by identity.md's new Onboarding section) to the module-specific index. |

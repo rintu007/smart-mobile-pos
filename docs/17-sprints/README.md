@@ -1,7 +1,7 @@
 # Phase 17 — Sprint Planning
 
-> **Status:** 🔵 In review — all 5 deliverables drafted; Sprint 01 closed (both backlog items done, demoed on real infrastructure, first real retrospective recorded)
-> **Version:** 0.2.0
+> **Status:** 🔵 In review — all 5 deliverables drafted; Sprint 01 closed, Sprint 02 planned (found and closed a real gap first: two module specifications and a missing API endpoint contract that predated any sprint)
+> **Version:** 0.3.0
 > **Last updated:** 2026-08-01
 > **Owner:** Product Manager / CTO
 
@@ -20,6 +20,7 @@
 | [`sprint-template.md`](sprint-template.md) | Explicit capacity-check section; checkbox-based (not %-based) defect/doc reservation | 🔵 In review |
 | [`backlog.md`](backlog.md) | M0 fully decomposed into 11 estimated, dependency-ordered items (18.5 person-days, confirming Phase 16's estimate) | 🔵 In review |
 | [`sprint-01.md`](sprint-01.md) | Repository scaffold + Auth wiring — both items done, demoed on real infrastructure | 🟢 Done |
+| [`sprint-02.md`](sprint-02.md) | `POST /api/v1/onboarding` (Company & Store Setup) — planned, not yet built | 🟡 Planned |
 | [`retrospective-log.md`](retrospective-log.md) | Sprint 01's real retrospective recorded: "verified locally" ≠ "CI-ready" | 🔵 In review |
 
 ## Exit criteria
@@ -43,10 +44,21 @@ actually closes, not pre-drafted here.
 ## Rules
 
 - **One module at a time.** A module is complete before the next begins. This is the founding rule
-  and sprint planning does not get to negotiate with it.
+  and sprint planning does not get to negotiate with it — **with the same M0 walking-skeleton
+  exception named in [modules/README.md's Rule 2](../modules/README.md#rules)**, not a separate
+  looser rule for sprints specifically: during M0, "one module" means M0 itself, since M0 is by
+  design a cross-cutting slice through several Registry rows at once.
 - Unfinished work does not silently roll forward. It is re-estimated and re-prioritised against
   everything else, because circumstances changed.
 - Retrospectives change something concrete or they are cancelled. A retrospective that produces
   only sentiment is a meeting.
 - Documentation is inside the sprint, never after it. "We will document it later" is how the single
   source of truth stops being true.
+
+## Change Log
+
+| Version | Date | Change |
+| --- | --- | --- |
+| 0.1.0 | 2026-07-31 | All 5 deliverables drafted; Sprint 01 planned and ready for Phase 18 kickoff. |
+| 0.2.0 | 2026-08-01 | Sprint 01 closed (both backlog items done, demoed live). |
+| 0.3.0 | 2026-08-01 | Sprint 02 planned. Found and closed a real gap first: Authentication and Company & Store Setup had no module specifications despite Authentication already having live code, and Phase 11 had never specified the actual signup/onboarding endpoint. Also amended the "one module at a time" rule with the M0 walking-skeleton exception, matching [modules/README.md](../modules/README.md)'s own correction. |
