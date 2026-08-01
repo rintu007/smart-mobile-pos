@@ -1,6 +1,30 @@
-import type { NextRequest, NextResponse } from "next/server";
-import { createRouteHandlerSupabaseClient } from "@/lib/supabase/server";
+import type { NextRequest } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { ApiError } from "@/core/errors/api-error";
+
+// The mobile API contract (app/api/v1/*) is called with `Authorization: Bearer <token>`, never
+// cookies -- a mobile client has no cookie jar in the browser-session sense. Cookie-based
+// @supabase/ssr (src/lib/supabase/server.ts) is the right tool for the *web admin's* own Server
+// Actions later (per docs/08-folder-structure/backend-structure.md), but it silently does not
+// read an incoming Authorization header at all -- found only by actually sending a real HTTP
+// request with a real bearer token and getting an unexpected 401, not by typecheck/build/service
+// -level testing, none of which exercise the HTTP layer. A plain (non-SSR) client verifying the
+// extracted token directly via `auth.getUser(token)` is the correct mechanism here.
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+);
+
+function extractBearerToken(request: NextRequest): string {
+  const header = request.headers.get("authorization");
+  const token = header?.startsWith("Bearer ") ? header.slice("Bearer ".length) : undefined;
+
+  if (!token) {
+    throw new ApiError(401, "UNAUTHENTICATED", "No valid session token presented.");
+  }
+
+  return token;
+}
 
 /**
  * Resolves the authenticated (but not yet tenant-scoped) identity for a Route Handler request.
@@ -13,13 +37,12 @@ import { ApiError } from "@/core/errors/api-error";
  */
 export async function requireAuthenticatedUser(
   request: NextRequest,
-  response: NextResponse,
 ): Promise<{ authUserId: string }> {
-  const supabase = createRouteHandlerSupabaseClient(request, response);
+  const token = extractBearerToken(request);
   const {
     data: { user },
     error,
-  } = await supabase.auth.getUser();
+  } = await supabase.auth.getUser(token);
 
   if (error || !user) {
     throw new ApiError(401, "UNAUTHENTICATED", "No valid session token presented.");
@@ -42,15 +65,12 @@ export interface AuthenticatedSession {
   tenantId: string;
 }
 
-export async function requireSession(
-  request: NextRequest,
-  response: NextResponse,
-): Promise<AuthenticatedSession> {
-  const supabase = createRouteHandlerSupabaseClient(request, response);
+export async function requireSession(request: NextRequest): Promise<AuthenticatedSession> {
+  const token = extractBearerToken(request);
   const {
     data: { user },
     error,
-  } = await supabase.auth.getUser();
+  } = await supabase.auth.getUser(token);
 
   if (error || !user) {
     throw new ApiError(401, "UNAUTHENTICATED", "No valid session token presented.");
