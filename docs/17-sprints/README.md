@@ -1,7 +1,7 @@
 # Phase 17 — Sprint Planning
 
-> **Status:** 🔵 In review — all 5 deliverables drafted; Sprint 01 and Sprint 02 both closed
-> **Version:** 0.4.0
+> **Status:** 🔵 In review — all 5 deliverables drafted; Sprint 01, Sprint 02, and Sprint 03 all closed
+> **Version:** 0.5.0
 > **Last updated:** 2026-08-01
 > **Owner:** Product Manager / CTO
 
@@ -21,7 +21,8 @@
 | [`backlog.md`](backlog.md) | M0 fully decomposed into 11 estimated, dependency-ordered items (18.5 person-days, confirming Phase 16's estimate) | 🔵 In review |
 | [`sprint-01.md`](sprint-01.md) | Repository scaffold + Auth wiring — both items done, demoed on real infrastructure | 🟢 Done |
 | [`sprint-02.md`](sprint-02.md) | `POST /api/v1/onboarding` (Company & Store Setup) — built and demoed live | 🟢 Done |
-| [`retrospective-log.md`](retrospective-log.md) | Sprint 01's real retrospective recorded: "verified locally" ≠ "CI-ready" | 🔵 In review |
+| [`sprint-03.md`](sprint-03.md) | Flutter SDK installed, `apps/mobile` scaffolded, local Drift database built (backlog.md item 4) | 🟢 Done |
+| [`retrospective-log.md`](retrospective-log.md) | Sprint 01/02/03 retrospectives recorded: "verified locally" ≠ "CI-ready" ≠ "the endpoint/database actually works" ≠ "first contact with new tooling won't surprise you" | 🔵 In review |
 
 ## Exit criteria
 
@@ -63,3 +64,4 @@ actually closes, not pre-drafted here.
 | 0.2.0 | 2026-08-01 | Sprint 01 closed (both backlog items done, demoed live). |
 | 0.3.0 | 2026-08-01 | Sprint 02 planned. Found and closed a real gap first: Authentication and Company & Store Setup had no module specifications despite Authentication already having live code, and Phase 11 had never specified the actual signup/onboarding endpoint. Also amended the "one module at a time" rule with the M0 walking-skeleton exception, matching [modules/README.md](../modules/README.md)'s own correction. |
 | 0.4.0 | 2026-08-01 | Sprint 02 closed: built and demoed live against the real database, all 6 demo steps passed. Found and fixed a real row-ordering bug (`stores_created_by_fkey`) on first contact with live data. |
+| 0.5.0 | 2026-08-01 | Sprint 03 planned and closed same-day: Flutter SDK installed (the founder-blocked item named since Sprint 01), `apps/mobile` scaffolded and reshaped, local Drift database built for backlog.md item 4 and verified via `flutter test`. Two real package-version findings (Riverpod 3.x vs. `riverpod_lint`, `sqlite3_flutter_libs` obsolescence). |

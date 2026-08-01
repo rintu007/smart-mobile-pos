@@ -1,8 +1,8 @@
 # Retrospective Log
 
-> **Status:** 🔵 In review — Sprint 01 and Sprint 02 retrospectives recorded
+> **Status:** 🔵 In review — Sprint 01, 02, and 03 retrospectives recorded
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.3.0
+> **Version:** 0.4.0
 > **Last updated:** 2026-08-01
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
@@ -89,6 +89,31 @@ consistently.
 **Did the last change help?** Sprint 03 is where this gets checked — the first endpoint that sprint
 adds should be curled for real before its DoD box is ticked.
 
+---
+
+### Sprint 03 retrospective — 2026-08-01
+
+**What surprised us:** first contact with the Flutter/Dart toolchain and a live `pub.dev` registry
+surfaced two real, current-state findings neither this project's docs nor general Flutter knowledge
+predicted: `riverpod_lint`/`custom_lint`/`riverpod_generator` don't yet support Riverpod 3.4.2
+cleanly (a genuine dependency-solver conflict with `drift_dev`), and `sqlite3_flutter_libs` — the
+package anyone following older Flutter/Drift tutorials would reach for — is marked end-of-life,
+superseded by `sqlite3` v3.x's own native bundling and the `drift_flutter` setup package. Both were
+found only by actually running `flutter pub add` and reading pub.dev directly, not by trusting
+either this project's own docs (written before this SDK was ever installed) or general familiarity
+with the ecosystem from months earlier.
+
+**What we're changing:** nothing new — this is the same lesson Sprint 01's retrospective already
+named for the Node/pnpm toolchain ("first contact with real tooling is where estimates and
+assumptions go wrong"), now confirmed to generalize to a second, unrelated toolchain (Dart/Flutter)
+on its first real use too. Worth stating plainly rather than treating as sprint-specific: **any
+toolchain's first real use in this project should be assumed to surface at least one surprise**,
+and defect capacity should be reserved accordingly (this sprint already did, per its own DoD).
+
+**Did the last change help?** N/A directly — this entry confirms an existing lesson rather than
+proposing a new change. Whether reserved defect capacity keeps being sufficient is checked again the
+next time a new toolchain (e.g. Android SDK/emulator, once installed) is used for the first time.
+
 ## Entry format
 
 ```markdown
@@ -118,3 +143,4 @@ than a diary.
 | 0.1.0 | 2026-07-31 | Log format fixed; explicitly left empty pending Sprint 01's actual close, rather than seeded with a fabricated first entry. |
 | 0.2.0 | 2026-08-01 | Sprint 01's real retrospective recorded: "verified locally" and "CI-ready" turned out to be different claims (two real CI-only failures on the first actual `pr.yml` run); the concrete change is that no future sprint closes its CI checkbox without an actual PR having actually run and passed. |
 | 0.3.0 | 2026-08-01 | Sprint 02's retrospective recorded (a real row-ordering bug found on first contact with live data), plus an addendum from deploying to Vercel: "service-layer tested and typechecks" turned out to also not mean "the HTTP endpoint works" — two real bugs (a runtime crash, and every mobile request silently failing auth) sat invisible through three green CI runs until the first actual HTTP request was sent. New rule: at least one real HTTP request before any endpoint is marked done. |
+| 0.4.0 | 2026-08-01 | Sprint 03's retrospective recorded: first real use of the Flutter/Dart toolchain surfaced two genuine current-state package findings (Riverpod 3.x vs. `riverpod_lint`, `sqlite3_flutter_libs` obsolescence) neither predicted in advance — confirms Sprint 01's "first contact with real tooling" lesson generalizes across toolchains, not just Node/pnpm. |

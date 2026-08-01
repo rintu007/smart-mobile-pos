@@ -2,7 +2,7 @@
 
 > **Status:** 🟡 In progress
 > **Phase:** 18 — Implementation
-> **Version:** 0.8.0
+> **Version:** 0.9.0
 > **Last updated:** 2026-08-01
 > **Owner:** CTO / All engineering roles
 
@@ -346,6 +346,65 @@ retrospective already named once ("verified locally" ≠ "CI-ready") recurring o
 entry, since the concrete fix (send at least one real HTTP request before calling an endpoint
 demoed) generalizes to every future endpoint, not just this one.
 
+## 2026-08-01 — Sprint 03: Flutter SDK installed, `apps/mobile` scaffolded, local Drift database built
+
+The founder authorised installing the Flutter SDK directly (rather than doing it themselves or
+finding non-blocked work instead), since every remaining M0 backlog item — 5 through 11 — depends
+on `apps/mobile` existing, which had been a named, un-actioned gap since Sprint 01.
+
+**Flutter SDK install:** C: had only ~7 GB free, so the SDK was cloned via `git clone
+https://github.com/flutter/flutter.git -b stable` into `D:\flutter` instead — outside this repo,
+not committed. Added to the user `PATH` permanently. `flutter doctor` confirmed Flutter itself is
+healthy (3.44.8, stable) but the Android SDK is not installed — a real, separate, much larger
+install (Android Studio or standalone SDK components) not needed for this sprint's actual scope
+(pure Dart schema/query code, verified via `flutter test`, needs no device or emulator) and
+deliberately deferred to whichever sprint first needs to build/run on Android.
+
+**Scaffold:** `flutter create --org com.smartposx --project-name mobile --platforms=android .` in
+`apps/mobile`, then reshaped into `mobile-structure.md`'s feature-first layout (`app/` composition
+root, `core/database/` for this sprint's actual content, `features/` left empty — no feature has
+real content yet).
+
+**Two real package-version findings**, both discovered by actually running `flutter pub add` and
+reading pub.dev, not by any prior assumption in this project's docs:
+
+1. `riverpod_lint`/`custom_lint`/`riverpod_generator` don't yet support Riverpod 3.4.2 cleanly — a
+   genuine dependency-solver conflict with `drift_dev` (`riverpod_generator` requires an `analyzer`
+   version range incompatible with what `drift_dev`/`flutter_test` pin). Resolved by dropping all
+   three; Riverpod itself works fine with manual (non-code-generated) provider syntax, used until
+   the ecosystem catches up.
+2. `sqlite3_flutter_libs` — the package most existing Flutter/Drift material assumes is needed —
+   resolved to `0.6.0+eol`. Checked pub.dev directly: it's explicitly marked obsolete, superseded by
+   `sqlite3` v3.x's own native-library bundling, with `drift_flutter` as the current recommended
+   Flutter setup package. Used `drift_flutter` instead of hand-wiring `sqlite3_flutter_libs`.
+
+**Schema built:** `outbound_queue` (full V1 shape, no ambiguity — schema-local.md already fully
+specifies it) plus a deliberately minimal `products`/`sales`/`sale_line_items`/`sale_payments`/
+`stock_movements` slice sized to M0's actual exit criterion (cash-only, no tax/discount/variants/
+trading-day/device attribution — all M1/M2 scope or dependent on local tables that don't exist yet).
+Each table file's header comment states exactly what's deferred and why, so the next sprint touching
+these tables sees the boundary next to the code, not just in this log entry — the same fix Sprint
+02's retrospective asked for after the deferred-FK boundary blurred in memory a few days later.
+
+Two Drift-specific implementation findings, fixed immediately via `flutter analyze`:
+`int64()` columns map to Dart `BigInt` in this Drift version, not `int` — switched every money
+column to plain `integer()` instead, since this app has no web target (the JS-precision concern
+`int64()` exists for) and `BigInt` arithmetic would be far less ergonomic throughout till/catalogue
+code than plain `int`. And a `.check(method.isIn([...]))` column constraint referencing its own
+getter triggered an analyzer `recursive_getters` warning — switched to `.customConstraint(...)` with
+the raw SQL, which is unambiguous.
+
+**Verified for real, not just compiled:** `flutter test` — schema opens with no error, an
+`outbound_queue` row round-trips, and a full sale (line item + cash payment + stock movement) writes
+and reads back correctly across all five tables, plus a widget test confirming the home screen
+renders after actually querying the live (in-memory) database through the same Riverpod provider
+`main.dart` wires up in production. This is the mobile-side application of the "prove it for real,
+not just that it typechecks/compiles" rule Sprint 02's addendum established for HTTP endpoints.
+
+`pr.yml` gained a `mobile-analyze-test` job (`flutter analyze` + `flutter test` on every PR touching
+`apps/mobile`) — not yet proven green on an actual PR run, per Sprint 01's own rule against
+inferring CI success from local success.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -359,3 +418,4 @@ demoed) generalizes to every future endpoint, not just this one.
 | 0.6.0 | 2026-08-01 | Sprint 02 implemented and demoed live: `POST /api/v1/onboarding`, RLS on `stores`, 6 unit tests, all 6 demo steps passed against the real database. Found and fixed a real row-ordering bug (`stores_created_by_fkey` is an ordinary FK, not part of the deferred pair) on first contact with live data. |
 | 0.7.0 | 2026-08-01 | This PR's own CI run found two more real gaps: `lint-typecheck`/`unit-tests` never ran `prisma generate` (only `build` did), and the `gh` token needed the `workflow` scope added to push a workflow-file fix. Both resolved; PR merged. Vercel's preview deployment fails on this branch for an unknown reason — not a required check, so it didn't block merging, but flagged as a real open item needing Vercel access to diagnose. |
 | 0.8.0 | 2026-08-01 | Vercel fixed at the root (`prisma generate` moved into the `build` script itself) and verified live. Founder-provided Vercel token used to diagnose, fix, and set the same 5 env vars as `.env.local`. Deploying it live led to the first-ever real HTTP request against this endpoint, which surfaced two real bugs invisible to every check run so far: `NextResponse.next()` crashing at runtime in a Route Handler, and — much more significant — the cookie-based `@supabase/ssr` client never reading an incoming `Authorization: Bearer` header at all, meaning every real mobile-client request to any endpoint would have failed authentication. Both fixed; verified end-to-end against local dev and live production. |
+| 0.9.0 | 2026-08-01 | Sprint 03: Flutter SDK installed (`D:\flutter`, stable channel, not committed), `apps/mobile` scaffolded and reshaped to `mobile-structure.md`; local Drift database built for backlog.md item 4's scope (`outbound_queue` full shape, minimal `products`/`sales`/`sale_line_items`/`sale_payments`/`stock_movements`). Two real package-version findings: `riverpod_lint`/`riverpod_generator` conflict with Riverpod 3.x + `drift_dev`, and `sqlite3_flutter_libs` is obsolete (superseded by `sqlite3` v3.x + `drift_flutter`). `flutter test` proves the schema actually opens and round-trips, not just compiles. Android SDK still not installed — deferred until a sprint needs to build/run on-device. |

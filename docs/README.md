@@ -44,8 +44,8 @@ deliverables and exit criteria.
 | 14 | Testing Strategy | [14-testing](14-testing/) | 🔵 In review — full 26-rule test traceability; 3-tier CI pipeline; found and fixed a DR-025 audit-logging gap from Phase 12 |
 | 15 | GitHub Project | [15-github-project](15-github-project/) | 🔵 In review — branch protection, 3-tier CI/CD workflows, full DoD-enforcing PR template; rollback rehearsal tracked to Phase 18 |
 | 16 | Milestones | [16-milestones](16-milestones/) | 🔵 In review — all 5 deliverables complete; OD-06 resolved (solo, 10–20 hrs/week); V1 converts to ~10–15 months at the midpoint pace |
-| 17 | Sprint Planning | [17-sprints](17-sprints/) | 🔵 In review — 2-week solo-sized cadence; M0 fully decomposed (18 person-days); Sprint 01 and Sprint 02 both closed |
-| 18 | Implementation | [18-implementation](18-implementation/) | 🟡 In progress — Sprint 01 done (Identity/Auth) and Sprint 02 done (`POST /api/v1/onboarding`, Company & Store Setup), both demoed live against real infrastructure. Sprint 02 also closed a real gap first: Authentication and Company & Store Setup module specifications, and Phase 11's missing signup endpoint contract. |
+| 17 | Sprint Planning | [17-sprints](17-sprints/) | 🔵 In review — 2-week solo-sized cadence; M0 fully decomposed (18 person-days); Sprint 01, Sprint 02, and Sprint 03 all closed |
+| 18 | Implementation | [18-implementation](18-implementation/) | 🟡 In progress — Sprint 01 done (Identity/Auth), Sprint 02 done (`POST /api/v1/onboarding`, Company & Store Setup), and Sprint 03 done (Flutter SDK installed, `apps/mobile` scaffolded, local Drift database built), all demoed live/for real. Sprint 02 also closed a real gap first: Authentication and Company & Store Setup module specifications, and Phase 11's missing signup endpoint contract. |
 
 **Legend:** ⚪ Not started · 🟡 Draft · 🔵 In review · 🟢 Approved · 🔴 Blocked
 
