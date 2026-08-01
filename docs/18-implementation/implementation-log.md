@@ -2,7 +2,7 @@
 
 > **Status:** 🟡 In progress
 > **Phase:** 18 — Implementation
-> **Version:** 0.9.0
+> **Version:** 0.10.0
 > **Last updated:** 2026-08-01
 > **Owner:** CTO / All engineering roles
 
@@ -405,6 +405,57 @@ not just that it typechecks/compiles" rule Sprint 02's addendum established for 
 `apps/mobile`) — not yet proven green on an actual PR run, per Sprint 01's own rule against
 inferring CI success from local success.
 
+## 2026-08-01 — Sprint 04: `POST /api/v1/products` built and demoed live; a real `requireSession` bug found and fixed
+
+Planning found a real spec gap before any code was written: `catalogue.md`'s already-approved
+`POST /products` contract requires `category_id`/`unit_id`, but `backlog.md`'s M1 row lists
+Categories and Units as M1 scope — and `FR-032`/`FR-035` (Phase 03, approved) also require
+category/unit at creation. M0's actual first cut can't meet any of that yet. Resolved the same way
+Sprint 02 resolved its own spec gaps: a dated correction note in `catalogue.md`, a new
+`docs/modules/products/specification.md` scoped honestly to name/price only, and the module
+registry's Products row naming the gap against both its listed dependency and the FRs explicitly,
+rather than quietly building past it.
+
+**Built:** `Product` Prisma model (M0-minimal columns only — `id`, `tenant_id`, `name`,
+`price_minor_units`, `created_at`, `updated_at`, `created_by`), migration
+`20260801142244_add_products_m0_minimal` applied live, RLS (`supabase/sql/004_rls_products.sql`)
+applied live. Money stored as Prisma `BigInt` (matching `schema-server.md`'s `BIGINT` exactly,
+unlike the mobile Drift schema's deliberate `int64→int` simplification in Sprint 03 — no
+web-JS-precision reason to deviate server-side), converted to a plain `Number` only at the JSON
+response boundary. Added `identityService.resolveUserId(authUserId)` — the sanctioned
+service-to-service cross-module call (`layering-rules.md` §2) every module needing a `created_by`
+FK will reuse, resolving the internal `users.id` from the session's Supabase auth id (these are
+deliberately different ids).
+
+**A real bug found running the live demo's very first `POST /api/v1/products` call:**
+`requireSession` (`src/core/auth/session.ts`) threw `401 — Session has no tenant_id claim` even for
+a freshly-onboarded, refreshed session whose JWT genuinely carried the claim. Root cause: the
+Custom Access Token Hook injects `tenant_id` as a **top-level** JWT claim
+(`supabase/sql/001_custom_access_token_hook.sql`: `jsonb_set(claims, '{tenant_id}', ...)`, read back
+by `current_tenant_id()`'s SQL as `auth.jwt() ->> 'tenant_id'`) — but `requireSession` read
+`user.app_metadata.tenant_id` instead, a field that doesn't exist for a custom top-level claim.
+This bug had been present since Sprint 01 and sat invisible through Sprint 01, 02, and 03 for one
+specific reason: `POST /api/v1/onboarding` deliberately uses the *other* function in the same file,
+`requireAuthenticatedUser` (tenant-agnostic by design, since onboarding runs before a tenant_id
+exists) — so `requireSession` itself had never actually been called by a real request until this
+sprint's `POST /api/v1/products`, the first endpoint requiring a tenant-scoped session at all. Fixed
+by decoding the already-verified token's payload directly for the top-level claim, rather than
+trusting the SDK's `User.app_metadata` field. Recorded as its own retrospective entry
+(`retrospective-log.md`) since it's a third instance of the same underlying shape (Sprint 01:
+"verified locally" ≠ "CI-ready"; Sprint 02: "service-layer tested" ≠ "HTTP endpoint works"; this:
+"one function in a file being proven live" ≠ "every function in that file being proven live") — new
+concrete practice adopted: `core/` files with multiple exports now state each export's own proof
+status in its docstring, applied immediately to both functions in `session.ts`.
+
+**Demo run 2026-08-01, all 7 steps passed** against live production Supabase via real HTTP requests
+to a local dev server (not direct service calls): create (201), idempotent replay (same row, no
+duplicate), missing-name validation (422), missing-auth (401), and a live cross-tenant RLS proof
+(tenant B denied reading tenant A's product). Test fixtures cleaned up after — including 4 orphaned
+tenant rows left behind by two earlier failed script attempts (before the `requireSession` fix and
+before switching from `signUp` to `admin.createUser` to work around this Supabase project's
+email-confirmation requirement) — database confirmed at 0 rows across `tenants`/`stores`/`users`/
+`products` afterward.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -419,3 +470,4 @@ inferring CI success from local success.
 | 0.7.0 | 2026-08-01 | This PR's own CI run found two more real gaps: `lint-typecheck`/`unit-tests` never ran `prisma generate` (only `build` did), and the `gh` token needed the `workflow` scope added to push a workflow-file fix. Both resolved; PR merged. Vercel's preview deployment fails on this branch for an unknown reason — not a required check, so it didn't block merging, but flagged as a real open item needing Vercel access to diagnose. |
 | 0.8.0 | 2026-08-01 | Vercel fixed at the root (`prisma generate` moved into the `build` script itself) and verified live. Founder-provided Vercel token used to diagnose, fix, and set the same 5 env vars as `.env.local`. Deploying it live led to the first-ever real HTTP request against this endpoint, which surfaced two real bugs invisible to every check run so far: `NextResponse.next()` crashing at runtime in a Route Handler, and — much more significant — the cookie-based `@supabase/ssr` client never reading an incoming `Authorization: Bearer` header at all, meaning every real mobile-client request to any endpoint would have failed authentication. Both fixed; verified end-to-end against local dev and live production. |
 | 0.9.0 | 2026-08-01 | Sprint 03: Flutter SDK installed (`D:\flutter`, stable channel, not committed), `apps/mobile` scaffolded and reshaped to `mobile-structure.md`; local Drift database built for backlog.md item 4's scope (`outbound_queue` full shape, minimal `products`/`sales`/`sale_line_items`/`sale_payments`/`stock_movements`). Two real package-version findings: `riverpod_lint`/`riverpod_generator` conflict with Riverpod 3.x + `drift_dev`, and `sqlite3_flutter_libs` is obsolete (superseded by `sqlite3` v3.x + `drift_flutter`). `flutter test` proves the schema actually opens and round-trips, not just compiles. Android SDK still not installed — deferred until a sprint needs to build/run on-device. |
+| 0.10.0 | 2026-08-01 | Sprint 04: `POST /api/v1/products` built and demoed live (M0-minimal name/price only — a real spec gap against catalogue.md/FR-032/FR-035 found and resolved before writing code). Found and fixed a real, three-sprints-latent bug: `requireSession` read the `tenant_id` claim from the wrong location (`user.app_metadata` instead of the JWT's top-level claim), invisible until this sprint's endpoint was the first to actually call it. New practice: `core/` files with multiple exports state each export's own proof status. |

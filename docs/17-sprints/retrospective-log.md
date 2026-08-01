@@ -1,8 +1,8 @@
 # Retrospective Log
 
-> **Status:** 🔵 In review — Sprint 01, 02, and 03 retrospectives recorded
+> **Status:** 🔵 In review — Sprint 01 through 04 retrospectives recorded
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.4.0
+> **Version:** 0.5.0
 > **Last updated:** 2026-08-01
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
@@ -114,6 +114,34 @@ and defect capacity should be reserved accordingly (this sprint already did, per
 proposing a new change. Whether reserved defect capacity keeps being sufficient is checked again the
 next time a new toolchain (e.g. Android SDK/emulator, once installed) is used for the first time.
 
+---
+
+### Sprint 04 retrospective — 2026-08-01
+
+**What surprised us:** `requireSession` — the auth helper every Route Handler *except* onboarding is
+meant to use — had a real, wrong-claim-location bug that sat completely invisible through Sprint
+01, 02, and 03, because nothing had ever actually called it with a real request. `POST /api/v1/onboarding`
+deliberately uses the tenant-agnostic `requireAuthenticatedUser` instead (its whole purpose is being
+callable *before* a tenant_id exists), so `requireSession` itself was unexercised code, fully
+typechecked, sitting in a file whose sibling function *had* been proven live in Sprint 02 — easy to
+mistake for "this file is already verified" when only half of it was. `POST /api/v1/products` is
+this project's first endpoint to actually require a tenant-scoped session, and the very first real
+call to it failed. This is the third time this exact shape has appeared: Sprint 01
+("verified locally" ≠ "CI-ready"), Sprint 02's addendum ("service-layer tested" ≠ "HTTP endpoint
+works"), and now this — "one function in a file was proven live" does not mean "every function in
+that file was."
+
+**What we're changing:** when a shared module (an auth helper, a core utility) exports more than one
+function and only one of them has been exercised by a real call, that file is only as verified as its
+most-tested function, not as verified as its most-recently-touched one. The concrete change: a
+module's own file-header comment (already this project's convention for cross-cutting `core/` files)
+states, per exported function, whether it has actually been called by a real request yet — not just
+what the function does. Applied immediately to `session.ts` itself as part of this sprint's fix.
+
+**Did the last change help?** Sprint 05 is where this gets checked — the next `core/` file with
+multiple exports should carry this per-function proof-status note from the start, not bolted on
+after a bug like this one.
+
 ## Entry format
 
 ```markdown
@@ -144,3 +172,4 @@ than a diary.
 | 0.2.0 | 2026-08-01 | Sprint 01's real retrospective recorded: "verified locally" and "CI-ready" turned out to be different claims (two real CI-only failures on the first actual `pr.yml` run); the concrete change is that no future sprint closes its CI checkbox without an actual PR having actually run and passed. |
 | 0.3.0 | 2026-08-01 | Sprint 02's retrospective recorded (a real row-ordering bug found on first contact with live data), plus an addendum from deploying to Vercel: "service-layer tested and typechecks" turned out to also not mean "the HTTP endpoint works" — two real bugs (a runtime crash, and every mobile request silently failing auth) sat invisible through three green CI runs until the first actual HTTP request was sent. New rule: at least one real HTTP request before any endpoint is marked done. |
 | 0.4.0 | 2026-08-01 | Sprint 03's retrospective recorded: first real use of the Flutter/Dart toolchain surfaced two genuine current-state package findings (Riverpod 3.x vs. `riverpod_lint`, `sqlite3_flutter_libs` obsolescence) neither predicted in advance — confirms Sprint 01's "first contact with real tooling" lesson generalizes across toolchains, not just Node/pnpm. |
+| 0.5.0 | 2026-08-01 | Sprint 04's retrospective recorded: `requireSession` had a real wrong-claim-location bug invisible through three sprints because it had never been exercised by a real request — only its sibling function in the same file had. New concrete practice: `core/` files with multiple exports now state each export's own proof status, not just what it does; applied immediately to `session.ts`. |
