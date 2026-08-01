@@ -52,7 +52,12 @@ model Store {
   createdBy     String    @map("created_by") @db.Uuid
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  user   User   @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  // NOT part of the deferred tenant<->user pair above (Tenant.createdBy, User.tenant) -- this is
+  // an ordinary, non-deferred FK. In any transaction creating a tenant/store/user together, `user`
+  // must be inserted before `store` for this reason. Found the hard way in Sprint 02
+  // (docs/18-implementation/implementation-log.md, 2026-08-01) when the insert order assumed the
+  // whole tenant/store/user set was deferred just because two of its tables are.
+  user User @relation(fields: [createdBy], references: [id], onDelete: Restrict)
 
   @@index([tenantId])
   @@map("stores")

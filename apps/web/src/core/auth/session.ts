@@ -3,7 +3,33 @@ import { createRouteHandlerSupabaseClient } from "@/lib/supabase/server";
 import { ApiError } from "@/core/errors/api-error";
 
 /**
- * Resolves the authenticated session for a Route Handler request.
+ * Resolves the authenticated (but not yet tenant-scoped) identity for a Route Handler request.
+ *
+ * Implements only step 1 of docs/12-security/authorisation-model.md §2's evaluation order: verify
+ * the JWT. Deliberately does **not** require a `tenant_id` claim — this is the one auth check used
+ * by `POST /api/v1/onboarding` (docs/11-api/endpoints/identity.md#onboarding), whose entire purpose
+ * is to be callable by an identity that does not have one yet. Every other Route Handler wants
+ * `requireSession` below instead.
+ */
+export async function requireAuthenticatedUser(
+  request: NextRequest,
+  response: NextResponse,
+): Promise<{ authUserId: string }> {
+  const supabase = createRouteHandlerSupabaseClient(request, response);
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error || !user) {
+    throw new ApiError(401, "UNAUTHENTICATED", "No valid session token presented.");
+  }
+
+  return { authUserId: user.id };
+}
+
+/**
+ * Resolves the authenticated, tenant-scoped session for a Route Handler request.
  *
  * Implements steps 1 and 3 of docs/12-security/authorisation-model.md §2's evaluation order:
  * (1) verify the JWT, (3) resolve `tenant_id` from its claim. Steps 2 (device revocation) and 4

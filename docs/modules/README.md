@@ -1,7 +1,7 @@
 # Module Registry
 
 > **Status:** 🔵 In review
-> **Version:** 0.2.0
+> **Version:** 0.3.0
 > **Last updated:** 2026-08-01
 > **Owner:** CTO
 
@@ -21,7 +21,7 @@ sections defined in [Documentation Standards](../00-governance/documentation-sta
 | Module | Slice | Spec | Build | Depends on |
 | --- | --- | --- | --- | --- |
 | Authentication | V1 | 🟢 [spec](authentication/specification.md) | 🔨 (sign-in, hook, `users` RLS, partial session resolution live; device registration/revocation not yet built) | — |
-| Company & Store Setup | V1 | 🟢 [spec](company-store-setup/specification.md) | ⚪ (Sprint 02, not yet started) | Authentication |
+| Company & Store Setup | V1 | 🟢 [spec](company-store-setup/specification.md) | 🔨 (`POST /api/v1/onboarding` live, demoed against real infrastructure; `PATCH /stores/{id}` deferred) | Authentication |
 | Roles & Permissions | V1 | ⚪ | ⚪ | Authentication |
 | Audit Log | V1 | ⚪ | ⚪ | Authentication |
 | Categories | V1 | ⚪ | ⚪ | Store Setup |
@@ -83,3 +83,4 @@ Restaurant module · Salon module · Analytics · Accountant role & accounting e
 | --- | --- | --- |
 | 0.1.0 | 2026-07-28 | Initial registry: V1–V4 module lists, all rows ⚪, four operating rules fixed. |
 | 0.2.0 | 2026-08-01 | Authentication and Company & Store Setup specifications authored and approved (the former retroactively, catching up to Sprint 01's already-live code). Rule 2 amended with the M0 walking-skeleton exception — a real ambiguity between this rule and Phase 18's own "M0 is the first module" framing, found and fixed rather than silently worked around. |
+| 0.3.0 | 2026-08-01 | Company & Store Setup moved to 🔨: `POST /api/v1/onboarding` implemented and demoed against real infrastructure (Sprint 02). |
