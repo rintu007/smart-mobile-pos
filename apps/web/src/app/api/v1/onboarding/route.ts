@@ -8,10 +8,8 @@ import { onboardingRequestSchema } from "@/modules/identity/schema";
 // exactly one service method, shape the response — docs/08-folder-structure/backend-structure.md §2.
 
 export async function POST(request: NextRequest) {
-  const response = NextResponse.next();
-
   try {
-    const { authUserId } = await requireAuthenticatedUser(request, response);
+    const { authUserId } = await requireAuthenticatedUser(request);
 
     const body = await request.json();
     const parsed = onboardingRequestSchema.safeParse(body);
@@ -22,13 +20,10 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await onboard(authUserId, parsed.data);
-    return NextResponse.json(result, { status: 201, headers: response.headers });
+    return NextResponse.json(result, { status: 201 });
   } catch (error) {
     if (error instanceof ApiError) {
-      return NextResponse.json(error.toResponseBody(), {
-        status: error.status,
-        headers: response.headers,
-      });
+      return NextResponse.json(error.toResponseBody(), { status: error.status });
     }
     throw error;
   }
