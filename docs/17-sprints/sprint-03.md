@@ -84,9 +84,8 @@ schema scaffold itself):
       opens and holds data."
 - [x] No secret, token, or key committed (nothing in this sprint touches secrets, but the check still
       applies).
-- [ ] Tests pass **in CI** on an actual merged PR — `pr.yml`'s new `mobile-analyze-test` job is
-      untested until a real PR runs it, per Sprint 01's own rule against inferring CI success from
-      local success.
+- [x] Tests pass **in CI** on an actual merged PR — [PR #9](https://github.com/rintu007/smart-mobile-pos/pull/9),
+      all 6 checks passed including `mobile-analyze-test`'s first real run (2m28s), merged to `main`.
 
 **Explicitly not in this sprint's DoD subset:** any UI/offline/sync box (no feature screen exists —
 `app/home_screen.dart` is a temporary composition-root proof, not a feature), Android build/run
@@ -119,3 +118,4 @@ would keep happening as new toolchains get touched for the first time.
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-08-01 | Sprint 03 planned and built same-day: Flutter SDK installed, `apps/mobile` scaffolded and reshaped, local Drift database (backlog.md item 4) built and verified via `flutter test`. Two real package-version findings recorded (`riverpod_lint` vs. Riverpod 3.x, `sqlite3_flutter_libs` obsolescence). CI checkbox intentionally left unticked pending a real PR run. |
+| 0.2.0 | 2026-08-01 | PR #9 opened, all 6 checks passed including `mobile-analyze-test`'s first real run, merged to `main`. Sprint 03 fully closed. |
