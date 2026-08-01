@@ -58,7 +58,26 @@ jobs:
           DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
           DIRECT_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
 
+  mobile-analyze-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+        working-directory: apps/mobile
+      - run: flutter pub run build_runner build --delete-conflicting-outputs
+        working-directory: apps/mobile
+      - run: flutter analyze
+        working-directory: apps/mobile
+      - run: flutter test
+        working-directory: apps/mobile
+
 # Per docs/15-github-project/ci-workflows.md, this file grows incrementally: `import-boundaries`
 # (dependency-cruiser), `fast-integration` (cross-tenant isolation, idempotent-replay,
 # 2-device composition), and `bundle-secret-scan` are added as the sprints that build the
 # modules/suites they check land — not stubbed here ahead of having anything real to run.
+# `mobile-analyze-test` added Sprint 03, once apps/mobile had real Dart code to check
+# (previously the directory was intentionally empty — see apps/mobile/README.md's Sprint-01-era
+# note, now superseded).

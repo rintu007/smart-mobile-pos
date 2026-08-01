@@ -1,7 +1,7 @@
 # Phase 18 — Implementation
 
-> **Status:** 🟡 In progress — Sprint 01 and Sprint 02 both closed; Sprint 03 planning is next
-> **Version:** 0.4.0
+> **Status:** 🟡 In progress — Sprint 01, Sprint 02, and Sprint 03 all closed; Sprint 04 planning is next
+> **Version:** 0.5.0
 > **Last updated:** 2026-08-01
 > **Owner:** CTO / All engineering roles
 
@@ -85,3 +85,4 @@ to the 13-step loop or the full Definition of Done. See
 | 0.2.0 | 2026-08-01 | Sprint 01 closed: branch protection live, CI actually exercised and green on a merged PR, Identity/Auth demoed end-to-end on real infrastructure. Next up is Sprint 02 planning for the first real module. |
 | 0.3.0 | 2026-08-01 | Sprint 02 planned. First closed a real gap found while planning it: Authentication and Company & Store Setup had no approved module specifications (the former despite already having live Sprint 01 code), and Phase 11 had never specified the signup/onboarding endpoint at all. |
 | 0.4.0 | 2026-08-01 | Sprint 02 closed: `POST /api/v1/onboarding` built and demoed live, all 6 demo steps passed against the real database. Next up is Sprint 03 planning. |
+| 0.5.0 | 2026-08-01 | Sprint 03 closed: Flutter SDK installed, `apps/mobile` scaffolded and reshaped to `mobile-structure.md`, local Drift database built for backlog.md item 4 and verified via `flutter test` (schema opens, all five tables round-trip). Unblocks every remaining M0 backlog item, which all depended on this. Next up is Sprint 04 planning. |
