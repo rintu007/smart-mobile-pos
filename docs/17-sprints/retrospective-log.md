@@ -1,8 +1,8 @@
 # Retrospective Log
 
-> **Status:** 🔵 In review — Sprint 01's real retrospective recorded
+> **Status:** 🔵 In review — Sprint 01 and Sprint 02 retrospectives recorded
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.2.0
+> **Version:** 0.3.0
 > **Last updated:** 2026-08-01
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
@@ -60,6 +60,35 @@ blanket exemption, not just in a changelog entry that's easy to forget having re
 
 **Did the last change help?** Sprint 03's retrospective is where this one gets checked.
 
+---
+
+### Sprint 02 addendum — 2026-08-01 (triggered by the founder asking to see it deployed)
+
+**What surprised us:** deploying to Vercel for the first time forced the first real HTTP request
+this whole project has ever sent to `POST /api/v1/onboarding` — every prior check (unit tests,
+`tsc --noEmit`, `next build`, even Sprint 02's own "demo") called the service layer directly or
+only compiled the route handler, never executed it as an actual request. That one real request
+found two bugs simultaneously: `NextResponse.next()` crashing at runtime in a Route Handler
+(cosmetic, easy fix), and — the real finding — the cookie-based `@supabase/ssr` client never reads
+an `Authorization: Bearer` header at all, meaning every mobile-client request to any endpoint using
+the old session helper would have silently failed authentication. This sat invisible through three
+separate green CI runs and a "demoed live" sprint close. Sprint 01's retrospective already named
+"verified locally ≠ CI-ready"; this is the same shape one layer deeper: **"the service layer is
+tested and it typechecks" ≠ "the HTTP endpoint actually works."**
+
+**What we're changing:** before any endpoint is marked demoed/done, at least one real HTTP request
+must actually be sent to it — `curl` or an equivalent fetch call against a running server (local or
+deployed), not a direct call into the service function underneath it. This is now a Definition-of-
+Done-level check for every future sprint that adds or changes a Route Handler, not just a one-off
+fix. Concretely: `sprint-template.md`'s Demo script guidance already says steps should be "executed
+at review, not described in the past tense from memory" — the gap was that "executed" got satisfied
+at the service layer, which the template didn't make explicit was insufficient. Worth tightening
+that template's wording the next time it's touched, rather than trusting memory to apply the lesson
+consistently.
+
+**Did the last change help?** Sprint 03 is where this gets checked — the first endpoint that sprint
+adds should be curled for real before its DoD box is ticked.
+
 ## Entry format
 
 ```markdown
@@ -88,3 +117,4 @@ than a diary.
 | --- | --- | --- |
 | 0.1.0 | 2026-07-31 | Log format fixed; explicitly left empty pending Sprint 01's actual close, rather than seeded with a fabricated first entry. |
 | 0.2.0 | 2026-08-01 | Sprint 01's real retrospective recorded: "verified locally" and "CI-ready" turned out to be different claims (two real CI-only failures on the first actual `pr.yml` run); the concrete change is that no future sprint closes its CI checkbox without an actual PR having actually run and passed. |
+| 0.3.0 | 2026-08-01 | Sprint 02's retrospective recorded (a real row-ordering bug found on first contact with live data), plus an addendum from deploying to Vercel: "service-layer tested and typechecks" turned out to also not mean "the HTTP endpoint works" — two real bugs (a runtime crash, and every mobile request silently failing auth) sat invisible through three green CI runs until the first actual HTTP request was sent. New rule: at least one real HTTP request before any endpoint is marked done. |

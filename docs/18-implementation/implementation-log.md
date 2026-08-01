@@ -2,7 +2,7 @@
 
 > **Status:** 🟡 In progress
 > **Phase:** 18 — Implementation
-> **Version:** 0.7.0
+> **Version:** 0.8.0
 > **Last updated:** 2026-08-01
 > **Owner:** CTO / All engineering roles
 
@@ -288,8 +288,63 @@ the part the type system already guarantees" approach Sprint 01 used.
   environment doesn't have. Founder action, tracked alongside the pre-existing Vercel-connection
   item rather than a new separate one.
 
-**What's blocked on the founder, not on more design work:** diagnosing the Vercel preview-deployment
-failure (needs Vercel dashboard/CLI access).
+**What's blocked on the founder, not on more design work:** nothing — resolved below.
+
+## 2026-08-01 — Vercel fixed and verified live; two real bugs found only by real HTTP requests
+
+Founder asked to see the deployment live, and provided a Vercel token (`vercel.com/account/tokens`,
+used locally only, never committed) to unblock diagnosing the failure already flagged above.
+
+**Root cause of the Vercel failure, same as the earlier CI one but in a third place**: Vercel's
+build command is plain `pnpm run build`, which never had the explicit `prisma generate` step CI's
+`build` job has separately. Fixed at the actual root this time — `prisma generate && next build` is
+now the `build` script itself in `apps/web/package.json`, so *any* environment that runs `pnpm
+build` (Vercel, CI, or a fresh clone) gets a real client first, not just the ones with their own
+separately-remembered CI step.
+
+**Deploying it live surfaced something this project had not actually done yet: send a real HTTP
+request to this endpoint.** Every verification so far — Sprint 02's "demo," the unit tests, `tsc
+--noEmit`, `next build` — either called the service layer directly or only compiled the route
+handler, never executed it against a real request. The first real `curl` against it (still
+pre-fix, testing the earlier Vercel deploy) returned `500`, not the `401` the code should produce
+for an unauthenticated call. Two real, distinct bugs, both invisible to everything run before now:
+
+1. **`NextResponse.next()` throws at runtime inside an App Router Route Handler** — it's
+   middleware-only. The onboarding route used it as a placeholder response object to let
+   `@supabase/ssr` write cookies onto before the real response was known. Fixed by using `new
+   NextResponse()` instead, which supports the same `.cookies` API without that restriction.
+2. **The cookie-based `@supabase/ssr` client never reads an incoming `Authorization` header at
+   all.** This is a much bigger finding than the crash: the mobile API (`app/api/v1/*`) is
+   documented and intended to be called with `Authorization: Bearer <token>`
+   ([authentication.md](../11-api/authentication.md)), never cookies — a mobile app has no browser
+   cookie jar. `@supabase/ssr`'s `createServerClient` is built for cookie-based browser sessions;
+   passed a bearer token in a header, it simply doesn't see it and reports no session. **Every
+   route using the old `requireSession`/`requireAuthenticatedUser` would have rejected every real
+   mobile-client request**, not just onboarding's — this was never exercised because nothing had
+   sent a real request with a real token before. Fixed by rewriting `src/core/auth/session.ts` to
+   extract the bearer token directly and verify it via a plain (non-SSR) client's
+   `auth.getUser(token)`, which doesn't depend on cookies at all.
+   `src/lib/supabase/server.ts` (the cookie-based client) is kept, not deleted — it's the
+   documented plan for the future web admin's own Server Actions
+   ([backend-structure.md](../08-folder-structure/backend-structure.md)), a genuinely
+   cookie/browser-session context where it's the right tool. It's just not wired to anything yet.
+
+**Verified end-to-end against both a local dev server and the live Vercel production URL**, not
+just re-typechecked: unauthenticated request → `401`; real bearer token → `201` with the three
+correct rows created; malformed body → `422`. Live URL:
+`https://smart-mobile-pos-web.vercel.app` (health check and onboarding both confirmed working).
+Vercel's Production and Preview environments now also have the same 5 Supabase/database
+environment variables as `.env.local`.
+
+**The honest lesson, worth being blunt about**: "the service layer is unit-tested and the build
+compiles" was treated as sufficient confidence to call Sprint 02 demoed and done. It wasn't — an
+HTTP-layer bug and an authentication-mechanism bug both sat completely invisible through unit
+tests, typecheck, lint, and three separate CI runs, because none of them, and no demo run so far,
+had ever actually sent a request to the route handler. This is the same shape of gap Sprint 01's
+retrospective already named once ("verified locally" ≠ "CI-ready") recurring one layer deeper
+("service-layer tested" ≠ "HTTP endpoint works") — worth its own retrospective note, not just a log
+entry, since the concrete fix (send at least one real HTTP request before calling an endpoint
+demoed) generalizes to every future endpoint, not just this one.
 
 ## Change Log
 
@@ -303,3 +358,4 @@ failure (needs Vercel dashboard/CLI access).
 | 0.5.0 | 2026-08-01 | Sprint 02 planning found and closed a real specification gap predating it: no approved module specification existed for Authentication (despite live Sprint 01 code) or Company & Store Setup, and Phase 11 never specified the signup/onboarding endpoint. All three written/added; `modules/README.md`'s Rule 2 amended with a named M0 exception after finding it contradicted Phase 18's own "M0 is the first module" framing. |
 | 0.6.0 | 2026-08-01 | Sprint 02 implemented and demoed live: `POST /api/v1/onboarding`, RLS on `stores`, 6 unit tests, all 6 demo steps passed against the real database. Found and fixed a real row-ordering bug (`stores_created_by_fkey` is an ordinary FK, not part of the deferred pair) on first contact with live data. |
 | 0.7.0 | 2026-08-01 | This PR's own CI run found two more real gaps: `lint-typecheck`/`unit-tests` never ran `prisma generate` (only `build` did), and the `gh` token needed the `workflow` scope added to push a workflow-file fix. Both resolved; PR merged. Vercel's preview deployment fails on this branch for an unknown reason — not a required check, so it didn't block merging, but flagged as a real open item needing Vercel access to diagnose. |
+| 0.8.0 | 2026-08-01 | Vercel fixed at the root (`prisma generate` moved into the `build` script itself) and verified live. Founder-provided Vercel token used to diagnose, fix, and set the same 5 env vars as `.env.local`. Deploying it live led to the first-ever real HTTP request against this endpoint, which surfaced two real bugs invisible to every check run so far: `NextResponse.next()` crashing at runtime in a Route Handler, and — much more significant — the cookie-based `@supabase/ssr` client never reading an incoming `Authorization: Bearer` header at all, meaning every real mobile-client request to any endpoint would have failed authentication. Both fixed; verified end-to-end against local dev and live production. |
