@@ -84,8 +84,8 @@ feature exists yet):
       tests
 - [x] Cross-tenant negative test: tenant B's session cannot read tenant A's `products` row — run
       live, passed (empty result)
-- [ ] Tests pass **in CI** on an actual merged PR — not checked until that PR is actually open and
-      green, per Sprint 01's own rule
+- [x] Tests pass **in CI** on an actual merged PR — [PR #11](https://github.com/rintu007/smart-mobile-pos/pull/11),
+      all 6 checks passed (including `mobile-analyze-test`), merged to `main`.
 - [x] No secret, token, or key written to logs
 - [x] Module registry ([modules/README.md](../modules/README.md)) updated to reflect Products'
       build status, including the honest gap against its "Categories, Units" dependency and
@@ -130,3 +130,4 @@ three-for-three.
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-08-01 | Sprint 04 planned and built same-day: found and resolved a real spec gap (catalogue.md's full `POST /products` contract vs. backlog.md's M0-minimal scope) before writing code, wrote the Products module specification, implemented and demoed `POST /api/v1/products` live against real infrastructure including a cross-tenant RLS proof. Found and fixed a real, three-sprints-latent bug in `requireSession` (wrong JWT claim location) — its first-ever real exercise. |
+| 0.2.0 | 2026-08-01 | PR #11 opened, all 6 checks passed, merged to `main`. Sprint 04 fully closed. |
