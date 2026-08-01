@@ -1,8 +1,8 @@
 # Phase 17 — Sprint Planning
 
-> **Status:** 🔵 In review — all 5 deliverables drafted; Sprint 01 underway (Identity/Auth item done and demoed live; Repository/CI item — branch protection, `pr.yml` actually running — still a founder action)
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-31
+> **Status:** 🔵 In review — all 5 deliverables drafted; Sprint 01 closed (both backlog items done, demoed on real infrastructure, first real retrospective recorded)
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-01
 > **Owner:** Product Manager / CTO
 
 ## Charter
@@ -19,8 +19,8 @@
 | [`sprint-cadence.md`](sprint-cadence.md) | 2-week sprints; every ceremony kept or dropped with its reason tied to the resolved solo/10–20hrs reality | 🔵 In review |
 | [`sprint-template.md`](sprint-template.md) | Explicit capacity-check section; checkbox-based (not %-based) defect/doc reservation | 🔵 In review |
 | [`backlog.md`](backlog.md) | M0 fully decomposed into 11 estimated, dependency-ordered items (18.5 person-days, confirming Phase 16's estimate) | 🔵 In review |
-| [`sprint-01.md`](sprint-01.md) | Repository scaffold + Auth wiring — Identity/Auth done and demoed live; Repository/CI (branch protection, CI run) still a founder action | 🟡 In progress |
-| [`retrospective-log.md`](retrospective-log.md) | Format fixed; deliberately empty pending Sprint 01's actual close | 🔵 In review |
+| [`sprint-01.md`](sprint-01.md) | Repository scaffold + Auth wiring — both items done, demoed on real infrastructure | 🟢 Done |
+| [`retrospective-log.md`](retrospective-log.md) | Sprint 01's real retrospective recorded: "verified locally" ≠ "CI-ready" | 🔵 In review |
 
 ## Exit criteria
 
