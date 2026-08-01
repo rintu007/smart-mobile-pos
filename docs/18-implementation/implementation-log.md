@@ -2,7 +2,7 @@
 
 > **Status:** 🟡 In progress
 > **Phase:** 18 — Implementation
-> **Version:** 0.6.0
+> **Version:** 0.7.0
 > **Last updated:** 2026-08-01
 > **Owner:** CTO / All engineering roles
 
@@ -269,7 +269,27 @@ Handler uses (the HTTP-layer wrapper itself — Zod parsing, auth, response shap
 already typechecked/linted/build-verified), the same "prove the part that can actually break, not
 the part the type system already guarantees" approach Sprint 01 used.
 
-**What's blocked on the founder, not on more design work:** nothing.
+**Two more real gaps found by this PR's own CI run, not by inspection:**
+- `lint-typecheck` and `unit-tests` never ran `prisma generate` — only the `build` job had that
+  step, added at Sprint 01 time for a reason no committed code had actually exercised until this
+  PR's code was the first to use real Prisma model/namespace types. `Cannot find module
+  '.prisma/client/default'` and `Property 'PrismaClientKnownRequestError' does not exist` were the
+  two symptoms. Fixed by adding the same `prisma generate` step to both jobs in `.github/workflows/pr.yml`.
+- Pushing that fix itself failed once, separately: `refusing to allow an OAuth App to create or
+  update workflow .github/workflows/pr.yml without workflow scope`. The `gh` CLI's token from
+  Sprint 01 was authorized with `repo`/`read:org`/`gist` only — editing workflow files needs the
+  `workflow` scope specifically, which GitHub does not imply from `repo`. Fixed via
+  `gh auth refresh -s workflow` (a second founder device-code confirmation).
+- **Not yet resolved, flagged rather than silently left broken:** the PR's Vercel preview deployment
+  failed (separately from GitHub Actions CI) on every push. Vercel is not a required status check
+  ([repository-setup.md §2](../15-github-project/repository-setup.md#2-branch-protection-on-main)
+  only names the three GitHub Actions jobs), so this didn't block merging, but it's a real,
+  unexplained gap — diagnosing it needs `vercel inspect` against a real Vercel login, which this
+  environment doesn't have. Founder action, tracked alongside the pre-existing Vercel-connection
+  item rather than a new separate one.
+
+**What's blocked on the founder, not on more design work:** diagnosing the Vercel preview-deployment
+failure (needs Vercel dashboard/CLI access).
 
 ## Change Log
 
@@ -282,3 +302,4 @@ the part the type system already guarantees" approach Sprint 01 used.
 | 0.4.0 | 2026-08-01 | `gh` CLI installed and authenticated; repo visibility resolved (public, since GitHub free tier blocks branch protection on private repos); branch protection applied to `main`; PR #1 opened, found and fixed two real CI-only gaps (missing `packageManager` pin, `next-env.d.ts` eslint false-positive), passed all checks, merged. Sprint 01 fully closed. |
 | 0.5.0 | 2026-08-01 | Sprint 02 planning found and closed a real specification gap predating it: no approved module specification existed for Authentication (despite live Sprint 01 code) or Company & Store Setup, and Phase 11 never specified the signup/onboarding endpoint. All three written/added; `modules/README.md`'s Rule 2 amended with a named M0 exception after finding it contradicted Phase 18's own "M0 is the first module" framing. |
 | 0.6.0 | 2026-08-01 | Sprint 02 implemented and demoed live: `POST /api/v1/onboarding`, RLS on `stores`, 6 unit tests, all 6 demo steps passed against the real database. Found and fixed a real row-ordering bug (`stores_created_by_fkey` is an ordinary FK, not part of the deferred pair) on first contact with live data. |
+| 0.7.0 | 2026-08-01 | This PR's own CI run found two more real gaps: `lint-typecheck`/`unit-tests` never ran `prisma generate` (only `build` did), and the `gh` token needed the `workflow` scope added to push a workflow-file fix. Both resolved; PR merged. Vercel's preview deployment fails on this branch for an unknown reason — not a required check, so it didn't block merging, but flagged as a real open item needing Vercel access to diagnose. |
