@@ -12,6 +12,8 @@ create or replace function public.custom_access_token_hook(event jsonb)
 returns jsonb
 language plpgsql
 stable
+security definer
+set search_path = ''
 as $$
 declare
   claims jsonb;

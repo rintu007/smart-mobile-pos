@@ -45,7 +45,7 @@ deliverables and exit criteria.
 | 15 | GitHub Project | [15-github-project](15-github-project/) | 🔵 In review — branch protection, 3-tier CI/CD workflows, full DoD-enforcing PR template; rollback rehearsal tracked to Phase 18 |
 | 16 | Milestones | [16-milestones](16-milestones/) | 🔵 In review — all 5 deliverables complete; OD-06 resolved (solo, 10–20 hrs/week); V1 converts to ~10–15 months at the midpoint pace |
 | 17 | Sprint Planning | [17-sprints](17-sprints/) | 🔵 In review — 2-week solo-sized cadence; M0 fully decomposed (18 person-days); Sprint 01 planned and ready for Phase 18 kickoff |
-| 18 | Implementation | [18-implementation](18-implementation/) | 🟡 In progress — Sprint 01: repository scaffold + Auth wiring code complete and verified locally; live Supabase/GitHub setup pending (founder action) |
+| 18 | Implementation | [18-implementation](18-implementation/) | 🟡 In progress — Sprint 01: Identity/Auth item fully done (live Supabase project, migration, RLS, Auth Hook wired, demo script steps 3–4 passed); Repository/CI item (branch protection, `pr.yml` actually running) remains a founder action |
 
 **Legend:** ⚪ Not started · 🟡 Draft · 🔵 In review · 🟢 Approved · 🔴 Blocked
 

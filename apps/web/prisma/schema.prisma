@@ -28,7 +28,10 @@ model Tenant {
   // this, so the constraint itself is added via a hand-edited follow-up migration once a real
   // database exists (`prisma migrate dev --create-only`, then add the FK with DEFERRABLE by hand).
   // Found during Sprint 01 implementation, not anticipated in Phase 07 — worth an ADR once the
-  // first real migration lands.
+  // first real migration lands. Both this FK and `User.tenant`'s below use `ON DELETE NO ACTION`,
+  // not `RESTRICT` — Postgres only allows a deferred check on `NO ACTION`, never on `RESTRICT`,
+  // regardless of the `DEFERRABLE INITIALLY DEFERRED` marker (a mistake the first migration made
+  // and a follow-up migration corrected).
   createdBy     String    @map("created_by") @db.Uuid
 
   users  User[]
@@ -66,7 +69,12 @@ model User {
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
   createdBy     String    @map("created_by") @db.Uuid
 
-  tenant       Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  // `onDelete: NoAction`, not `Restrict` — Postgres does not allow a `RESTRICT` foreign key to
+  // actually be deferred (only `NO ACTION` supports it), even when marked `DEFERRABLE INITIALLY
+  // DEFERRED`. This matters for this exact relation since it's half of the tenant/user circular
+  // bootstrapping pair — found when a hard-delete of test fixtures failed immediately instead of
+  // deferring to commit. See implementation-log.md's 2026-08-01 entry.
+  tenant       Tenant  @relation(fields: [tenantId], references: [id], onDelete: NoAction)
   storesOwned  Store[]
 
   @@index([tenantId])
