@@ -1,22 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/router.dart';
 import 'app/theme.dart';
+import 'core/config/env.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Fails fast on a missing --dart-define rather than starting with a blank
+  // or broken Supabase client — see ADR-0010.
+  Env.assertConfigured();
+  await Supabase.initialize(
+    url: Env.supabaseUrl,
+    publishableKey: Env.supabaseAnonKey,
+  );
   runApp(const ProviderScope(child: SmartPosXApp()));
 }
 
-class SmartPosXApp extends StatelessWidget {
+class SmartPosXApp extends ConsumerWidget {
   const SmartPosXApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(appRouterProvider);
     return MaterialApp.router(
       title: 'SmartPOS X',
       theme: buildAppTheme(),
-      routerConfig: appRouter,
+      darkTheme: buildAppTheme(brightness: Brightness.dark),
+      routerConfig: router,
     );
   }
 }

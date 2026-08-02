@@ -3,8 +3,8 @@
 > **Status:** 🟢 Approved (written retroactively — see §0; build status is tracked separately in [modules/README.md](../README.md), not conflated with this document's own review state)
 > **Module:** Authentication
 > **Slice:** V1
-> **Version:** 0.1.0
-> **Last updated:** 2026-08-01
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-02
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
 
@@ -106,11 +106,14 @@ its access token naturally expires, a known and accepted gap bounded by the shor
 `/auth/login` and `/auth/verify`, per [route-map.md](../../09-navigation/route-map.md) — no guard
 (unauthenticated-only routes), the `/auth/login` route explicitly requiring connectivity per the
 same table. Device-list/revocation UI is Owner-only, per
-[permission-matrix.md](../../05-personas/permission-matrix.md). No Flutter screen exists yet for
-either — mobile app scaffolding has not started (`apps/mobile` has no Dart code, per
-[implementation-log.md](../../18-implementation/implementation-log.md)); these routes and their
-screens are built when the mobile client work reaches this module, not blocked on this
-specification.
+[permission-matrix.md](../../05-personas/permission-matrix.md).
+
+**`/auth/login` is built** (Sprint 06, `apps/mobile/lib/features/authentication/`) — the first real
+Flutter screen in the project. It calls Supabase Auth directly (§4), persists the session via
+`flutter_secure_storage`, and `app/router.dart`'s redirect guard sends every unauthenticated route
+to it. **`/auth/verify` is not built** — new-account email confirmation is driven by Company &
+Store Setup's web onboarding flow, not mobile, per §1's scope boundary; nothing in M0's backlog
+currently needs it on-device. Device-list/revocation UI remains unbuilt, same as its backend (§4).
 
 ## 10. Test plan
 
@@ -121,6 +124,11 @@ specification.
   exercises `users`' RLS policy indirectly, since the test session is itself a `users` row).
 - Two real gaps found and fixed by this testing: the hook needed `security definer`; the circular
   FK needed `NO ACTION` instead of `RESTRICT` to actually defer.
+- Mobile: `SupabaseAuthRepository.signInWithPassword` verified live against real Supabase Auth
+  (Sprint 06) — success (session created, correct user), sign-out (session cleared), and a wrong
+  password (rejected, mapped to `AuthFailure`). Widget tests cover the login screen's
+  loading/validation/error states against a fake repository
+  (`test/features/authentication/presentation/screens/login_screen_test.dart`).
 
 **Not yet run, because the code doesn't exist yet:**
 - Device registration, revocation, and the `DEVICE_REVOKED` rejection path (steps 4 above).
@@ -151,3 +159,4 @@ standard — it is 🔨 In implementation, honestly partial, tracked to a future
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-08-01 | First version, written retroactively to catch this specification up to Sprint 01's already-live code (§0). Sign-in/hook/session-resolution documented as built; device registration/revocation documented as specified but not implemented. |
+| 0.2.0 | 2026-08-02 | Sprint 06: `/auth/login` documented as built — the mobile client's first real screen, verified live against Supabase Auth. `/auth/verify` and device registration/revocation remain undone. |

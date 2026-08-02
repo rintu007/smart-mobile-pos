@@ -2,7 +2,7 @@
 
 > **Status:** 🟡 In progress
 > **Phase:** 18 — Implementation
-> **Version:** 0.11.0
+> **Version:** 0.12.0
 > **Last updated:** 2026-08-02
 > **Owner:** CTO / All engineering roles
 
@@ -504,6 +504,47 @@ scope discipline, but flagged explicitly in `sprint-05.md`'s Risks section as wo
 when Sprint 06 is planned, rather than let the pattern compound silently — the M0 exit criterion
 (backlog.md item 11) genuinely needs a working mobile app eventually.
 
+## 2026-08-02 — Sprint 06: mobile sign-in — the first real Flutter screen
+
+Planning found a real gap in `backlog.md`: item 11's end-to-end proof requires "sign in" as its
+first step, but no backlog item had ever decomposed the mobile sign-in screen itself — added as
+item 12 (dated correction, `backlog.md` 0.2.0), the concrete first action against the
+three-sprints-running mobile-UI-deferral risk `sprint-05.md` named.
+
+**Built:** `apps/mobile/lib/features/authentication/` (domain/data/presentation layers per
+`mobile-structure.md`), `core/auth/session.dart` (session primitives shared by every feature),
+`core/config/env.dart` (build-time config, `String.fromEnvironment`, fails loudly if unset — see
+[ADR-0010](../adr/ADR-0010-mobile-config-via-dart-define.md), the first architecturally-significant
+mobile decision this project has needed). `app/router.dart` now guards every route: signed out →
+`/auth/login`, signed in → `/`, reactive via a `GoRouterRefreshStream` bridging Supabase's
+auth-state stream to `go_router`'s `refreshListenable`. `app/theme.dart`'s placeholder indigo seed
+colour — explicitly flagged in its own docstring as temporary "until a real screen consumes it" —
+replaced with `foundations.md`'s actual `#0F6B5C` seed, since this sprint is that trigger event.
+
+**A real bug found and fixed before it shipped, not in production:** the `SignInController`
+(`AsyncNotifier<void>`)'s `build()` was originally written `async`, which meant the controller
+started in `AsyncLoading` for one frame on every screen load — before the user had done anything —
+because an `async` function body always resolves via a microtask even with nothing to await.
+Caught by a widget test expecting the submit button enabled immediately, not by manual inspection.
+Fixed by making `build()` synchronous (`FutureOr<void> build() {}`, no `async`), which returns
+immediately rather than via a microtask.
+
+**Two genuine environment gaps, recorded in full in `sprint-06.md`'s Demo script and
+`retrospective-log.md`'s Sprint 06 entry:** the C: drive hit 0 bytes free mid-sprint from
+accumulated package-manager caches (resolved with the founder's confirmation before clearing
+anything); and no local device can actually run the mobile UI (Windows desktop missing its C++
+workload, no Android SDK) — discovered only when the demo needed a real device. Worked around by
+proving the real `SupabaseAuthRepository` production code against live Supabase Auth via a
+temporary `flutter run -d chrome` script (session created and cleared correctly, wrong password
+correctly rejected as `AuthFailure`), separately from the screen's own UI behaviour (8 widget tests
+against a fake repository) — a legitimate but honestly-logged substitute for one single end-to-end
+run, not claimed as equivalent to it.
+
+**Demo run 2026-08-02:** a real, previously-onboarded Supabase Auth user (created via the same
+`POST /api/v1/onboarding` pattern prior sprints used) signed in and out successfully against
+production Supabase; a wrong password was correctly rejected. Test fixtures (tenant, store, user,
+Supabase Auth account) deleted afterward, confirmed at 0 rows.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -520,3 +561,4 @@ when Sprint 06 is planned, rather than let the pattern compound silently — the
 | 0.9.0 | 2026-08-01 | Sprint 03: Flutter SDK installed (`D:\flutter`, stable channel, not committed), `apps/mobile` scaffolded and reshaped to `mobile-structure.md`; local Drift database built for backlog.md item 4's scope (`outbound_queue` full shape, minimal `products`/`sales`/`sale_line_items`/`sale_payments`/`stock_movements`). Two real package-version findings: `riverpod_lint`/`riverpod_generator` conflict with Riverpod 3.x + `drift_dev`, and `sqlite3_flutter_libs` is obsolete (superseded by `sqlite3` v3.x + `drift_flutter`). `flutter test` proves the schema actually opens and round-trips, not just compiles. Android SDK still not installed — deferred until a sprint needs to build/run on-device. |
 | 0.10.0 | 2026-08-01 | Sprint 04: `POST /api/v1/products` built and demoed live (M0-minimal name/price only — a real spec gap against catalogue.md/FR-032/FR-035 found and resolved before writing code). Found and fixed a real, three-sprints-latent bug: `requireSession` read the `tenant_id` claim from the wrong location (`user.app_metadata` instead of the JWT's top-level claim), invisible until this sprint's endpoint was the first to actually call it. New practice: `core/` files with multiple exports state each export's own proof status. |
 | 0.11.0 | 2026-08-02 | Sprint 05: `POST /api/v1/sales` built and demoed live (M0-minimal cash-only, no discount/tax/trading-day — two real spec gaps against sales.md/WF-002 found and resolved before writing code). Server-side price/payment recompute proven live (`PRICE_MISMATCH`, new `PAYMENT_AMOUNT_MISMATCH`). No new bug found — `requireSession`'s Sprint 04 fix held on its second real caller. Named the mobile-UI deferral as a three-sprints-running risk worth addressing in Sprint 06. |
+| 0.12.0 | 2026-08-02 | Sprint 06: mobile `/auth/login` — the first real Flutter screen — built and verified against real Supabase Auth. Closed the missing-backlog-item gap (item 12) and made the first concrete move against the mobile-UI-deferral risk. Found and fixed a real pre-ship bug (`SignInController`'s async `build()` causing a spurious initial loading flash) via a widget test, and two real environment gaps (disk full, no runnable mobile device locally) — both logged honestly rather than worked around silently. |
