@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 09 — Navigation
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-30
+> **Version:** 0.1.2
+> **Last updated:** 2026-08-02
 > **Owner:** UI-UX Lead / Principal Flutter Engineer
 > **Approved by:** _pending_
 
@@ -48,6 +48,7 @@ invented fresh here.
 | Route | Permission | Offline | Notes |
 | --- | --- | --- | --- |
 | `/catalogue` | Cashier+ (view), Manager+ (edit) | Yes | Product list |
+| `/catalogue/add` | Manager+ (edit) | Yes | Add a product — omitted from the original route list (added 2026-08-02, Sprint 07 planning); `/catalogue/:id` covered viewing/editing an *existing* product but nothing covered creating a new one |
 | `/catalogue/:id` | Cashier+ (view), Manager+ (edit) | Yes | Product detail |
 | `/catalogue/categories` | Manager+ | Yes | |
 | `/catalogue/units` | Manager+ | Yes | |
@@ -94,3 +95,4 @@ none are left blank pending "figure out later."
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial route map: 6 pre-shell + 35 shell routes (13 Till, 9 Catalogue, 5 Reports, 8 Settings) — 41 total. |
 | 0.1.1 | 2026-07-31 | **Correction:** the route count was originally miscounted as "4 pre-shell + 34 shell" (38 total); recounting the tables above gives 6 + 35 = 41. No routes were added or removed — the earlier figure simply undercounted what was already here. |
+| 0.1.2 | 2026-08-02 | **Correction:** added `/catalogue/add`, missing from the original decomposition — `/catalogue/:id` covered an existing product's detail/edit but nothing covered creating a new one, found while planning Sprint 07's mobile product-creation screen. Total is now 6 pre-shell + 36 shell = 42. |

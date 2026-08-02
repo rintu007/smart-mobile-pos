@@ -1,8 +1,8 @@
 # Retrospective Log
 
-> **Status:** 🔵 In review — Sprint 01 through 06 retrospectives recorded
+> **Status:** 🔵 In review — Sprint 01 through 07 retrospectives recorded
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.6.0
+> **Version:** 0.7.0
 > **Last updated:** 2026-08-02
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
@@ -174,6 +174,31 @@ single end-to-end run.
 gets checked — it should open with a `flutter doctor` check, not discover the gap at demo time
 again.
 
+---
+
+### Sprint 07 retrospective — 2026-08-02
+
+**What surprised us:** Sprint 06's own new practice (`flutter doctor` at the start of any
+UI-touching sprint) *did* get followed this time — no repeat of discovering the device gap mid-demo.
+But a different, related surprise showed up: `flutter analyze` crashed outright partway through this
+sprint ("Could not reserve virtual memory"), and the actual cause was that Sprint 06's own
+`flutter run -d chrome` demo had left roughly 33 Chrome processes (~3.2 GB) running — the Monitor
+task wrapping that command was stopped at the end of Sprint 06, but stopping the wrapper task never
+verified the browser process it launched had actually exited. This is the same shape of gap as
+Sprint 06's own finding, one layer further in: verifying a *demo device* exists is not the same as
+verifying a *demo process* actually terminated when the demo is done.
+
+**What we're changing:** after any sprint runs a `flutter run -d <device>` (or similar
+long-lived-process) demo, explicitly check that the launched process is gone — not just that the
+task wrapping it reports stopped — before considering that sprint's environment cleanup complete.
+Concretely: a quick process check (e.g. `Get-Process -Name chrome`) for whatever device/browser the
+demo used, added to the same mental checklist `flutter doctor` now occupies at sprint *start*, but
+run at sprint *close* instead.
+
+**Did the last change help?** Whichever future sprint next runs a `flutter run -d <device>` demo is
+where this gets checked — its environment should stay clean afterward without a memory crisis
+surfacing in the sprint that follows it.
+
 ## Entry format
 
 ```markdown
@@ -206,3 +231,4 @@ than a diary.
 | 0.4.0 | 2026-08-01 | Sprint 03's retrospective recorded: first real use of the Flutter/Dart toolchain surfaced two genuine current-state package findings (Riverpod 3.x vs. `riverpod_lint`, `sqlite3_flutter_libs` obsolescence) neither predicted in advance — confirms Sprint 01's "first contact with real tooling" lesson generalizes across toolchains, not just Node/pnpm. |
 | 0.5.0 | 2026-08-01 | Sprint 04's retrospective recorded: `requireSession` had a real wrong-claim-location bug invisible through three sprints because it had never been exercised by a real request — only its sibling function in the same file had. New concrete practice: `core/` files with multiple exports now state each export's own proof status, not just what it does; applied immediately to `session.ts`. |
 | 0.6.0 | 2026-08-02 | Sprint 06's retrospective recorded: the mobile app's first UI screen exposed that no local device can actually run it (Windows C++ workload and Android SDK both missing), discovered only at demo time. New concrete practice: `flutter doctor` runs at the start of any sprint touching mobile UI, not mid-demo. |
+| 0.7.0 | 2026-08-02 | Sprint 07's retrospective recorded: Sprint 06's own `flutter doctor`-at-start practice held, but a `flutter run -d chrome` demo left ~33 leftover Chrome processes running after its wrapper task was stopped, exhausting system memory and crashing `flutter analyze` in the next sprint. New concrete practice: verify the demo's actual process terminated, not just that the wrapping task reports stopped — checked at sprint close, not start. |
