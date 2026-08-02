@@ -1,7 +1,7 @@
 # Phase 18 — Implementation
 
-> **Status:** 🟡 In progress — Sprint 01 through Sprint 07 all closed; Sprint 08 planning is next
-> **Version:** 0.9.0
+> **Status:** 🟡 In progress — Sprint 01 through Sprint 08 all closed; Sprint 09 planning is next
+> **Version:** 0.10.0
 > **Last updated:** 2026-08-02
 > **Owner:** CTO / All engineering roles
 
@@ -90,3 +90,4 @@ to the 13-step loop or the full Definition of Done. See
 | 0.7.0 | 2026-08-02 | Sprint 05 closed: `POST /api/v1/sales` built and demoed live with server-side price/payment recompute and a cross-tenant RLS proof. No new bug found. Flagged the three-sprints-running mobile-UI deferral as a risk for Sprint 06 to weigh directly. Next up is Sprint 06 planning. |
 | 0.8.0 | 2026-08-02 | Sprint 06 closed: mobile `/auth/login` — the first real Flutter screen — built, tested, and verified live against real Supabase Auth. Closed the mobile-UI-deferral risk's first concrete slice and a real backlog gap (mobile sign-in was never decomposed). Next up is Sprint 07 planning. |
 | 0.9.0 | 2026-08-02 | Sprint 07 closed: mobile product creation (`/catalogue/add`) built, tested, and verified against a real on-disk file across a fresh connection. Closed backlog item 5's remaining mobile scope. Next up is Sprint 08 planning. |
+| 0.10.0 | 2026-08-02 | Sprint 08 closed: `GET /api/v1/stores` built and verified live with a cross-tenant RLS proof; mobile fetch-and-cache built — the till screen's real prerequisite, found during planning rather than assumed. Next up is Sprint 09 planning (the till screen itself). |

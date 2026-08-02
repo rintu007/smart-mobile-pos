@@ -2,7 +2,7 @@
 
 > **Status:** 🟡 In progress
 > **Phase:** 18 — Implementation
-> **Version:** 0.13.0
+> **Version:** 0.14.0
 > **Last updated:** 2026-08-02
 > **Owner:** CTO / All engineering roles
 
@@ -583,6 +583,48 @@ just an open connection's in-memory cache. An idempotent replay against the reop
 correctly wrote nothing new. 16 tests (3 new repository tests, 5 new widget tests, 8 carried over
 from Sprint 06) all pass; `flutter analyze` clean.
 
+## 2026-08-02 — Sprint 08: store context — the till screen's real prerequisite
+
+Found while planning Sprint 08 (originally scoped as the till screen itself): the till screen
+(backlog item 6) cannot create a sale without a `store_id`, and nothing built through Sprint 07
+ever gave the device one — the JWT carries `tenant_id` (a device's tenant, per the Custom Access
+Token Hook) but not `store_id`, since a tenant can have multiple stores by design (ADR-0003) even
+though V1 only ever creates one. Added backlog item 13 (dated correction, `backlog.md` 0.3.0) and
+scoped this sprint to it alone, deferring the till screen itself to the next sprint — the same
+"find the real prerequisite, build it as its own sprint" pattern Sprint 06 already established for
+mobile sign-in.
+
+**Built (backend):** `apps/web/src/modules/stores/` (new module folder) — `GET /api/v1/stores`,
+already documented in `identity.md` and named in `company-store-setup/specification.md §4` as "not
+yet implemented," so no new specification was needed. Returns `{ data: [{ id, name, address }],
+next_cursor: null }`, tenant-scoped via the RLS policy Sprint 02 actually shipped
+(`supabase/sql/003_rls_stores.sql`) — found and fixed a **stale doc claim** in the same pass:
+`company-store-setup/specification.md §3` still said "Not yet built: RLS on stores," true only
+until Sprint 02 shipped it and never corrected since.
+
+**Built (mobile):** `apps/mobile/lib/core/network/` (a bare Dio client with a bearer-token
+interceptor reading the current Supabase session — the first mobile call to this project's own
+backend, not just Supabase Auth) and `core/store_context/` (`StoreContextRepository`: cache-first
+read from a new local `StoreContext` Drift table, one-row read cache per `schema-local.md`'s
+`shop_settings` precedent — never written to `outbound_queue`, since it isn't an entity that syncs).
+Wired into the home screen alongside the existing local-database status text.
+
+**Live verification:** a temporary script (real Supabase, deleted after) onboarded tenant A,
+re-signed-in for a fresh token (the pre-onboarding token predates the `tenant_id` claim — the same
+gotcha every prior demo script has had to work around), and confirmed `GET /stores` returns exactly
+tenant A's own store. Onboarded tenant B and confirmed its session never sees tenant A's store — the
+cross-tenant RLS proof this endpoint's contract has needed since it was first documented, now
+actually run. 9/9 checks passed on the first try. Mobile: 4 repository tests against a fake fetch
+function prove cache-first behaviour, cache overwrite on refresh, and a thrown error on an empty
+server response — no real device needed for this half, unlike Sprints 06/07's UI work.
+
+**A real bug found on the first live attempt, fixed immediately:** the demo script's first version
+reused the pre-onboarding sign-in token for the `GET /stores` call and got
+`UNAUTHENTICATED — Session has no tenant_id claim` — not an endpoint bug, a script bug (the Custom
+Access Token Hook stamps `tenant_id` at mint/refresh time, not retroactively onto an
+already-issued token). Fixed by re-signing-in after onboarding, same pattern Sprint 04/05's scripts
+already used for exactly this reason.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -601,3 +643,4 @@ from Sprint 06) all pass; `flutter analyze` clean.
 | 0.11.0 | 2026-08-02 | Sprint 05: `POST /api/v1/sales` built and demoed live (M0-minimal cash-only, no discount/tax/trading-day — two real spec gaps against sales.md/WF-002 found and resolved before writing code). Server-side price/payment recompute proven live (`PRICE_MISMATCH`, new `PAYMENT_AMOUNT_MISMATCH`). No new bug found — `requireSession`'s Sprint 04 fix held on its second real caller. Named the mobile-UI deferral as a three-sprints-running risk worth addressing in Sprint 06. |
 | 0.12.0 | 2026-08-02 | Sprint 06: mobile `/auth/login` — the first real Flutter screen — built and verified against real Supabase Auth. Closed the missing-backlog-item gap (item 12) and made the first concrete move against the mobile-UI-deferral risk. Found and fixed a real pre-ship bug (`SignInController`'s async `build()` causing a spurious initial loading flash) via a widget test, and two real environment gaps (disk full, no runnable mobile device locally) — both logged honestly rather than worked around silently. |
 | 0.13.0 | 2026-08-02 | Sprint 07: mobile product creation (`/catalogue/add`) built — local write + `outbound_queue` enqueue atomic and idempotent, verified against a real on-disk file across a fresh connection. Closed backlog item 5's remaining scope and a real route-map.md gap. Found and fixed a real `Product` name collision (Drift's generated row class vs. the domain entity) and diagnosed a real memory-exhaustion issue (33 leftover Chrome processes from Sprint 06's demo) without guessing at the fix. |
+| 0.14.0 | 2026-08-02 | Sprint 08: `GET /api/v1/stores` built and verified live with a cross-tenant RLS proof; mobile fetch-and-cache built (`core/network/`, `core/store_context/`) — the first mobile call to this project's own backend. Closed a real gap found while planning the till screen (no `store_id` source existed) and a stale doc claim (RLS on `stores` was actually shipped Sprint 02, never corrected). |

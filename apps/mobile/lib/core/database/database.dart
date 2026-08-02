@@ -7,12 +7,14 @@ import 'tables/sale_line_items.dart';
 import 'tables/sale_payments.dart';
 import 'tables/sales.dart';
 import 'tables/stock_movements.dart';
+import 'tables/store_context.dart';
 
 part 'database.g.dart';
 
 /// M0's local database — outbound_queue plus the minimal products/sales/
-/// stock_movements slice backlog.md item 4 scopes. Every other local table in
-/// schema-local.md (categories, units, customers, shop_settings, the
+/// stock_movements slice backlog.md item 4 scopes, plus `StoreContext`
+/// (Sprint 08, a local cache of the device's own `store_id`). Every other
+/// local table in schema-local.md (categories, units, customers, the
 /// server-authoritative caches, ...) is added by the sprint that actually
 /// needs it, not stubbed here ahead of the backlog.
 @DriftDatabase(
@@ -23,6 +25,7 @@ part 'database.g.dart';
     SaleLineItems,
     SalePayments,
     StockMovements,
+    StoreContext,
   ],
 )
 class AppDatabase extends _$AppDatabase {
