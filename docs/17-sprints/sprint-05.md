@@ -83,8 +83,9 @@ Backend-only slice, same narrow subset as Sprint 02/04:
       `src/modules/pos/service.test.ts`, 5 tests
 - [x] Cross-tenant negative test: tenant B's session cannot read tenant A's `sales` row — run live,
       passed (empty result)
-- [ ] Tests pass **in CI** on an actual merged PR — not checked until that PR is actually open and
-      green, per Sprint 01's own rule
+- [x] Tests pass **in CI** on an actual merged PR — PR #13, all 6 checks green (`build`,
+      `lint-typecheck`, `mobile-analyze-test`, `unit-tests`, `Vercel`, `Vercel Preview Comments`),
+      merged 2026-08-02
 - [x] No secret, token, or key written to logs
 - [x] Module registry ([modules/README.md](../modules/README.md)) updated to reflect POS' build
       status, including the honest gaps against its listed dependency, WF-002's atomicity
@@ -125,3 +126,4 @@ produces a concrete process change when Sprint 06 is planned — not pre-judged 
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-08-02 | Sprint 05 planned and built same-day: found and resolved two real spec gaps (sales.md's full contract vs. backlog.md's M0-minimal scope; WF-002's stock-ledger atomicity vs. backlog.md's own item 6/7 split) before writing code, wrote the POS module specification, implemented and demoed `POST /api/v1/sales` live including server-side recompute and a cross-tenant RLS proof. No new bug found — `requireSession`'s Sprint 04 fix held on its second real caller. |
+| 0.1.1 | 2026-08-02 | PR #13 merged, all 6 CI checks green. Sprint 05 fully closed. |
