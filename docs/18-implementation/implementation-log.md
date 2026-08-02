@@ -2,8 +2,8 @@
 
 > **Status:** 🟡 In progress
 > **Phase:** 18 — Implementation
-> **Version:** 0.10.0
-> **Last updated:** 2026-08-01
+> **Version:** 0.11.0
+> **Last updated:** 2026-08-02
 > **Owner:** CTO / All engineering roles
 
 Module-by-module record: dates, decisions, deviations, lessons — per this phase's own charter.
@@ -456,6 +456,54 @@ before switching from `signUp` to `admin.createUser` to work around this Supabas
 email-confirmation requirement) — database confirmed at 0 rows across `tenants`/`stores`/`users`/
 `products` afterward.
 
+## 2026-08-02 — Sprint 05: `POST /api/v1/sales` built and demoed live; no new bug found
+
+Planning found two real gaps before writing code, both against already-approved documents:
+`sales.md`'s full `POST /sales` contract requires `trading_day_id` (Trading Day is M2 scope, not
+built) and tax/discount/split-payment fields (M1/M2); separately,
+[WF-002](../06-workflows/sales-workflows.md#wf-002--complete-a-single-item-cash-sale) requires the
+stock-ledger movement atomically with the sale, but that's backlog.md's own item 7, a later sprint
+depending on this one. Both resolved the same way Sprint 02/04 resolved their own spec gaps: dated
+correction notes in `sales.md`, a new `docs/modules/pos/specification.md` scoped honestly to
+cash-only/no-discount/no-tax, and the gap against WF-002's atomicity requirement named directly
+rather than silently produced.
+
+**Built:** `Sale`/`SaleLineItem`/`SalePayment` Prisma models (M0-minimal columns — no
+`trading_day_id`/`device_id`/`customer_id`/tax/discount), migration
+`20260801153106_add_sales_m0_minimal` applied live, RLS (`supabase/sql/005_rls_sales.sql`) applied
+live (`sale_line_items`/`sale_payments` have no independent RLS, matching `schema-server.md`'s own
+design — access is via `sale_id`). `POST /api/v1/sales` recomputes every line's total from the
+product's **current** `price_minor_units` (never the client-submitted figure, per
+`api-principles.md §7`) and rejects a stale price with `PRICE_MISMATCH`; validates the single cash
+payment equals the computed grand total exactly, rejecting a mismatch with the new
+`PAYMENT_AMOUNT_MISMATCH` code; and is idempotent on the client-generated `id` — a replay returns
+the original sale directly, skipping recompute entirely, so a price that legitimately moved *after*
+a first success can never turn a legitimate retry into a spurious rejection.
+
+**A transient local environment issue, not a code bug:** three consecutive `prisma db execute`
+attempts against `DIRECT_URL` (session-mode pooler) hung and had to be killed, after having applied
+a migration successfully moments earlier on the same connection string. Root cause: each hung
+attempt held a pooler connection open without releasing it, and the session-mode pooler has a small
+connection-slot limit — by the third attempt the pool was exhausted, so even a trivial `select 1`
+hung. Resolved once the earlier hung processes were confirmed terminated (`Get-CimInstance
+Win32_Process` showed them already gone by the time this was investigated — the Bash tool's own
+timeout had SIGTERM'd them). Distinct from the previously-documented "`prisma db execute` hangs on
+*transaction*-mode URLs" CLI quirk — this was a real, if self-inflicted, connection-pool exhaustion
+on the *session*-mode URL that normally doesn't hang at all.
+
+**Demo run 2026-08-02, all 9 steps passed** against live production Supabase via real HTTP requests:
+create (201, server-computed total), idempotent replay, a stale-price rejection
+(`PRICE_MISMATCH`), a payment-mismatch rejection (`PAYMENT_AMOUNT_MISMATCH`), an unknown-product
+rejection (`NOT_FOUND`), and a live cross-tenant RLS proof. **No new bug found** — notable because
+this is `requireSession`'s second real caller since Sprint 04's fix, and it held. Test fixtures
+cleaned up after; database confirmed at 0 rows across every table touched.
+
+**A named, not-yet-acted-on risk:** this is the third sprint in a row (03, 04, 05) that defers the
+actual mobile Flutter UI in favour of a backend-only slice. Each deferral was independently correct
+scope discipline, but flagged explicitly in `sprint-05.md`'s Risks section as worth weighing head-on
+when Sprint 06 is planned, rather than let the pattern compound silently — the M0 exit criterion
+(backlog.md item 11) genuinely needs a working mobile app eventually.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -471,3 +519,4 @@ email-confirmation requirement) — database confirmed at 0 rows across `tenants
 | 0.8.0 | 2026-08-01 | Vercel fixed at the root (`prisma generate` moved into the `build` script itself) and verified live. Founder-provided Vercel token used to diagnose, fix, and set the same 5 env vars as `.env.local`. Deploying it live led to the first-ever real HTTP request against this endpoint, which surfaced two real bugs invisible to every check run so far: `NextResponse.next()` crashing at runtime in a Route Handler, and — much more significant — the cookie-based `@supabase/ssr` client never reading an incoming `Authorization: Bearer` header at all, meaning every real mobile-client request to any endpoint would have failed authentication. Both fixed; verified end-to-end against local dev and live production. |
 | 0.9.0 | 2026-08-01 | Sprint 03: Flutter SDK installed (`D:\flutter`, stable channel, not committed), `apps/mobile` scaffolded and reshaped to `mobile-structure.md`; local Drift database built for backlog.md item 4's scope (`outbound_queue` full shape, minimal `products`/`sales`/`sale_line_items`/`sale_payments`/`stock_movements`). Two real package-version findings: `riverpod_lint`/`riverpod_generator` conflict with Riverpod 3.x + `drift_dev`, and `sqlite3_flutter_libs` is obsolete (superseded by `sqlite3` v3.x + `drift_flutter`). `flutter test` proves the schema actually opens and round-trips, not just compiles. Android SDK still not installed — deferred until a sprint needs to build/run on-device. |
 | 0.10.0 | 2026-08-01 | Sprint 04: `POST /api/v1/products` built and demoed live (M0-minimal name/price only — a real spec gap against catalogue.md/FR-032/FR-035 found and resolved before writing code). Found and fixed a real, three-sprints-latent bug: `requireSession` read the `tenant_id` claim from the wrong location (`user.app_metadata` instead of the JWT's top-level claim), invisible until this sprint's endpoint was the first to actually call it. New practice: `core/` files with multiple exports state each export's own proof status. |
+| 0.11.0 | 2026-08-02 | Sprint 05: `POST /api/v1/sales` built and demoed live (M0-minimal cash-only, no discount/tax/trading-day — two real spec gaps against sales.md/WF-002 found and resolved before writing code). Server-side price/payment recompute proven live (`PRICE_MISMATCH`, new `PAYMENT_AMOUNT_MISMATCH`). No new bug found — `requireSession`'s Sprint 04 fix held on its second real caller. Named the mobile-UI deferral as a three-sprints-running risk worth addressing in Sprint 06. |

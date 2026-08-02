@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 11 — API Design
-> **Version:** 0.1.2
+> **Version:** 0.1.3
 > **Last updated:** 2026-08-01
 > **Owner:** Principal Next.js Engineer
 > **Approved by:** _pending_
@@ -41,6 +41,7 @@ single complete list, not a duplicate source of truth — module documents link 
 | Code | HTTP | Cause | Client handling |
 | --- | --- | --- | --- |
 | `PRICE_MISMATCH` | 409 | Connected-device sale submitted against a stale cached price — [sales.md](endpoints/sales.md) | Refresh the product's price and prompt the Cashier to confirm before retrying; this error is **not** produced for offline-queued sales, which complete using the price actually charged. |
+| `PAYMENT_AMOUNT_MISMATCH` | 409 | A submitted payment's total does not equal the server-recomputed `grand_total_minor_units` — [sales.md](endpoints/sales.md) | Refresh the computed total and prompt the Cashier to confirm the payment amount before retrying. |
 | `STOCK_ANOMALY` | — (not a rejection; informational, surfaced via `sync_rejections`, never blocks a sale) | A resulting stock balance went negative — expected under concurrent offline selling, per [stock-ledger.md](../07-database/stock-ledger.md) | No client action required; visible to the Owner via the `sync_rejections`-backed attention list. |
 
 ## Module-specific codes (defined in their owning document, indexed here for completeness)
@@ -62,3 +63,4 @@ single complete list, not a duplicate source of truth — module documents link 
 | 0.1.0 | 2026-07-30 | Initial catalogue: 9 cross-cutting codes, sync/financial-integrity codes, index of module-specific codes. |
 | 0.1.1 | 2026-07-31 | Added `SETTINGS_CONFLICT` (defined by Phase 13's conflict-resolution policy) to the module-specific index — changelog corrected to actually reflect this, since the code had already been added to the table without a version bump. |
 | 0.1.2 | 2026-08-01 | Added `ALREADY_ONBOARDED` (defined by identity.md's new Onboarding section) to the module-specific index. |
+| 0.1.3 | 2026-08-01 | Added `PAYMENT_AMOUNT_MISMATCH` (financial-integrity code, defined by Sprint 05's M0-minimal `POST /sales`). |
