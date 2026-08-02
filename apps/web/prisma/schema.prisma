@@ -1,7 +1,8 @@
 // Built incrementally, module-by-module, per docs/17-sprints/backlog.md — this file is not
 // docs/07-database/schema-server.md's full 22-table schema yet, by design. So far: `tenants`/
 // `users` (Sprint 01, Custom Access Token Hook), `stores` (Sprint 02, Company & Store Setup),
-// `products` (Sprint 04, name/price-only M0 slice — see docs/modules/products/specification.md).
+// `products` (Sprint 04, name/price-only M0 slice), `sales`/`sale_line_items`/`sale_payments`
+// (Sprint 05, cash-only M0 slice — see docs/modules/pos/specification.md).
 
 generator client {
   provider = "prisma-client-js"
@@ -37,6 +38,7 @@ model Tenant {
   users    User[]
   stores   Store[]
   products Product[]
+  sales    Sale[]
 
   @@map("tenants")
 }
@@ -59,6 +61,7 @@ model Store {
   // (docs/18-implementation/implementation-log.md, 2026-08-01) when the insert order assumed the
   // whole tenant/store/user set was deferred just because two of its tables are.
   user   User   @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  sales  Sale[]
 
   @@index([tenantId])
   @@map("stores")
@@ -83,6 +86,7 @@ model User {
   tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: NoAction)
   storesOwned     Store[]
   productsCreated Product[]
+  salesCreated    Sale[]
 
   @@index([tenantId])
   @@map("users")
@@ -105,9 +109,76 @@ model Product {
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
   createdBy       String    @map("created_by") @db.Uuid
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  user   User   @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user          User           @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  saleLineItems SaleLineItem[]
 
   @@index([tenantId])
   @@map("products")
+}
+
+/// M0-minimal slice of docs/07-database/schema-server.md's `sales` table — cash-only, no
+/// discount/tax. `trading_day_id`/`device_id`/`customer_id`/`canonical_invoice_number`/
+/// `tax_registration_type_at_sale`/`tax_total_minor_units`/`discount_total_minor_units` are real
+/// columns in the full V1 design but are added once Trading Day/device-registration/Customers/
+/// tax-and-discount (M1/M2) exist, per docs/modules/pos/specification.md §1/§3.
+model Sale {
+  id                       String   @id @db.Uuid
+  tenantId                 String   @map("tenant_id") @db.Uuid
+  storeId                  String   @map("store_id") @db.Uuid
+  /// Always 'completed' this sprint — draft/held/cancelled are real server states a future
+  /// milestone's UI produces (hold/resume is M2 scope).
+  status                   String
+  provisionalInvoiceNumber String   @map("provisional_invoice_number")
+  /// BigInt, matching schema-server.md's BIGINT exactly — same reasoning as Product.priceMinorUnits.
+  subtotalMinorUnits       BigInt   @map("subtotal_minor_units")
+  grandTotalMinorUnits     BigInt   @map("grand_total_minor_units")
+  completedAt              DateTime @map("completed_at") @db.Timestamptz
+  createdAt                DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdBy                String   @map("created_by") @db.Uuid
+
+  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  store     Store          @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  user      User           @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  lineItems SaleLineItem[]
+  payments  SalePayment[]
+
+  @@index([tenantId])
+  @@map("sales")
+}
+
+/// M0-minimal slice of docs/07-database/schema-server.md's `sale_line_items` — omits `variant_id`
+/// (V2+ stub), `hsn_sac_code_at_sale`/`tax_rate_basis_points`/`line_discount_minor_units`/
+/// `line_tax_minor_units` (M2 scope, see Sale's comment above).
+model SaleLineItem {
+  id                  String @id @db.Uuid
+  saleId              String @map("sale_id") @db.Uuid
+  productId           String @map("product_id") @db.Uuid
+  /// NUMERIC(14,3) on schema-server.md; Int here — M0 rejects fractional quantities entirely
+  /// (docs/modules/pos/specification.md §2, since Units doesn't exist yet to say whether a
+  /// product allows them), so no fixed-point representation is needed yet either.
+  quantity            Int
+  unitPriceMinorUnits BigInt @map("unit_price_minor_units")
+  lineTotalMinorUnits BigInt @map("line_total_minor_units")
+
+  sale    Sale    @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([saleId])
+  @@map("sale_line_items")
+}
+
+/// M0 is cash-only (docs/modules/pos/specification.md §2) — `method`'s `CHECK` still allows the
+/// full server enum since it costs nothing extra, matching Products' precedent, but only `'cash'`
+/// rows are written until Split Payment (M2) exists.
+model SalePayment {
+  id               String @id @db.Uuid
+  saleId           String @map("sale_id") @db.Uuid
+  method           String
+  amountMinorUnits BigInt @map("amount_minor_units")
+
+  sale Sale @relation(fields: [saleId], references: [id], onDelete: Restrict)
+
+  @@index([saleId])
+  @@map("sale_payments")
 }

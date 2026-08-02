@@ -39,6 +39,21 @@ is mutated only on the client until the moment it completes; a held/draft cart i
 to the server as a partial row — see [sync-api.md](../sync-api.md) for exactly what crosses the
 wire and when.
 
+## M0's actual first implementation is smaller than this section's full shape
+
+**Correction, found while planning Sprint 05 (2026-08-01):** [backlog.md item 6](../../17-sprints/backlog.md#1-m0--walking-skeleton-fully-decomposed)
+scopes M0's `POST /sales` to "manual product add to cart..., cash payment only" — no discount, tax,
+split payment, or hold/resume, all explicitly [M1 scope](../../17-sprints/backlog.md#2-m1m4--module-grain-only-decomposed-when-reached).
+`trading_day_id` can't be required either: Trading Day is its own M2-scope module (not yet built),
+and `device_id` can't be required since `devices` (Authentication's device-registration slice) isn't
+built yet either — the same category of gap already named for Authentication's row in the
+[module registry](../../modules/README.md) ("device registration/revocation not yet built"). This
+section below is still the correct full V1 target; M0's real shape is documented in
+[pos/specification.md](../../modules/pos/specification.md) instead — `line_items` and a single
+`cash` `payments` entry only, no `trading_day_id`/`device_id`/`customer_id`/tax/discount fields.
+Those fields become required/accepted once the modules they depend on land — matching the pattern
+already used for `catalogue.md`'s own `POST /products` correction.
+
 ## Request/response shape — `POST /sales`
 
 **Request**
@@ -116,6 +131,7 @@ per [sync-api.md](../sync-api.md), rather than blocking the sale.
 | `TRADING_DAY_NOT_OPEN` | 409 | `POST /sales` attempted with no open trading day on this device. |
 | `TRADING_DAY_ALREADY_OPEN` | 409 | `POST /trading-days/open` attempted while one is already open. |
 | `PRICE_MISMATCH` | 409 | See above — connected-device case only; the offline case does not produce this error at all. |
+| `PAYMENT_AMOUNT_MISMATCH` | 409 | A submitted payment's total does not equal the server-recomputed `grand_total_minor_units` — added in M0's minimal implementation (Sprint 05), which has no discount/tax yet so this simplifies to "payment must equal the sum of line totals." |
 | `SALE_IMMUTABLE` | 409 | Any write attempt against a `completed` sale. |
 
 ## Change Log
@@ -123,3 +139,4 @@ per [sync-api.md](../sync-api.md), rather than blocking the sale.
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial sales/trading-day endpoint set; server-recompute behaviour and the connected-vs-offline price-mismatch distinction specified in full. |
+| 0.1.1 | 2026-08-01 | Correction found planning Sprint 05: this document's `POST /sales` shape is the full V1 contract, but backlog.md scopes M0 to cash-only/no-discount/no-tax and defers Trading Day (M2) and device registration (Authentication, not yet built) — noted inline rather than narrowing this section. |

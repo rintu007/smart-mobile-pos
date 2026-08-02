@@ -1,8 +1,8 @@
 # Phase 17 — Sprint Planning
 
-> **Status:** 🔵 In review — all 5 deliverables drafted; Sprint 01 through Sprint 04 all closed
-> **Version:** 0.6.0
-> **Last updated:** 2026-08-01
+> **Status:** 🔵 In review — all 5 deliverables drafted; Sprint 01 through Sprint 05 all closed
+> **Version:** 0.7.0
+> **Last updated:** 2026-08-02
 > **Owner:** Product Manager / CTO
 
 ## Charter
@@ -23,6 +23,7 @@
 | [`sprint-02.md`](sprint-02.md) | `POST /api/v1/onboarding` (Company & Store Setup) — built and demoed live | 🟢 Done |
 | [`sprint-03.md`](sprint-03.md) | Flutter SDK installed, `apps/mobile` scaffolded, local Drift database built (backlog.md item 4) | 🟢 Done |
 | [`sprint-04.md`](sprint-04.md) | `POST /api/v1/products` (Products) — built and demoed live, a real `requireSession` bug found and fixed | 🟢 Done |
+| [`sprint-05.md`](sprint-05.md) | `POST /api/v1/sales` (POS) — built and demoed live with server-side recompute; no new bug found | 🟢 Done |
 | [`retrospective-log.md`](retrospective-log.md) | Sprint 01–04 retrospectives recorded: "verified locally" ≠ "CI-ready" ≠ "the endpoint/database works" ≠ "new tooling won't surprise you" ≠ "one proven function means the whole file is proven" | 🔵 In review |
 
 ## Exit criteria
@@ -67,3 +68,4 @@ actually closes, not pre-drafted here.
 | 0.4.0 | 2026-08-01 | Sprint 02 closed: built and demoed live against the real database, all 6 demo steps passed. Found and fixed a real row-ordering bug (`stores_created_by_fkey`) on first contact with live data. |
 | 0.5.0 | 2026-08-01 | Sprint 03 planned and closed same-day: Flutter SDK installed (the founder-blocked item named since Sprint 01), `apps/mobile` scaffolded and reshaped, local Drift database built for backlog.md item 4 and verified via `flutter test`. Two real package-version findings (Riverpod 3.x vs. `riverpod_lint`, `sqlite3_flutter_libs` obsolescence). |
 | 0.6.0 | 2026-08-01 | Sprint 04 planned and closed same-day: found and resolved a real spec gap (catalogue.md's full `POST /products` contract vs. backlog.md's M0-minimal scope) before writing code, built and demoed `POST /api/v1/products` live including a cross-tenant RLS proof. Found and fixed a real, three-sprints-latent `requireSession` bug. |
+| 0.7.0 | 2026-08-02 | Sprint 05 planned and closed same-day: found and resolved two real spec gaps (sales.md's full contract vs. backlog.md's M0-minimal scope; WF-002's stock-ledger atomicity vs. the item 6/7 split) before writing code, built and demoed `POST /api/v1/sales` live with server-side recompute and a cross-tenant RLS proof. No new bug found — `requireSession`'s fix held on its second real caller. |
