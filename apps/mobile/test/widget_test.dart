@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/app/home_screen.dart';
 import 'package:mobile/app/providers.dart';
 import 'package:mobile/core/database/database.dart';
+import 'package:mobile/core/store_context/store_context_providers.dart';
 
 void main() {
   testWidgets('home screen proves the local database opens and is queryable', (
@@ -14,13 +15,17 @@ void main() {
     // the app shell's router redirects through a Supabase-backed auth guard
     // before HomeScreen is ever reached, which is irrelevant to what this
     // test proves (the database opens and is queryable) and would require
-    // faking Supabase's session storage for no benefit here.
+    // faking Supabase's session storage for no benefit here. Since Sprint 08,
+    // HomeScreen also watches `storeContextProvider`, which would otherwise
+    // touch the (uninitialized, in this test) Supabase client and a real
+    // network call — overridden with a fixed value for the same reason.
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           appDatabaseProvider.overrideWithValue(
             AppDatabase(NativeDatabase.memory()),
           ),
+          storeContextProvider.overrideWith((ref) async => 'fake-store-id'),
         ],
         child: const MaterialApp(home: HomeScreen()),
       ),

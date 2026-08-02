@@ -1,7 +1,7 @@
 # Module Registry
 
 > **Status:** 🔵 In review
-> **Version:** 0.7.0
+> **Version:** 0.8.0
 > **Last updated:** 2026-08-02
 > **Owner:** CTO
 
@@ -21,7 +21,7 @@ sections defined in [Documentation Standards](../00-governance/documentation-sta
 | Module | Slice | Spec | Build | Depends on |
 | --- | --- | --- | --- | --- |
 | Authentication | V1 | 🟢 [spec](authentication/specification.md) | 🔨 (sign-in, hook, `users` RLS, partial session resolution live; mobile `/auth/login` screen live and demoed against real Supabase Auth (Sprint 06); device registration/revocation not yet built) | — |
-| Company & Store Setup | V1 | 🟢 [spec](company-store-setup/specification.md) | 🔨 (`POST /api/v1/onboarding` live, demoed against real infrastructure; `PATCH /stores/{id}` deferred) | Authentication |
+| Company & Store Setup | V1 | 🟢 [spec](company-store-setup/specification.md) | 🔨 (`POST /api/v1/onboarding` live, demoed against real infrastructure; `GET /api/v1/stores` live and verified with a cross-tenant RLS proof, mobile fetch-and-cache built (Sprint 08); `PATCH /stores/{id}` deferred) | Authentication |
 | Roles & Permissions | V1 | ⚪ | ⚪ | Authentication |
 | Audit Log | V1 | ⚪ | ⚪ | Authentication |
 | Categories | V1 | ⚪ | ⚪ | Store Setup |
@@ -88,3 +88,4 @@ Restaurant module · Salon module · Analytics · Accountant role & accounting e
 | 0.5.0 | 2026-08-01 | POS specification authored and approved; moved to 🔨: `POST /api/v1/sales` implemented and demoed live (Sprint 05). Specification names the gap against its listed "Stock Ledger, Customers" dependency, against the stock-ledger effect WF-002 requires atomically, and against the still-unbuilt mobile till screen. |
 | 0.6.0 | 2026-08-02 | Authentication row updated: mobile `/auth/login` screen built and demoed live against real Supabase Auth (Sprint 06) — the first real Flutter feature screen in the project, closing the gap found in backlog.md item 12. Device registration/revocation remain the only undone part of this module. |
 | 0.7.0 | 2026-08-02 | Products row updated: mobile local write path (`/catalogue/add`) built and verified against a real on-disk file (Sprint 07) — the local write and `outbound_queue` enqueue are atomic and idempotent. Nothing yet drains the queue; the sync engine is still the named gap. |
+| 0.8.0 | 2026-08-02 | Company & Store Setup row updated: `GET /api/v1/stores` built and verified live with a cross-tenant RLS proof, mobile fetch-and-cache built (Sprint 08) — closes the till screen's `store_id` prerequisite, a real gap found during Sprint 08 planning. |
