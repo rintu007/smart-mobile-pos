@@ -1,9 +1,9 @@
 # Retrospective Log
 
-> **Status:** 🔵 In review — Sprint 01 through 04 retrospectives recorded
+> **Status:** 🔵 In review — Sprint 01 through 06 retrospectives recorded
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.5.0
-> **Last updated:** 2026-08-01
+> **Version:** 0.6.0
+> **Last updated:** 2026-08-02
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
 
@@ -142,6 +142,38 @@ what the function does. Applied immediately to `session.ts` itself as part of th
 multiple exports should carry this per-function proof-status note from the start, not bolted on
 after a bug like this one.
 
+---
+
+### Sprint 06 retrospective — 2026-08-02
+
+**What surprised us:** this project's own established demo pattern ("send a real request against
+live infrastructure before claiming done") assumed the thing being demoed could actually be *run*.
+For the mobile app's first UI screen, that assumption broke: `flutter doctor` — never run before
+this sprint's demo step, because prior sprints never needed a device — revealed Windows desktop
+build support was never fully installed (missing the C++ workload) and no Android SDK exists on
+this machine, leaving only Chrome (web) available, and even that couldn't run the app's tests
+directly (`flutter test` blocks real HTTP and has no `shared_preferences` platform channel, so it
+can't prove a live sign-in either). The gap was found only when the demo script needed a real
+device — by which point the sprint's actual code was already finished and correct; the surprise was
+entirely about what could *prove* it, not about the code itself. Separately and unrelated to this
+project's code: the machine's C: drive hit 0 bytes free mid-sprint (`flutter pub add` failed
+outright) from accumulated package-manager caches never pruned — resolved with the founder's
+confirmation before clearing anything, since disk cleanup is a machine-wide action, not a
+project-scoped one.
+
+**What we're changing:** `flutter doctor` runs at the *start* of any sprint whose scope touches
+mobile UI, not discovered mid-demo — so a missing device target becomes a Day 1 scoping input
+(pick a reachable target, or flag the gap before writing code) rather than a Day 1-of-the-*next*-
+sprint scramble. This sprint worked around it by proving the real network code path
+(`SupabaseAuthRepository`) via a temporary Chrome-run script separately from the UI's own behavior
+(via widget tests with fakes) — a legitimate substitute, but a substitute, honestly logged as such
+in [sprint-06.md](sprint-06.md)'s Demo script rather than claimed as the originally planned
+single end-to-end run.
+
+**Did the last change help?** Sprint 07 (or whichever sprint next touches mobile UI) is where this
+gets checked — it should open with a `flutter doctor` check, not discover the gap at demo time
+again.
+
 ## Entry format
 
 ```markdown
@@ -173,3 +205,4 @@ than a diary.
 | 0.3.0 | 2026-08-01 | Sprint 02's retrospective recorded (a real row-ordering bug found on first contact with live data), plus an addendum from deploying to Vercel: "service-layer tested and typechecks" turned out to also not mean "the HTTP endpoint works" — two real bugs (a runtime crash, and every mobile request silently failing auth) sat invisible through three green CI runs until the first actual HTTP request was sent. New rule: at least one real HTTP request before any endpoint is marked done. |
 | 0.4.0 | 2026-08-01 | Sprint 03's retrospective recorded: first real use of the Flutter/Dart toolchain surfaced two genuine current-state package findings (Riverpod 3.x vs. `riverpod_lint`, `sqlite3_flutter_libs` obsolescence) neither predicted in advance — confirms Sprint 01's "first contact with real tooling" lesson generalizes across toolchains, not just Node/pnpm. |
 | 0.5.0 | 2026-08-01 | Sprint 04's retrospective recorded: `requireSession` had a real wrong-claim-location bug invisible through three sprints because it had never been exercised by a real request — only its sibling function in the same file had. New concrete practice: `core/` files with multiple exports now state each export's own proof status, not just what it does; applied immediately to `session.ts`. |
+| 0.6.0 | 2026-08-02 | Sprint 06's retrospective recorded: the mobile app's first UI screen exposed that no local device can actually run it (Windows C++ workload and Android SDK both missing), discovered only at demo time. New concrete practice: `flutter doctor` runs at the start of any sprint touching mobile UI, not mid-demo. |

@@ -1,8 +1,8 @@
 # Module Registry
 
 > **Status:** 🔵 In review
-> **Version:** 0.5.0
-> **Last updated:** 2026-08-01
+> **Version:** 0.6.0
+> **Last updated:** 2026-08-02
 > **Owner:** CTO
 
 The operational tracker for every business module. The strategic rationale for the ordering lives
@@ -20,7 +20,7 @@ sections defined in [Documentation Standards](../00-governance/documentation-sta
 
 | Module | Slice | Spec | Build | Depends on |
 | --- | --- | --- | --- | --- |
-| Authentication | V1 | 🟢 [spec](authentication/specification.md) | 🔨 (sign-in, hook, `users` RLS, partial session resolution live; device registration/revocation not yet built) | — |
+| Authentication | V1 | 🟢 [spec](authentication/specification.md) | 🔨 (sign-in, hook, `users` RLS, partial session resolution live; mobile `/auth/login` screen live and demoed against real Supabase Auth (Sprint 06); device registration/revocation not yet built) | — |
 | Company & Store Setup | V1 | 🟢 [spec](company-store-setup/specification.md) | 🔨 (`POST /api/v1/onboarding` live, demoed against real infrastructure; `PATCH /stores/{id}` deferred) | Authentication |
 | Roles & Permissions | V1 | ⚪ | ⚪ | Authentication |
 | Audit Log | V1 | ⚪ | ⚪ | Authentication |
@@ -86,3 +86,4 @@ Restaurant module · Salon module · Analytics · Accountant role & accounting e
 | 0.3.0 | 2026-08-01 | Company & Store Setup moved to 🔨: `POST /api/v1/onboarding` implemented and demoed against real infrastructure (Sprint 02). |
 | 0.4.0 | 2026-08-01 | Products specification authored and approved; moved to 🔨: `POST /api/v1/products` implemented and demoed live (Sprint 04). Specification explicitly names the gap against its listed "Categories, Units" dependency and against FR-032/FR-035 — M0's minimal slice is name/price only, not the full V1 shape. |
 | 0.5.0 | 2026-08-01 | POS specification authored and approved; moved to 🔨: `POST /api/v1/sales` implemented and demoed live (Sprint 05). Specification names the gap against its listed "Stock Ledger, Customers" dependency, against the stock-ledger effect WF-002 requires atomically, and against the still-unbuilt mobile till screen. |
+| 0.6.0 | 2026-08-02 | Authentication row updated: mobile `/auth/login` screen built and demoed live against real Supabase Auth (Sprint 06) — the first real Flutter feature screen in the project, closing the gap found in backlog.md item 12. Device registration/revocation remain the only undone part of this module. |

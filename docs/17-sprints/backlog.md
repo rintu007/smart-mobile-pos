@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-31
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-02
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
 
@@ -30,11 +30,15 @@ sprint-01.md-style planning reaches it.
 | 8 | Audit log: one entry per completed sale, per [DR-025](../03-functional-requirements/business-rules.md) | 6 | 1 |
 | 9 | Sync engine: `POST /sync/push` for `product.create`/`sale.create`, `GET /sync/pull` for `products` — the minimal slice of [sync-api.md](../11-api/sync-api.md), not the full 5-entity-type pull | 5, 6 | 3 |
 | 10 | Bluetooth ESC/POS receipt print (58 mm), against [receipt-design.md](../10-design-system/receipt-design.md)'s worked example | 6 | 2 |
-| 11 | End-to-end proof: sign in, add a product, complete a sale in airplane mode, reconnect, watch it sync, print the receipt — [milestones.md — M0](../16-milestones/milestones.md#m0--walking-skeleton)'s exact exit criterion, executed and evidenced | 1–10 | 1 |
+| 11 | End-to-end proof: sign in, add a product, complete a sale in airplane mode, reconnect, watch it sync, print the receipt — [milestones.md — M0](../16-milestones/milestones.md#m0--walking-skeleton)'s exact exit criterion, executed and evidenced | 1–10, 12 | 1 |
+| 12 | Mobile sign-in screen (`/auth/login`): direct client call to Supabase Auth per [authentication/specification.md §9](../modules/authentication/specification.md#9-ui-specification), session persisted on-device — the first real Flutter screen and the actual prerequisite for item 11's "sign in" step, which this list never decomposed as its own item until Sprint 06 planning caught the gap | 2, 3 | 1.5 |
 
-**Total: 18.5 person-days** — inside [roadmap.md](../16-milestones/roadmap.md)'s 15–20 person-day
-estimate for M0, confirming that estimate held up under actual decomposition rather than needing
-revision the moment real planning touched it.
+**Total: 20 person-days** (18.5 across items 1–11, plus item 12's 1.5, added 2026-08-02 — see
+Change Log) — at the top edge of [roadmap.md](../16-milestones/roadmap.md)'s 15–20 person-day
+estimate for M0, not comfortably inside it as the original 18.5 figure was. The gap that produced
+item 12 (mobile sign-in was never decomposed despite item 11 depending on it) was a real omission,
+not a padding choice, so the honest move is reporting the higher total rather than quietly
+absorbing it into an existing item's estimate.
 
 ## 2. M1–M4 — module grain only, decomposed when reached
 
@@ -57,3 +61,4 @@ specifically.
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-31 | M0 fully decomposed into 11 estimated, dependency-ordered items totalling 18.5 person-days (within the Phase 16 estimate); M1–M4 left at module grain, decomposed when reached. |
+| 0.2.0 | 2026-08-02 | Sprint 06 planning found a real gap: this decomposition never listed a mobile sign-in screen as its own item, despite item 11's E2E proof requiring "sign in" as its first step and despite [authentication/specification.md §9](../modules/authentication/specification.md#9-ui-specification) already anticipating the `/auth/login` route. Added item 12 (depends on 2, 3; 1.5 person-days) and updated item 11's dependency list to include it, rather than silently folding the work into an existing item's estimate. Total revised to 20 person-days. |

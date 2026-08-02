@@ -1,7 +1,7 @@
 # Phase 18 — Implementation
 
-> **Status:** 🟡 In progress — Sprint 01 through Sprint 05 all closed; Sprint 06 planning is next
-> **Version:** 0.7.0
+> **Status:** 🟡 In progress — Sprint 01 through Sprint 06 all closed; Sprint 07 planning is next
+> **Version:** 0.8.0
 > **Last updated:** 2026-08-02
 > **Owner:** CTO / All engineering roles
 
@@ -88,3 +88,4 @@ to the 13-step loop or the full Definition of Done. See
 | 0.5.0 | 2026-08-01 | Sprint 03 closed: Flutter SDK installed, `apps/mobile` scaffolded and reshaped to `mobile-structure.md`, local Drift database built for backlog.md item 4 and verified via `flutter test` (schema opens, all five tables round-trip). Unblocks every remaining M0 backlog item, which all depended on this. Next up is Sprint 04 planning. |
 | 0.6.0 | 2026-08-01 | Sprint 04 closed: `POST /api/v1/products` built and demoed live against real infrastructure, including a cross-tenant RLS proof. Found and fixed a real, three-sprints-latent bug in `requireSession`. Next up is Sprint 05 planning. |
 | 0.7.0 | 2026-08-02 | Sprint 05 closed: `POST /api/v1/sales` built and demoed live with server-side price/payment recompute and a cross-tenant RLS proof. No new bug found. Flagged the three-sprints-running mobile-UI deferral as a risk for Sprint 06 to weigh directly. Next up is Sprint 06 planning. |
+| 0.8.0 | 2026-08-02 | Sprint 06 closed: mobile `/auth/login` — the first real Flutter screen — built, tested, and verified live against real Supabase Auth. Closed the mobile-UI-deferral risk's first concrete slice and a real backlog gap (mobile sign-in was never decomposed). Next up is Sprint 07 planning. |
