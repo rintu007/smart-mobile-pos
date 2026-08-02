@@ -1,7 +1,7 @@
 # Module Registry
 
 > **Status:** 🔵 In review
-> **Version:** 0.6.0
+> **Version:** 0.7.0
 > **Last updated:** 2026-08-02
 > **Owner:** CTO
 
@@ -26,7 +26,7 @@ sections defined in [Documentation Standards](../00-governance/documentation-sta
 | Audit Log | V1 | ⚪ | ⚪ | Authentication |
 | Categories | V1 | ⚪ | ⚪ | Store Setup |
 | Units | V1 | ⚪ | ⚪ | Store Setup |
-| Products | V1 | 🟢 [spec](products/specification.md) | 🔨 (`POST /api/v1/products` live, name/price only; `GET`/`PATCH`/`DELETE`, category/unit, and the mobile write path all deferred) | Categories, Units *(named exception — see spec §1: M0's minimal slice doesn't wait on either, per the M0 exception below)* |
+| Products | V1 | 🟢 [spec](products/specification.md) | 🔨 (`POST /api/v1/products` live, name/price only; mobile local write path (`/catalogue/add`) live, verified against a real on-disk file (Sprint 07); `GET`/`PATCH`/`DELETE`, category/unit, and the sync engine that would push a locally-created product to the server all deferred) | Categories, Units *(named exception — see spec §1: M0's minimal slice doesn't wait on either, per the M0 exception below)* |
 | Inventory — Stock Ledger | V1 | ⚪ | ⚪ | Products |
 | Customers (basic) | V1 | ⚪ | ⚪ | Store Setup |
 | POS | V1 | 🟢 [spec](pos/specification.md) | 🔨 (`POST /api/v1/sales` live, cash-only/no-discount/no-tax, no stock-ledger effect yet; mobile till screen not built) | Products, Stock Ledger, Customers *(named exception — see spec §1: M0's minimal slice doesn't wait on Stock Ledger/Customers, per the M0 exception below)* |
@@ -87,3 +87,4 @@ Restaurant module · Salon module · Analytics · Accountant role & accounting e
 | 0.4.0 | 2026-08-01 | Products specification authored and approved; moved to 🔨: `POST /api/v1/products` implemented and demoed live (Sprint 04). Specification explicitly names the gap against its listed "Categories, Units" dependency and against FR-032/FR-035 — M0's minimal slice is name/price only, not the full V1 shape. |
 | 0.5.0 | 2026-08-01 | POS specification authored and approved; moved to 🔨: `POST /api/v1/sales` implemented and demoed live (Sprint 05). Specification names the gap against its listed "Stock Ledger, Customers" dependency, against the stock-ledger effect WF-002 requires atomically, and against the still-unbuilt mobile till screen. |
 | 0.6.0 | 2026-08-02 | Authentication row updated: mobile `/auth/login` screen built and demoed live against real Supabase Auth (Sprint 06) — the first real Flutter feature screen in the project, closing the gap found in backlog.md item 12. Device registration/revocation remain the only undone part of this module. |
+| 0.7.0 | 2026-08-02 | Products row updated: mobile local write path (`/catalogue/add`) built and verified against a real on-disk file (Sprint 07) — the local write and `outbound_queue` enqueue are atomic and idempotent. Nothing yet drains the queue; the sync engine is still the named gap. |

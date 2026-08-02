@@ -16,7 +16,7 @@
 
 | Document | Content | Status |
 | --- | --- | --- |
-| [`route-map.md`](route-map.md) | 6 pre-shell + 35 shell routes (41 total), every one with permission and offline value stated | 🔵 In review |
+| [`route-map.md`](route-map.md) | 6 pre-shell + 36 shell routes (42 total), every one with permission and offline value stated | 🔵 In review |
 | [`navigation-model.md`](navigation-model.md) | 4-tab persistent shell, Till app-bar quick actions, mid-sale-interruption gap closed | 🔵 In review |
 | [`deep-links.md`](deep-links.md) | 1 real V1 deep link (account verification); rest deferred with reasoning | 🔵 In review |
 | [`guards-and-redirects.md`](guards-and-redirects.md) | 4 guards; subscription guard explicitly ruled out and why | 🔵 In review |

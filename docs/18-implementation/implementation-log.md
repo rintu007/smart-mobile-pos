@@ -2,7 +2,7 @@
 
 > **Status:** 🟡 In progress
 > **Phase:** 18 — Implementation
-> **Version:** 0.12.0
+> **Version:** 0.13.0
 > **Last updated:** 2026-08-02
 > **Owner:** CTO / All engineering roles
 
@@ -545,6 +545,44 @@ run, not claimed as equivalent to it.
 production Supabase; a wrong password was correctly rejected. Test fixtures (tenant, store, user,
 Supabase Auth account) deleted afterward, confirmed at 0 rows.
 
+## 2026-08-02 — Sprint 07: mobile product creation — the local write path
+
+Closes backlog item 5's remaining, mobile-only scope (the server half shipped Sprint 04) — the
+second concrete action against the mobile-UI-deferral risk. Found one real gap while planning:
+`route-map.md` had a route for viewing/editing an existing product (`/catalogue/:id`) but none for
+creating a new one — added `/catalogue/add` as a dated correction (`route-map.md` 0.1.2) before
+writing the screen.
+
+**Built:** `apps/mobile/lib/features/catalogue/` (domain/data/presentation, per
+`mobile-structure.md`). `DriftProductRepository.createProduct` writes the local `products` row and
+enqueues a `product.create` operation to `outbound_queue` inside a single Drift transaction —
+payload identical to `POST /api/v1/products`'s own request shape (`{ id, name, price_minor_units }`),
+matching `sync-api.md §1`'s "push does not define a second, parallel request schema" so the future
+sync engine can hand the queued payload straight to the same service logic the direct endpoint uses.
+Idempotent on `id`. `AddProductScreen` at `/catalogue/add`, reached via a FAB on the home screen.
+
+**Two environment issues hit and resolved, neither a code bug:**
+- The C: drive's free space had not been an issue since Sprint 06's cache cleanup, but mid-sprint
+  `flutter analyze` crashed outright with "Could not reserve virtual memory" — the machine's RAM was
+  down to 0.7 GB free (of 15.67 GB), traced to 33 leftover Chrome processes (~3.2 GB) that outlived
+  Sprint 06's `flutter run -d chrome` demo despite the wrapper task having been stopped. Resolved by
+  the founder closing Chrome directly, since distinguishing "leftover demo instance" from "the
+  founder's actual open tabs" isn't safely inferable from a process list alone — asked rather than
+  guessed. **New standing note:** a `flutter run -d <device>` launched for a demo can leave the
+  browser/process running even after its wrapper task is stopped; verify no such process survives
+  after wrapping up, not just that the launching task exited.
+- A real name collision: Drift generates a row class literally named `Product` for the `Products`
+  table, colliding with this feature's own domain `Product` entity — surfaced immediately by
+  `flutter analyze` (`ambiguous_import`), fixed with a scoped `hide Product` on the database import.
+
+**Live verification (no local device can run the actual rendered UI, same gap Sprint 06 found):** a
+temporary script used a real file-backed `NativeDatabase` (not `.memory()`), wrote a product, closed
+the connection, reopened a **fresh** connection to the same file, and confirmed both the `products`
+row and the `outbound_queue` row were present and correct — proving genuine on-disk persistence, not
+just an open connection's in-memory cache. An idempotent replay against the reopened connection
+correctly wrote nothing new. 16 tests (3 new repository tests, 5 new widget tests, 8 carried over
+from Sprint 06) all pass; `flutter analyze` clean.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -562,3 +600,4 @@ Supabase Auth account) deleted afterward, confirmed at 0 rows.
 | 0.10.0 | 2026-08-01 | Sprint 04: `POST /api/v1/products` built and demoed live (M0-minimal name/price only — a real spec gap against catalogue.md/FR-032/FR-035 found and resolved before writing code). Found and fixed a real, three-sprints-latent bug: `requireSession` read the `tenant_id` claim from the wrong location (`user.app_metadata` instead of the JWT's top-level claim), invisible until this sprint's endpoint was the first to actually call it. New practice: `core/` files with multiple exports state each export's own proof status. |
 | 0.11.0 | 2026-08-02 | Sprint 05: `POST /api/v1/sales` built and demoed live (M0-minimal cash-only, no discount/tax/trading-day — two real spec gaps against sales.md/WF-002 found and resolved before writing code). Server-side price/payment recompute proven live (`PRICE_MISMATCH`, new `PAYMENT_AMOUNT_MISMATCH`). No new bug found — `requireSession`'s Sprint 04 fix held on its second real caller. Named the mobile-UI deferral as a three-sprints-running risk worth addressing in Sprint 06. |
 | 0.12.0 | 2026-08-02 | Sprint 06: mobile `/auth/login` — the first real Flutter screen — built and verified against real Supabase Auth. Closed the missing-backlog-item gap (item 12) and made the first concrete move against the mobile-UI-deferral risk. Found and fixed a real pre-ship bug (`SignInController`'s async `build()` causing a spurious initial loading flash) via a widget test, and two real environment gaps (disk full, no runnable mobile device locally) — both logged honestly rather than worked around silently. |
+| 0.13.0 | 2026-08-02 | Sprint 07: mobile product creation (`/catalogue/add`) built — local write + `outbound_queue` enqueue atomic and idempotent, verified against a real on-disk file across a fresh connection. Closed backlog item 5's remaining scope and a real route-map.md gap. Found and fixed a real `Product` name collision (Drift's generated row class vs. the domain entity) and diagnosed a real memory-exhaustion issue (33 leftover Chrome processes from Sprint 06's demo) without guessing at the fix. |

@@ -6,8 +6,8 @@
 > [mobile-structure.md](../../08-folder-structure/mobile-structure.md)'s own note that the two
 > groupings are different, valid axes over the same modules)
 > **Slice:** V1 — this document scopes only M0's minimal first cut, not the full V1 shape (§1)
-> **Version:** 0.1.0
-> **Last updated:** 2026-08-01
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-02
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
 
@@ -67,13 +67,14 @@ RLS: tenant-scoped, same template as `stores`
 | `GET /products` | **Already documented**, not yet implemented — [catalogue.md](../../11-api/endpoints/catalogue.md). Deferred past this sprint, matching Sprint 02's precedent of shipping create-only first. |
 | `PATCH /products/{id}`, `DELETE /products/{id}` | **Already documented**, not yet implemented — deferred past this sprint. |
 
-**Also explicitly out of scope this sprint:** the mobile-side local write path (Drift insert +
-`outbound_queue` enqueue) [backlog.md item 5](../../17-sprints/backlog.md#1-m0--walking-skeleton-fully-decomposed)'s
-own text bundles alongside the server endpoint. No Flutter feature screen or data layer exists yet
-(`apps/mobile/features/catalogue/` is still empty — [Sprint 03](../../17-sprints/sprint-03.md) built
-only the Drift schema, not a feature on top of it). Building the server endpoint first, proven live,
-is this sprint's actual scope; the mobile write path is a follow-up sprint's work, named here rather
-than silently dropped.
+**Mobile local write path — built [Sprint 07](../../17-sprints/sprint-07.md).**
+`apps/mobile/lib/features/catalogue/` (`DriftProductRepository.createProduct`) writes to the local
+`products` table and enqueues a `product.create` operation to `outbound_queue` in a single Drift
+transaction — payload identical to this table's request shape (`{ id, name, price_minor_units }`),
+per [sync-api.md §1](../../11-api/sync-api.md#1-push--post-syncpush)'s "push does not define a
+second, parallel request schema." Idempotent on `id`, same as the server endpoint. **Nothing yet
+drains the queue** — the sync engine (backlog item 9) is a separate, later sprint; a product
+created on-device stays local-only (never pushed to the server) until that sprint exists.
 
 ## 5. Validation rules (client and server)
 
@@ -97,9 +98,12 @@ reasoning as Company & Store Setup's spec §6 (backend-only sprint, no mobile sc
 The server endpoint itself requires connectivity, same as any `POST` — but per
 [catalogue.md](../../11-api/endpoints/catalogue.md), `POST /products` is documented as
 **offline-capable** in the full V1 design (queued via `outbound_queue`, per
-[sync-api.md](../../11-api/sync-api.md)'s "Products created offline" dependency-ordering note). That
-offline path is exactly the mobile local-write-path scope named as deferred in §4 — this sprint
-proves only the direct online path.
+[sync-api.md](../../11-api/sync-api.md)'s "Products created offline" dependency-ordering note).
+**Built Sprint 07**: creating a product on-device writes locally and enqueues immediately,
+regardless of connectivity — the screen never calls the network directly. What's still missing is
+the other half of "offline-capable": nothing yet drains the queue back to the server (backlog item
+9, the sync engine), so a product created offline currently stays offline indefinitely rather than
+eventually syncing — a real, named gap, not a claim that offline support is complete.
 
 ## 8. Realtime behaviour
 
@@ -109,9 +113,15 @@ endpoint exists (§4).
 
 ## 9. UI specification
 
-`apps/mobile/features/catalogue/` per [mobile-structure.md](../../08-folder-structure/mobile-structure.md) —
-no screen built yet, same statement as Company & Store Setup's spec §9. Not a blocker: this sprint
-(per its own capacity check, [sprint-04.md](../../17-sprints/sprint-04.md)) is backend-only.
+`/catalogue/add` (added to [route-map.md](../../09-navigation/route-map.md) as a dated correction
+during Sprint 07 planning — the original route list covered viewing/editing an existing product
+but not creating one) — **built Sprint 07**
+(`apps/mobile/lib/features/catalogue/presentation/screens/add_product_screen.dart`): name and price
+fields, reached via a FAB on the app shell's home screen until the product list screen (`/catalogue`
+itself) is built. No dedicated design-system composition spec exists for this screen (only the till
+screen is composed in patterns.md), so it follows components.md §1/§2's generic button/text-field
+states. The product **list** screen (`/catalogue`) itself is not yet built — this sprint only
+built the add flow, reachable directly rather than through a list that doesn't exist yet.
 
 ## 10. Test plan
 
@@ -128,8 +138,20 @@ no screen built yet, same statement as Company & Store Setup's spec §9. Not a b
   ([retrospective-log.md](../../17-sprints/retrospective-log.md)): a unit-tested, typechecked
   service is not the same claim as a working HTTP endpoint.
 
-**Explicitly deferred past Sprint 04:** `GET`/`PATCH`/`DELETE /products`, the mobile local write
-path (§4), everything FR-032/FR-035 require beyond name/price (§1).
+**Sprint 07 scope (mobile):**
+- Repository test (`drift_product_repository_test.dart`): writes both the `products` row and the
+  matching `outbound_queue` row; idempotent replay with the same `id` writes neither a second time;
+  a forced enqueue failure leaves no `products` row behind (the transaction is atomic).
+- Widget tests (`add_product_screen_test.dart`): empty/invalid-price validation, the loading state,
+  and a thrown failure rendering as inline error text.
+- **Live verification required before this was marked done** — same rule as Sprint 02's HTTP-request
+  addendum, applied to local storage instead of a server: a real file-backed `NativeDatabase`
+  (not `.memory()`) was written to, closed, and reopened on a fresh connection to prove the write
+  actually persists to disk, not just within one open connection's cache.
+
+**Explicitly deferred past Sprint 07:** `GET`/`PATCH`/`DELETE /products`, the product list screen
+(`/catalogue`), the sync engine that would actually push a locally-created product to the server
+(§7), everything FR-032/FR-035 require beyond name/price (§1).
 
 ## 11. Traceability
 
@@ -146,3 +168,4 @@ path (§4), everything FR-032/FR-035 require beyond name/price (§1).
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-08-01 | First version — written to drive Sprint 04's implementation of `POST /api/v1/products`. Scope deliberately narrow (name/price only); FR-032/FR-035's category/unit requirement and the mobile local write path both named as not-yet-met rather than silently claimed. |
+| 0.2.0 | 2026-08-02 | Sprint 07: mobile local write path built (`DriftProductRepository`, `/catalogue/add`) — local write and `outbound_queue` enqueue atomic in one Drift transaction, idempotent on `id`, verified against a real on-disk file. Nothing yet drains the queue (sync engine, backlog item 9) — named explicitly, not claimed as full offline support. |
