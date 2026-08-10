@@ -1,7 +1,7 @@
 # Module Registry
 
 > **Status:** 🔵 In review
-> **Version:** 0.8.0
+> **Version:** 0.9.0
 > **Last updated:** 2026-08-02
 > **Owner:** CTO
 
@@ -29,7 +29,7 @@ sections defined in [Documentation Standards](../00-governance/documentation-sta
 | Products | V1 | 🟢 [spec](products/specification.md) | 🔨 (`POST /api/v1/products` live, name/price only; mobile local write path (`/catalogue/add`) live, verified against a real on-disk file (Sprint 07); `GET`/`PATCH`/`DELETE`, category/unit, and the sync engine that would push a locally-created product to the server all deferred) | Categories, Units *(named exception — see spec §1: M0's minimal slice doesn't wait on either, per the M0 exception below)* |
 | Inventory — Stock Ledger | V1 | ⚪ | ⚪ | Products |
 | Customers (basic) | V1 | ⚪ | ⚪ | Store Setup |
-| POS | V1 | 🟢 [spec](pos/specification.md) | 🔨 (`POST /api/v1/sales` live, cash-only/no-discount/no-tax, no stock-ledger effect yet; mobile till screen not built) | Products, Stock Ledger, Customers *(named exception — see spec §1: M0's minimal slice doesn't wait on Stock Ledger/Customers, per the M0 exception below)* |
+| POS | V1 | 🟢 [spec](pos/specification.md) | 🔨 (`POST /api/v1/sales` live, cash-only/no-discount/no-tax; mobile till screen (`/pos`) live — local write path built and tested, verified against a real Drift database, including a multi-row atomicity proof; no stock-ledger effect yet, sync engine not built so the mobile write path and the server endpoint aren't connected yet) | Products, Stock Ledger, Customers *(named exception — see spec §1: M0's minimal slice doesn't wait on Stock Ledger/Customers, per the M0 exception below)* |
 | Sales & Invoices | V1 | ⚪ | ⚪ | POS |
 | Receipt & Printing | V1 | ⚪ | ⚪ | Sales |
 | Returns & Refund (basic) | V1 | ⚪ | ⚪ | Sales, Stock Ledger |
@@ -89,3 +89,4 @@ Restaurant module · Salon module · Analytics · Accountant role & accounting e
 | 0.6.0 | 2026-08-02 | Authentication row updated: mobile `/auth/login` screen built and demoed live against real Supabase Auth (Sprint 06) — the first real Flutter feature screen in the project, closing the gap found in backlog.md item 12. Device registration/revocation remain the only undone part of this module. |
 | 0.7.0 | 2026-08-02 | Products row updated: mobile local write path (`/catalogue/add`) built and verified against a real on-disk file (Sprint 07) — the local write and `outbound_queue` enqueue are atomic and idempotent. Nothing yet drains the queue; the sync engine is still the named gap. |
 | 0.8.0 | 2026-08-02 | Company & Store Setup row updated: `GET /api/v1/stores` built and verified live with a cross-tenant RLS proof, mobile fetch-and-cache built (Sprint 08) — closes the till screen's `store_id` prerequisite, a real gap found during Sprint 08 planning. |
+| 0.9.0 | 2026-08-02 | POS row updated: mobile till screen (`/pos`) built (Sprint 09) — cart, cash-only sale completion, local write path proven atomic across a multi-row transaction. Server endpoint and mobile write path remain independently proven, not yet connected (sync engine, backlog.md item 9). |

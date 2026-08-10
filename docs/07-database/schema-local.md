@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 07 — Database Design
-> **Version:** 0.1.2
-> **Last updated:** 2026-07-31
+> **Version:** 0.1.3
+> **Last updated:** 2026-08-02
 > **Owner:** Principal Flutter Engineer / PostgreSQL Architect
 > **Approved by:** _pending_
 
@@ -71,12 +71,29 @@ actual V1 tables:
 
 ### `local_provisional_sequence`
 **Purpose:** the per-device counter backing provisional invoice numbers —
-[ADR-0008](../adr/ADR-0008-offline-invoice-numbering.md).
+[ADR-0008](../adr/ADR-0008-offline-invoice-numbering.md). **Built Sprint 09**
+(`apps/mobile/lib/core/database/tables/local_provisional_sequence.dart`).
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `financial_year` | `TEXT` | Primary key component |
 | `next_sequence` | `INTEGER` | Incremented atomically on each sale creation, never decremented or reset except at a financial-year boundary |
+
+### `device_identity`
+**Purpose:** the local half of ADR-0008's `client_device_id` — a single row
+(`id = 'current'`) holding a device short id, generated fresh per install and
+never derived from a hardware identifier (identifiers.md §4's edge case).
+**Not previously listed in this document; added Sprint 09** alongside
+`local_provisional_sequence`, the first table that actually needed it.
+Deliberately narrower than the full ADR-0008 device model: this has no
+corresponding `devices` server row yet (Authentication's device-registration
+slice isn't built) — it exists only to make the provisional-number scheme's
+local half concrete.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `TEXT` | Primary key, always the literal `'current'` — one device, one row, same convention as `store_context`'s single-row cache |
+| `short_id` | `TEXT` | 6-character, generated once at first use, stable thereafter |
 
 ---
 
@@ -96,3 +113,4 @@ redesign — the server schema already holds the full history regardless.
 | 0.1.0 | 2026-07-30 | Initial local schema: entity classification, divergence table, 2 local-only tables. |
 | 0.1.1 | 2026-07-31 | **Correction, found during Phase 13:** `categories`/`units`/`products` were misclassified as server-authoritative (grouped with identity data under an FR-019 justification that only actually applies to role changes). Reclassified as client-editable, matching [endpoints/catalogue.md](../11-api/endpoints/catalogue.md)'s already-specified offline write path — no design changed, the schema-local.md classification was simply wrong and now matches Phase 11. |
 | 0.1.2 | 2026-07-31 | **Correction, found during a pre-Phase-18 documentation audit:** the divergence table omitted `customers` and `shop_settings` entirely, despite both being listed in the entity-classification table above it. Added. |
+| 0.1.3 | 2026-08-02 | Sprint 09: `local_provisional_sequence` built. Added `device_identity`, a local-only table not previously listed in this document — the local half of ADR-0008's device-scoped numbering, needed the moment a real mobile write path (the till screen) had to produce a real invoice number. |

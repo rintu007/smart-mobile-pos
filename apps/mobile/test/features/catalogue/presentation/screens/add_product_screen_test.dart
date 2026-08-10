@@ -24,6 +24,9 @@ class _FakeProductRepository implements ProductRepository {
     if (createBehavior != null) await createBehavior!();
     return Product(id: id, name: name, priceMinorUnits: priceMinorUnits);
   }
+
+  @override
+  Future<List<Product>> listAll() async => [];
 }
 
 Widget _wrap(Widget child, {required ProductRepository repository}) {
