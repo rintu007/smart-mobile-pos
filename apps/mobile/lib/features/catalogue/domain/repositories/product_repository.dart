@@ -13,4 +13,10 @@ abstract class ProductRepository {
     required String name,
     required int priceMinorUnits,
   });
+
+  /// The local product cache, name-ordered — the till screen's product
+  /// picker (backlog.md item 6). Reflects only what this device has created
+  /// or pulled so far; there is no product pull-sync yet, so this can be a
+  /// strict subset of the tenant's full catalogue.
+  Future<List<Product>> listAll();
 }

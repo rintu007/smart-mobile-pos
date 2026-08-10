@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/auth/session.dart';
 import '../features/authentication/presentation/screens/login_screen.dart';
 import '../features/catalogue/presentation/screens/add_product_screen.dart';
+import '../features/pos/presentation/screens/till_screen.dart';
 import 'home_screen.dart';
 
 /// Bridges Supabase's auth-state stream to `GoRouter`'s `refreshListenable`,
@@ -57,6 +58,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/catalogue/add',
         builder: (context, state) => const AddProductScreen(),
       ),
+      GoRoute(path: '/pos', builder: (context, state) => const TillScreen()),
     ],
   );
 });

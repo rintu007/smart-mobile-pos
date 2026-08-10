@@ -10,10 +10,10 @@ import 'providers.dart';
 /// §2 (a "feature" is one of the 11 user-facing folders; this is composition
 /// root, same category as router.dart). Exists only to prove the local
 /// database opens and is queryable, to offer sign-out (Sprint 06), a way to
-/// reach `/catalogue/add` (Sprint 07), and now (Sprint 08) to trigger the
-/// store-context bootstrap the till screen will depend on, until the first
-/// real feature (till/catalogue's own product list) replaces it as the
-/// actual home destination.
+/// reach `/catalogue/add` (Sprint 07), to trigger the store-context
+/// bootstrap the till screen depends on (Sprint 08), and now a way to reach
+/// `/pos` (Sprint 09) — until a real bottom-nav shell
+/// (navigation-model.md) replaces this as the actual home destination.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
@@ -52,6 +52,16 @@ class HomeScreen extends ConsumerWidget {
                   Text('Store context error: $error', key: const Key('store_context_error')),
             ),
           ],
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: ElevatedButton(
+            key: const Key('go_to_till_button'),
+            onPressed: () => context.push('/pos'),
+            child: const Text('Go to till'),
+          ),
         ),
       ),
       floatingActionButton: FloatingActionButton(

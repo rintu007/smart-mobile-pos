@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/money/money.dart';
 import '../providers/product_providers.dart';
 
 /// `/catalogue/add`, per route-map.md (added this sprint — see its own
@@ -27,19 +28,10 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     super.dispose();
   }
 
-  /// Decimal major-units string ("12.50") -> integer minor units (1250) —
-  /// per ADR-0006. No `core/money` type yet (see sprint-07.md's Risks); this
-  /// is the one place in the app that does this conversion until a second
-  /// feature needs it too.
-  int? _parsePriceMinorUnits(String input) {
-    final majorUnits = double.tryParse(input.trim());
-    if (majorUnits == null || majorUnits < 0) return null;
-    return (majorUnits * 100).round();
-  }
-
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
-    final priceMinorUnits = _parsePriceMinorUnits(_priceController.text)!;
+    final priceMinorUnits =
+        Money.tryParseMajorUnits(_priceController.text)!.minorUnits;
     await ref
         .read(createProductControllerProvider.notifier)
         .createProduct(
@@ -102,7 +94,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                       ),
                       validator: (value) {
                         if (value == null ||
-                            _parsePriceMinorUnits(value) == null) {
+                            Money.tryParseMajorUnits(value) == null) {
                           return 'Enter a valid, non-negative price.';
                         }
                         return null;

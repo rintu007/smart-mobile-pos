@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:drift/drift.dart';
+
 // `database.dart`'s Drift-generated row class for the `Products` table is
 // also named `Product`, colliding with this feature's own domain entity of
 // the same name — hidden here since this file never needs the generated
@@ -67,5 +69,22 @@ class DriftProductRepository implements ProductRepository {
 
       return Product(id: id, name: name, priceMinorUnits: priceMinorUnits);
     });
+  }
+
+  @override
+  Future<List<Product>> listAll() async {
+    final rows =
+        await (_db.select(_db.products)..orderBy([
+          (t) => OrderingTerm(expression: t.name),
+        ])).get();
+    return rows
+        .map(
+          (row) => Product(
+            id: row.id,
+            name: row.name,
+            priceMinorUnits: row.priceMinorUnits,
+          ),
+        )
+        .toList();
   }
 }
