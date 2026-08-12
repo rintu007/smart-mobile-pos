@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/store_context/store_context_providers.dart';
+import '../core/sync/sync_providers.dart';
 import '../features/authentication/presentation/providers/auth_providers.dart';
 import 'providers.dart';
 
@@ -21,6 +22,13 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final productCount = ref.watch(productCountProvider);
     final storeContext = ref.watch(storeContextProvider);
+    // Fire-and-forget: runs once per app session right after store context
+    // resolves (docs/modules/sync-engine/specification.md §1's automatic
+    // trigger). Its own AsyncValue is deliberately not read here — a failure
+    // is swallowed inside the provider itself, and "Sync now" below is the
+    // user-visible half.
+    ref.watch(autoSyncOnStartProvider);
+    final syncState = ref.watch(syncControllerProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -50,6 +58,26 @@ class HomeScreen extends ConsumerWidget {
               loading: () => const CircularProgressIndicator(key: Key('store_context_loading')),
               error: (error, stack) =>
                   Text('Store context error: $error', key: const Key('store_context_error')),
+            ),
+            const SizedBox(height: 12),
+            syncState.when(
+              data: (summary) => Text(
+                summary == null
+                    ? 'Not synced yet this session.'
+                    : summary.hadNothingToPush
+                    ? 'Synced — nothing queued, ${summary.productsPulled} product(s) pulled.'
+                    : 'Synced — ${summary.accepted} pushed, ${summary.pending} pending, '
+                          '${summary.rejected} rejected, ${summary.productsPulled} product(s) pulled.',
+                key: const Key('sync_status'),
+              ),
+              loading: () => const CircularProgressIndicator(key: Key('sync_loading')),
+              error: (error, stack) => Text('Sync failed: $error', key: const Key('sync_error')),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton(
+              key: const Key('sync_now_button'),
+              onPressed: () => ref.read(syncControllerProvider.notifier).syncNow(),
+              child: const Text('Sync now'),
             ),
           ],
         ),

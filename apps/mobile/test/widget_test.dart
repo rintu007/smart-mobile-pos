@@ -6,6 +6,9 @@ import 'package:mobile/app/home_screen.dart';
 import 'package:mobile/app/providers.dart';
 import 'package:mobile/core/database/database.dart';
 import 'package:mobile/core/store_context/store_context_providers.dart';
+import 'package:mobile/core/sync/sync_dto.dart';
+import 'package:mobile/core/sync/sync_providers.dart';
+import 'package:mobile/core/sync/sync_repository.dart';
 
 void main() {
   testWidgets('home screen proves the local database opens and is queryable', (
@@ -19,6 +22,10 @@ void main() {
     // HomeScreen also watches `storeContextProvider`, which would otherwise
     // touch the (uninitialized, in this test) Supabase client and a real
     // network call — overridden with a fixed value for the same reason.
+    // Since Sprint 14, HomeScreen also watches `autoSyncOnStartProvider`,
+    // which would otherwise issue a real `GET /sync/pull` the moment
+    // `storeContextProvider` resolves — overridden to a no-op for the same
+    // reason.
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -26,6 +33,7 @@ void main() {
             AppDatabase(NativeDatabase.memory()),
           ),
           storeContextProvider.overrideWith((ref) async => 'fake-store-id'),
+          autoSyncOnStartProvider.overrideWith((ref) async {}),
         ],
         child: const MaterialApp(home: HomeScreen()),
       ),
@@ -33,5 +41,36 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Local database ready — 0 product(s) cached.'), findsOneWidget);
+    expect(find.text('Not synced yet this session.'), findsOneWidget);
+  });
+
+  testWidgets('tapping "Sync now" shows the resulting summary', (WidgetTester tester) async {
+    final db = AppDatabase(NativeDatabase.memory());
+    final fakeRepository = SyncRepository(
+      db,
+      (operations) async => const SyncPushResponse([]),
+      ({cursor}) async => const SyncPullPage(products: [], nextCursor: null),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          storeContextProvider.overrideWith((ref) async => 'fake-store-id'),
+          autoSyncOnStartProvider.overrideWith((ref) async {}),
+          syncRepositoryProvider.overrideWithValue(fakeRepository),
+        ],
+        child: const MaterialApp(home: HomeScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('sync_now_button')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Synced — nothing queued, 0 product(s) pulled.'),
+      findsOneWidget,
+    );
   });
 }

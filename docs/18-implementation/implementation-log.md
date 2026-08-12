@@ -2,7 +2,7 @@
 
 > **Status:** 🟡 In progress
 > **Phase:** 18 — Implementation
-> **Version:** 0.19.0
+> **Version:** 0.20.0
 > **Last updated:** 2026-08-13
 > **Owner:** CTO / All engineering roles
 
@@ -747,6 +747,32 @@ batch; a corrected two-page cursor walk; cross-tenant isolation on pull. 14/14 c
 **Named, not built:** no mobile sync trigger exists yet — the outbound queue still isn't drained,
 so on-device writes remain local-only until the next sprint wires a client to call these endpoints.
 
+## 2026-08-13 — Sprint 14: the sync engine's mobile half (M0 item 9, in full)
+
+**What landed:** `apps/mobile/lib/core/sync/` — `SyncRepository.syncNow()` pushes every `queued`/
+`failed_retrying` `outbound_queue` row via the exact same `pushSyncOperations` call Sprint 13's
+backend accepts, then updates each row's own `status`/`attempt_count`/`rejection_reason` from its
+push result (`synced`, `failed_retrying` + incremented `attempt_count` for
+`DEPENDENCY_NOT_FOUND`, or `rejected` + a reason for anything else) — never touching a row unless a
+server response actually named it. Then pages `GET /sync/pull` for `products`, upserting every row
+into the local cache. Triggered automatically once per app session (a cached `FutureProvider`,
+right after `storeContextProvider` resolves) plus a manual "Sync now" button on the home screen.
+
+**A real, deliberate design trade-off, named rather than defaulted into:** the obvious next step —
+persisting the pull cursor between sync runs, matching the backend's own resumable design
+(sync-api.md §6) — was not built. Doing so would have meant a new local table and a Drift schema
+migration, and this is the first mobile sprint where that carries real risk: the founder's phone
+has a persistent, non-throwaway installed app with real data since Sprint 10, unlike every prior
+mobile sprint's throwaway-fresh-install assumption. Every `syncNow()` call instead pages `products`
+from the start each time — fine at M0's dataset size, revisited if it ever isn't.
+
+**Verified:** `flutter test`, 60/60 (52 before this sprint) — 7 new `SyncRepository` tests against a
+real in-memory Drift database (accepted/pending/rejected status transitions, batch composition,
+empty-queue short-circuit, multi-page pull, upsert-not-duplicate) and 1 new widget test (the home
+screen's sync status line and "Sync now" button). `flutter analyze` clean. No real device needed —
+same reasoning Sprint 09/10's own repository tests already established, since nothing in this
+sprint's DoD required proving it against a physical phone.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -771,3 +797,4 @@ so on-device writes remain local-only until the next sprint wires a client to ca
 | 0.17.0 | 2026-08-13 | Sprint 11: M0 item 7 (stock ledger) built — `stock_movements` table + RLS, `opening`/`sale` movements written server-side inside explicit transactions with their triggering row. Live-verified: idempotent opening-movement creation, a correct sale movement, a real oversell proving DR-005, and a cross-tenant RLS proof — 16/16 checks, no new bug. Found and fixed this file's own two-sprint logging gap (0.15.0/0.16.0) in the same pass. |
 | 0.18.0 | 2026-08-13 | Sprint 12: M0 item 8 (audit log) built — `audit_log` table + RLS, one `sale.completed` entry written server-side inside the same transaction as the sale and its stock movements. Live-verified: correct entry shape, idempotent replay, cross-tenant RLS proof — 11/11 checks, no new bug. Named a real, still-open gap: `stock_movements` has zero audit coverage. |
 | 0.19.0 | 2026-08-13 | Sprint 13: M0 item 9's backend half (sync engine) built — `POST /sync/push` (`product.create`/`sale.create`, dependency-ordered, per-operation results) and `GET /sync/pull` (`products`, cursor-paginated, this codebase's first). Found and fixed a real cursor off-by-one bug live (a full-looking last page). 14/14 checks passed. Mobile trigger/outbound-queue drain remains the next sprint. |
+| 0.20.0 | 2026-08-13 | Sprint 14: M0 item 9's mobile half built — `core/sync/` drains `outbound_queue` and refreshes local `products`, triggered automatically once per session plus a manual button. Deliberately no persisted pull cursor, avoiding a schema migration against the founder's real installed app. `flutter test` 60/60, `flutter analyze` clean. Item 9 done in full. |
