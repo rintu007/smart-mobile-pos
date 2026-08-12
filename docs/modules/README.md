@@ -1,8 +1,8 @@
 # Module Registry
 
 > **Status:** 🔵 In review
-> **Version:** 0.9.0
-> **Last updated:** 2026-08-02
+> **Version:** 0.10.0
+> **Last updated:** 2026-08-12
 > **Owner:** CTO
 
 The operational tracker for every business module. The strategic rationale for the ordering lives
@@ -30,7 +30,7 @@ sections defined in [Documentation Standards](../00-governance/documentation-sta
 | Inventory — Stock Ledger | V1 | ⚪ | ⚪ | Products |
 | Customers (basic) | V1 | ⚪ | ⚪ | Store Setup |
 | POS | V1 | 🟢 [spec](pos/specification.md) | 🔨 (`POST /api/v1/sales` live, cash-only/no-discount/no-tax; mobile till screen (`/pos`) live — local write path built and tested, verified against a real Drift database, including a multi-row atomicity proof; no stock-ledger effect yet, sync engine not built so the mobile write path and the server endpoint aren't connected yet) | Products, Stock Ledger, Customers *(named exception — see spec §1: M0's minimal slice doesn't wait on Stock Ledger/Customers, per the M0 exception below)* |
-| Sales & Invoices | V1 | ⚪ | ⚪ | POS |
+| Sales & Invoices | V1 | 🟢 [spec](sales-invoices/specification.md) | 🔨 (mobile local sales list/detail (`/sales-history`) live Sprint 10, reading straight from this device's own local sales — no server `GET /sales*`, no canonical numbering, no permission enforcement; full V1 shape still M1 scope) | POS |
 | Receipt & Printing | V1 | ⚪ | ⚪ | Sales |
 | Returns & Refund (basic) | V1 | ⚪ | ⚪ | Sales, Stock Ledger |
 | Cash Drawer / Day Close | V1 | ⚪ | ⚪ | Sales |
@@ -74,6 +74,15 @@ Restaurant module · Salon module · Analytics · Accountant role & accounting e
    honestly *not* ✅ until its **full** Definition of Done is met, which for most rows below happens
    well after M0 closes. Once M0 is done, this exception ends and Rule 2 governs literally again —
    M1 onward builds one row at a time, no exception needed.
+
+   **A second, narrower exception, added 2026-08-12:** Sales & Invoices moved to 🔨 (Sprint 10)
+   while POS (an M0 row) was still 🔨 and M0 itself still open — Sales & Invoices was never part of
+   M0's backlog, so the exception above doesn't cover it on its own wording. This was a deliberate,
+   one-off, founder-directed insertion (the founder's own first hands-on test of the till screen
+   surfaced the gap immediately — see [sprint-10.md](../17-sprints/sprint-10.md)), not a standing
+   change to how this rule works. Named honestly rather than silently treated as already covered;
+   Rule 2 reverts to governing literally (one module at a time, M0 aside) once both M0 and this
+   insertion are done.
 3. A module reaches ✅ only when every Definition of Done box is ticked.
 4. This table is updated in the same pull request as the work it describes.
 
@@ -90,3 +99,4 @@ Restaurant module · Salon module · Analytics · Accountant role & accounting e
 | 0.7.0 | 2026-08-02 | Products row updated: mobile local write path (`/catalogue/add`) built and verified against a real on-disk file (Sprint 07) — the local write and `outbound_queue` enqueue are atomic and idempotent. Nothing yet drains the queue; the sync engine is still the named gap. |
 | 0.8.0 | 2026-08-02 | Company & Store Setup row updated: `GET /api/v1/stores` built and verified live with a cross-tenant RLS proof, mobile fetch-and-cache built (Sprint 08) — closes the till screen's `store_id` prerequisite, a real gap found during Sprint 08 planning. |
 | 0.9.0 | 2026-08-02 | POS row updated: mobile till screen (`/pos`) built (Sprint 09) — cart, cash-only sale completion, local write path proven atomic across a multi-row transaction. Server endpoint and mobile write path remain independently proven, not yet connected (sync engine, backlog.md item 9). |
+| 0.10.0 | 2026-08-12 | Sales & Invoices specification authored and approved; moved to 🔨: mobile local sales list/detail (`/sales-history`) built (Sprint 10), a founder-directed insertion outside M0's own backlog — see Rule 2's new second exception, added this version. |

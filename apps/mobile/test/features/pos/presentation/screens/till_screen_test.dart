@@ -5,6 +5,7 @@ import 'package:mobile/core/store_context/store_context_providers.dart';
 import 'package:mobile/features/catalogue/domain/entities/product.dart';
 import 'package:mobile/features/pos/domain/entities/cart_line.dart';
 import 'package:mobile/features/pos/domain/entities/completed_sale.dart';
+import 'package:mobile/features/pos/domain/entities/sale_detail.dart';
 import 'package:mobile/features/pos/domain/repositories/sale_repository.dart';
 import 'package:mobile/features/pos/presentation/providers/pos_providers.dart';
 import 'package:mobile/features/pos/presentation/screens/till_screen.dart';
@@ -30,8 +31,15 @@ class _FakeSaleRepository implements SaleRepository {
       id: id,
       provisionalInvoiceNumber: 'DEV001-2026-000001',
       grandTotalMinorUnits: total,
+      completedAt: DateTime(2026, 8, 12),
     );
   }
+
+  @override
+  Future<List<CompletedSale>> listCompletedSales() async => [];
+
+  @override
+  Future<SaleDetail?> getSaleDetail(String id) async => null;
 }
 
 const _coffee = Product(id: 'product-1', name: 'Filter coffee', priceMinorUnits: 1500);
@@ -57,6 +65,7 @@ void main() {
     expect(find.byKey(const Key('pos_product_product-2')), findsOneWidget);
     expect(find.byKey(const Key('pos_cart_empty')), findsOneWidget);
     expect(find.text('\u{20B9}0.00'), findsOneWidget);
+    expect(find.byKey(const Key('pos_sales_history_button')), findsOneWidget);
   });
 
   testWidgets('tapping a product adds it to the cart and updates the total', (tester) async {

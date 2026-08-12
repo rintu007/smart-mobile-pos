@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/money/money.dart';
 import '../providers/pos_providers.dart';
@@ -32,7 +33,17 @@ class TillScreen extends ConsumerWidget {
     });
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Till')),
+      appBar: AppBar(
+        title: const Text('Till'),
+        actions: [
+          IconButton(
+            key: const Key('pos_sales_history_button'),
+            icon: const Icon(Icons.receipt_long),
+            tooltip: 'Sales history',
+            onPressed: () => context.push('/sales-history'),
+          ),
+        ],
+      ),
       body: Column(
         children: [
           Expanded(

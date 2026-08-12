@@ -9,6 +9,8 @@ import '../core/auth/session.dart';
 import '../features/authentication/presentation/screens/login_screen.dart';
 import '../features/catalogue/presentation/screens/add_product_screen.dart';
 import '../features/pos/presentation/screens/till_screen.dart';
+import '../features/sales_history/presentation/screens/sale_detail_screen.dart';
+import '../features/sales_history/presentation/screens/sales_history_screen.dart';
 import 'home_screen.dart';
 
 /// Bridges Supabase's auth-state stream to `GoRouter`'s `refreshListenable`,
@@ -59,6 +61,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const AddProductScreen(),
       ),
       GoRoute(path: '/pos', builder: (context, state) => const TillScreen()),
+      GoRoute(
+        path: '/sales-history',
+        builder: (context, state) => const SalesHistoryScreen(),
+      ),
+      GoRoute(
+        path: '/sales-history/:id',
+        builder: (context, state) =>
+            SaleDetailScreen(saleId: state.pathParameters['id']!),
+      ),
     ],
   );
 });
