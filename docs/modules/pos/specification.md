@@ -3,7 +3,7 @@
 > **Status:** 🟢 Approved
 > **Module:** POS
 > **Slice:** V1 — this document scopes only M0's minimal first cut, not the full V1 shape (§1)
-> **Version:** 0.3.0
+> **Version:** 0.4.0
 > **Last updated:** 2026-08-13
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
@@ -33,6 +33,10 @@ it atomically with the sale) was out of scope when this document was first writt
 item 7 was its own, later, dependent backlog item. It has since landed: `POST /api/v1/sales` now
 writes one `sale` stock movement per line item inside the same transaction as the sale itself — see
 [inventory/specification.md](../inventory/specification.md).
+
+**Closed, Sprint 12:** likewise, DR-025's audit-log requirement (backlog.md item 8) was its own
+later, dependent item. `POST /api/v1/sales` now also writes one `sale.completed` audit-log entry in
+the same transaction — see [audit-log/specification.md](../audit-log/specification.md).
 
 ## 2. Business rules
 
@@ -236,3 +240,4 @@ minimal shape (§1).
 | 0.1.0 | 2026-08-01 | First version — written to drive Sprint 05's implementation of `POST /api/v1/sales`. Scope deliberately narrow (cash-only, no trading day/device/tax/discount); the stock-ledger effect and the mobile till screen both named as not-yet-met rather than silently claimed. |
 | 0.2.0 | 2026-08-02 | Sprint 09: mobile till screen (`/pos`) and its local write path built — cart, cash-only completion, `sales`/`sale_line_items`/`sale_payments` + `outbound_queue` written atomically, ADR-0008's local invoice-numbering half implemented as a deliberately narrower slice (no `devices` row, no canonical-number assignment). The server endpoint and the mobile write path are proven independently; nothing yet drains `outbound_queue` to connect them (backlog.md item 9). |
 | 0.3.0 | 2026-08-13 | Sprint 11: closed this document's own named stock-ledger gap — `POST /api/v1/sales` now writes one `sale` stock movement per line item inside the same transaction as the sale, per [inventory/specification.md](../inventory/specification.md). |
+| 0.4.0 | 2026-08-13 | Sprint 12: closed the audit-log gap (DR-025, backlog.md item 8) — `POST /api/v1/sales` now also writes one `sale.completed` audit-log entry in the same transaction, per [audit-log/specification.md](../audit-log/specification.md). |

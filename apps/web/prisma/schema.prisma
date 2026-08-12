@@ -35,11 +35,12 @@ model Tenant {
   // and a follow-up migration corrected).
   createdBy     String    @map("created_by") @db.Uuid
 
-  users          User[]
-  stores         Store[]
-  products       Product[]
-  sales          Sale[]
-  stockMovements StockMovement[]
+  users           User[]
+  stores          Store[]
+  products        Product[]
+  sales           Sale[]
+  stockMovements  StockMovement[]
+  auditLogEntries AuditLog[]
 
   @@map("tenants")
 }
@@ -55,15 +56,16 @@ model Store {
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
   createdBy     String    @map("created_by") @db.Uuid
 
-  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   // NOT part of the deferred tenant<->user pair above (Tenant.createdBy, User.tenant) -- this is
   // an ordinary, non-deferred FK. In any transaction creating a tenant/store/user together, `user`
   // must be inserted before `store` for this reason. Found the hard way in Sprint 02
   // (docs/18-implementation/implementation-log.md, 2026-08-01) when the insert order assumed the
   // whole tenant/store/user set was deferred just because two of its tables are.
-  user           User            @relation(fields: [createdBy], references: [id], onDelete: Restrict)
-  sales          Sale[]
-  stockMovements StockMovement[]
+  user            User            @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  sales           Sale[]
+  stockMovements  StockMovement[]
+  auditLogEntries AuditLog[]
 
   @@index([tenantId])
   @@map("stores")
@@ -90,6 +92,7 @@ model User {
   productsCreated       Product[]
   salesCreated          Sale[]
   stockMovementsCreated StockMovement[]
+  auditLogEntriesActed  AuditLog[]
 
   @@index([tenantId])
   @@map("users")
@@ -219,4 +222,30 @@ model StockMovement {
 
   @@index([tenantId, storeId, productId])
   @@map("stock_movements")
+}
+
+/// M0-minimal slice of docs/07-database/schema-server.md's `audit_log` table — only the
+/// `sale.completed` action is ever written this sprint (backlog.md item 8, DR-025's "Sale
+/// completed" row). Every other audit-model.md §1 trigger (stock movements, returns, trading day,
+/// role/device/settings/user changes) is out of scope — docs/modules/audit-log/specification.md
+/// §1, including the now-visible gap that Sprint 11's stock movements have no audit coverage yet.
+model AuditLog {
+  id          String   @id @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  storeId     String?  @map("store_id") @db.Uuid
+  actorUserId String   @map("actor_user_id") @db.Uuid
+  action      String
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id") @db.Uuid
+  beforeState Json?    @map("before_state")
+  afterState  Json?    @map("after_state")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  store  Store? @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  actor  User   @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, createdAt])
+  @@map("audit_log")
 }

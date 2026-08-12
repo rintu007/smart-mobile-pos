@@ -92,6 +92,30 @@ export function createSale(input: CreateSaleInput) {
       })),
     });
 
+    // DR-025 (backlog.md item 8): one audit entry per completed sale, in the same transaction as
+    // the sale itself — docs/modules/audit-log/specification.md. Reuses the sale's own id as this
+    // row's id, the same 1:1 idempotency-key reuse the stock movements above already established.
+    // No `beforeState` — this is a creation event, there is no prior state to snapshot.
+    await tx.auditLog.create({
+      data: {
+        id: input.id,
+        tenantId: input.tenantId,
+        storeId: input.storeId,
+        actorUserId: input.createdBy,
+        action: "sale.completed",
+        entityType: "sale",
+        entityId: input.id,
+        afterState: {
+          id: input.id,
+          status: "completed",
+          provisional_invoice_number: input.provisionalInvoiceNumber,
+          subtotal_minor_units: Number(input.subtotalMinorUnits),
+          grand_total_minor_units: Number(input.grandTotalMinorUnits),
+          completed_at: completedAt.toISOString(),
+        },
+      },
+    });
+
     return sale;
   });
 }
