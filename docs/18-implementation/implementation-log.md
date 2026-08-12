@@ -2,7 +2,7 @@
 
 > **Status:** 🟡 In progress
 > **Phase:** 18 — Implementation
-> **Version:** 0.18.0
+> **Version:** 0.19.0
 > **Last updated:** 2026-08-13
 > **Owner:** CTO / All engineering roles
 
@@ -715,6 +715,38 @@ sprint covers exactly one (`sale.completed`). Sprint 11's own `stock_movements` 
 in `audit-log/specification.md §1` as the concrete next candidate, not silently absorbed into this
 sprint's own narrower, already-estimated scope.
 
+## 2026-08-13 — Sprint 13: the sync engine's backend half (M0 item 9)
+
+**What landed:** `apps/web/src/modules/sync/` (new module) — `POST /api/v1/sync/push` and
+`GET /api/v1/sync/pull`, the backend-only half of backlog.md item 9, matching the same
+alternating backend/mobile split already established for products (Sprint 04/07) and sales
+(Sprint 05/09). Push dispatches each operation to the **exact same service function** its direct
+endpoint already calls (`products.service.createProduct`, `pos.service.createSale`) — no new
+idempotency mechanism, per sync-api.md §5; processes `product.create` before `sale.create`
+regardless of submitted order (the six-group ordering collapsed to two, since no other operation
+type has a client-facing write path yet); remaps a sale's `NOT_FOUND` (missing product) to
+`DEPENDENCY_NOT_FOUND`, the one place its error handling genuinely diverges from the direct
+endpoint. Pull is this codebase's first cursor-paginated endpoint (`GET /stores` never needed one —
+exactly one store per tenant), `(updated_at, id)` on `products` only.
+
+**A real bug found on the first live attempt, fixed immediately:** the pull cursor's `next_cursor`
+came back non-null on a genuinely final page — a classic off-by-one. The repository fetched exactly
+`limit` rows, so "exactly filled the page" was indistinguishable from "filled the page, and more
+exists after it." Fixed by fetching `limit + 1` as a peek and trimming the extra row before
+returning; its presence, not the returned count, is what actually answers the question. Caught by
+the demo script's own two-page walk, not by unit tests (which had mocked the repository and so
+never exercised the real off-by-one at all) — the same shape of finding this project's "real HTTP
+request/live verification required" addendum rule exists to catch.
+
+**Live-verified against the real database**, throwaway tenants deleted after: a `sale.create`
+submitted *before* its own `product.create` in the same batch still succeeds (proving the
+reordering actually runs, not just that unordered batches happen to work);
+`DEPENDENCY_NOT_FOUND` for a genuinely missing product; idempotent replay of an already-accepted
+batch; a corrected two-page cursor walk; cross-tenant isolation on pull. 14/14 checks passed.
+
+**Named, not built:** no mobile sync trigger exists yet — the outbound queue still isn't drained,
+so on-device writes remain local-only until the next sprint wires a client to call these endpoints.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -738,3 +770,4 @@ sprint's own narrower, already-estimated scope.
 | 0.16.0 | 2026-08-12 | *Retroactive.* Sprint 10: mobile sales-history (`/sales-history`, `/sales-history/:id`) built, local-only, a founder-directed insertion ahead of M1. First real (non-throwaway) founder account and first real-device APK install/side-load, after USB/wireless debugging both proved unreliable. Also never written at the time — same gap as 0.15.0, closed the same way. |
 | 0.17.0 | 2026-08-13 | Sprint 11: M0 item 7 (stock ledger) built — `stock_movements` table + RLS, `opening`/`sale` movements written server-side inside explicit transactions with their triggering row. Live-verified: idempotent opening-movement creation, a correct sale movement, a real oversell proving DR-005, and a cross-tenant RLS proof — 16/16 checks, no new bug. Found and fixed this file's own two-sprint logging gap (0.15.0/0.16.0) in the same pass. |
 | 0.18.0 | 2026-08-13 | Sprint 12: M0 item 8 (audit log) built — `audit_log` table + RLS, one `sale.completed` entry written server-side inside the same transaction as the sale and its stock movements. Live-verified: correct entry shape, idempotent replay, cross-tenant RLS proof — 11/11 checks, no new bug. Named a real, still-open gap: `stock_movements` has zero audit coverage. |
+| 0.19.0 | 2026-08-13 | Sprint 13: M0 item 9's backend half (sync engine) built — `POST /sync/push` (`product.create`/`sale.create`, dependency-ordered, per-operation results) and `GET /sync/pull` (`products`, cursor-paginated, this codebase's first). Found and fixed a real cursor off-by-one bug live (a full-looking last page). 14/14 checks passed. Mobile trigger/outbound-queue drain remains the next sprint. |

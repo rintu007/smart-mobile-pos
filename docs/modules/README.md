@@ -1,7 +1,7 @@
 # Module Registry
 
 > **Status:** 🔵 In review
-> **Version:** 0.12.0
+> **Version:** 0.13.0
 > **Last updated:** 2026-08-13
 > **Owner:** CTO
 
@@ -26,17 +26,17 @@ sections defined in [Documentation Standards](../00-governance/documentation-sta
 | Audit Log | V1 | 🟢 [spec](audit-log/specification.md) | 🔨 (one `sale.completed` entry written server-side, atomic with the sale itself — Sprint 12; every other audit-model.md §1 trigger, including Sprint 11's own stock movements, has no audit coverage yet — named gap) | Authentication |
 | Categories | V1 | ⚪ | ⚪ | Store Setup |
 | Units | V1 | ⚪ | ⚪ | Store Setup |
-| Products | V1 | 🟢 [spec](products/specification.md) | 🔨 (`POST /api/v1/products` live, name/price only; mobile local write path (`/catalogue/add`) live, verified against a real on-disk file (Sprint 07); `GET`/`PATCH`/`DELETE`, category/unit, and the sync engine that would push a locally-created product to the server all deferred) | Categories, Units *(named exception — see spec §1: M0's minimal slice doesn't wait on either, per the M0 exception below)* |
+| Products | V1 | 🟢 [spec](products/specification.md) | 🔨 (`POST /api/v1/products` live, name/price only; mobile local write path (`/catalogue/add`) live, verified against a real on-disk file (Sprint 07); the sync engine's backend half now exists (Sprint 13) but nothing on-device calls it yet, so a locally-created product still stays local-only; `GET`/`PATCH`/`DELETE`, category/unit deferred) | Categories, Units *(named exception — see spec §1: M0's minimal slice doesn't wait on either, per the M0 exception below)* |
 | Inventory — Stock Ledger | V1 | 🟢 [spec](inventory/specification.md) | 🔨 (`opening` movement on product creation, `sale` movement on sale completion, each server-side and atomic with its triggering row — Sprint 11; no adjustment workflow, no public stock-movement/balance endpoints, no mobile UI) | Products |
 | Customers (basic) | V1 | ⚪ | ⚪ | Store Setup |
-| POS | V1 | 🟢 [spec](pos/specification.md) | 🔨 (`POST /api/v1/sales` live, cash-only/no-discount/no-tax, now with a same-transaction `sale` stock movement per line item (Sprint 11) and a same-transaction `sale.completed` audit-log entry (Sprint 12); mobile till screen (`/pos`) live — local write path built and tested, verified against a real Drift database, including a multi-row atomicity proof; sync engine not built so the mobile write path and the server endpoint aren't connected yet) | Products, Stock Ledger, Customers *(named exception — see spec §1: M0's minimal slice doesn't wait on Stock Ledger/Customers, per the M0 exception below)* |
+| POS | V1 | 🟢 [spec](pos/specification.md) | 🔨 (`POST /api/v1/sales` live, cash-only/no-discount/no-tax, now with a same-transaction `sale` stock movement per line item (Sprint 11) and a same-transaction `sale.completed` audit-log entry (Sprint 12); mobile till screen (`/pos`) live — local write path built and tested, verified against a real Drift database, including a multi-row atomicity proof; the sync engine's backend half now exists (Sprint 13) but nothing on-device calls it yet, so the mobile write path and the server endpoint still aren't actually connected) | Products, Stock Ledger, Customers *(named exception — see spec §1: M0's minimal slice doesn't wait on Stock Ledger/Customers, per the M0 exception below)* |
 | Sales & Invoices | V1 | 🟢 [spec](sales-invoices/specification.md) | 🔨 (mobile local sales list/detail (`/sales-history`) live Sprint 10, reading straight from this device's own local sales — no server `GET /sales*`, no canonical numbering, no permission enforcement; full V1 shape still M1 scope) | POS |
 | Receipt & Printing | V1 | ⚪ | ⚪ | Sales |
 | Returns & Refund (basic) | V1 | ⚪ | ⚪ | Sales, Stock Ledger |
 | Cash Drawer / Day Close | V1 | ⚪ | ⚪ | Sales |
 | Reports (core four) | V1 | ⚪ | ⚪ | Sales, Stock Ledger |
 | Settings — tax, currency, printer, receipt | V1 | ⚪ | ⚪ | Store Setup |
-| **Offline Sync Engine** | V1 | ⚪ | ⚪ | *Cross-cutting — designed in Phase 13, built alongside the first modules* |
+| **Offline Sync Engine** | V1 | 🟢 [spec](sync-engine/specification.md) | 🔨 (`POST /api/v1/sync/push` for `product.create`/`sale.create`, `GET /api/v1/sync/pull` for `products` — Sprint 13, both live-verified including a dependency-ordering proof and a cursor-pagination bug found and fixed live; no mobile trigger yet, so the outbound queue still isn't drained — named gap) | *Cross-cutting — designed in Phase 13, built alongside the first modules* |
 
 ## V2 — Buy and Grow
 
@@ -102,3 +102,4 @@ Restaurant module · Salon module · Analytics · Accountant role & accounting e
 | 0.10.0 | 2026-08-12 | Sales & Invoices specification authored and approved; moved to 🔨: mobile local sales list/detail (`/sales-history`) built (Sprint 10), a founder-directed insertion outside M0's own backlog — see Rule 2's new second exception, added this version. |
 | 0.11.0 | 2026-08-13 | Inventory — Stock Ledger specification authored and approved; moved to 🔨: `opening`/`sale` stock movements built (Sprint 11), each atomic with its triggering row — backlog.md item 7, back inside M0's own backlog (no new Rule 2 exception needed). POS row updated to reflect the stock-ledger effect it previously named as missing. |
 | 0.12.0 | 2026-08-13 | Audit Log specification authored and approved; moved to 🔨: one `sale.completed` entry built (Sprint 12), atomic with the sale — backlog.md item 8. Named gap: every other audit-model.md §1 trigger, including Sprint 11's own stock movements, still has zero audit coverage. POS row updated to reflect the new audit-log effect. |
+| 0.13.0 | 2026-08-13 | Offline Sync Engine specification authored and approved; moved to 🔨: `POST /sync/push` (`product.create`/`sale.create`) and `GET /sync/pull` (`products`) built (Sprint 13) — backlog.md item 9's backend half. Found and fixed a real cursor-pagination off-by-one bug live. Products/POS rows updated: the backend half of sync now exists, but no mobile trigger calls it yet, so on-device writes still aren't actually connected to the server. |
