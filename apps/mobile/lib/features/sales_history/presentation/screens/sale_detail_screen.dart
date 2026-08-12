@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/money/money.dart';
+import '../../../pos/domain/entities/sale_detail.dart';
+import '../../../receipt_printing/presentation/providers/receipt_printing_providers.dart';
+import '../../../receipt_printing/presentation/widgets/printer_picker_dialog.dart';
 import '../providers/sales_history_providers.dart';
 
 String _formatTimestamp(DateTime dt) {
@@ -17,12 +20,64 @@ class SaleDetailScreen extends ConsumerWidget {
 
   final String saleId;
 
+  Future<void> _printReceipt(BuildContext context, WidgetRef ref, SaleDetail sale) async {
+    final printer = await showPrinterPickerDialog(context);
+    if (printer == null || !context.mounted) return;
+
+    final shopName = await ref.read(shopNameProvider.future);
+    await ref
+        .read(receiptPrintControllerProvider.notifier)
+        .printReceipt(sale: sale, shopName: shopName, macAddress: printer.macAddress);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final detail = ref.watch(saleDetailProvider(saleId));
+    final printState = ref.watch(receiptPrintControllerProvider);
+
+    ref.listen(receiptPrintControllerProvider, (previous, next) {
+      next.when(
+        data: (success) {
+          if (success == null) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                success ? 'Receipt sent to printer.' : 'Printer did not accept the receipt.',
+                key: const Key('receipt_print_result'),
+              ),
+            ),
+          );
+        },
+        error: (error, stack) => ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not connect to printer: $error')),
+        ),
+        loading: () {},
+      );
+    });
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Sale detail')),
+      appBar: AppBar(
+        title: const Text('Sale detail'),
+        actions: [
+          detail.maybeWhen(
+            data: (sale) => sale == null
+                ? const SizedBox.shrink()
+                : IconButton(
+                    key: const Key('sale_detail_print_button'),
+                    icon: printState.isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.print),
+                    tooltip: 'Print receipt',
+                    onPressed: printState.isLoading ? null : () => _printReceipt(context, ref, sale),
+                  ),
+            orElse: () => const SizedBox.shrink(),
+          ),
+        ],
+      ),
       body: detail.when(
         data: (sale) {
           if (sale == null) {

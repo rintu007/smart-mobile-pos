@@ -1,7 +1,7 @@
 # Module Registry
 
 > **Status:** 🔵 In review
-> **Version:** 0.14.0
+> **Version:** 0.15.0
 > **Last updated:** 2026-08-13
 > **Owner:** CTO
 
@@ -31,7 +31,7 @@ sections defined in [Documentation Standards](../00-governance/documentation-sta
 | Customers (basic) | V1 | ⚪ | ⚪ | Store Setup |
 | POS | V1 | 🟢 [spec](pos/specification.md) | 🔨 (`POST /api/v1/sales` live, cash-only/no-discount/no-tax, now with a same-transaction `sale` stock movement per line item (Sprint 11) and a same-transaction `sale.completed` audit-log entry (Sprint 12); mobile till screen (`/pos`) live — local write path built and tested, verified against a real Drift database, including a multi-row atomicity proof; the mobile write path and the server endpoint are now actually connected (Sprint 14's mobile sync trigger)) | Products, Stock Ledger, Customers *(named exception — see spec §1: M0's minimal slice doesn't wait on Stock Ledger/Customers, per the M0 exception below)* |
 | Sales & Invoices | V1 | 🟢 [spec](sales-invoices/specification.md) | 🔨 (mobile local sales list/detail (`/sales-history`) live Sprint 10, reading straight from this device's own local sales — no server `GET /sales*`, no canonical numbering, no permission enforcement; full V1 shape still M1 scope) | POS |
-| Receipt & Printing | V1 | ⚪ | ⚪ | Sales |
+| Receipt & Printing | V1 | 🟢 [spec](receipt-printing/specification.md) | 🔨 (`ReceiptFormatter`/`EscPosReceiptEncoder`/`BluetoothPrinterRepository` built and unit-tested — Sprint 15, a print action on `/sales-history/:id`; 58 mm only, shop-name-only header; physical-printer verification (MTS-01) named as a founder action, not yet run — no hardware available) | Sales |
 | Returns & Refund (basic) | V1 | ⚪ | ⚪ | Sales, Stock Ledger |
 | Cash Drawer / Day Close | V1 | ⚪ | ⚪ | Sales |
 | Reports (core four) | V1 | ⚪ | ⚪ | Sales, Stock Ledger |
@@ -104,3 +104,4 @@ Restaurant module · Salon module · Analytics · Accountant role & accounting e
 | 0.12.0 | 2026-08-13 | Audit Log specification authored and approved; moved to 🔨: one `sale.completed` entry built (Sprint 12), atomic with the sale — backlog.md item 8. Named gap: every other audit-model.md §1 trigger, including Sprint 11's own stock movements, still has zero audit coverage. POS row updated to reflect the new audit-log effect. |
 | 0.13.0 | 2026-08-13 | Offline Sync Engine specification authored and approved; moved to 🔨: `POST /sync/push` (`product.create`/`sale.create`) and `GET /sync/pull` (`products`) built (Sprint 13) — backlog.md item 9's backend half. Found and fixed a real cursor-pagination off-by-one bug live. Products/POS rows updated: the backend half of sync now exists, but no mobile trigger calls it yet, so on-device writes still aren't actually connected to the server. |
 | 0.14.0 | 2026-08-13 | Offline Sync Engine row updated: mobile trigger built (Sprint 14) — `outbound_queue` now actually drains via `POST /sync/push`, local `products` refreshed via `GET /sync/pull`, backlog.md item 9 done in full. Products/POS rows updated: on-device writes are now actually connected to the server, closing the gap Sprint 13 named. |
+| 0.15.0 | 2026-08-13 | Receipt & Printing specification authored and approved; moved to 🔨: Bluetooth ESC/POS receipt printing built (Sprint 15) — backlog.md item 10's software half. Physical-printer verification (MTS-01) named as a founder action, not run, matching device-matrix.md §3's own precedent for hardware this project can't test without the founder's own equipment. |
