@@ -1,15 +1,18 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import * as identityService from "@/modules/identity/service";
+import * as storesService from "@/modules/stores/service";
 import * as repository from "./repository";
 import { createProduct } from "./service";
 import type { CreateProductRequest } from "./schema";
 
 vi.mock("./repository");
 vi.mock("@/modules/identity/service");
+vi.mock("@/modules/stores/service");
 
 const authUserId = "11111111-1111-4111-8111-111111111111";
 const tenantId = "22222222-2222-4222-8222-222222222222";
 const userId = "33333333-3333-4333-8333-333333333333";
+const storeId = "55555555-5555-4555-8555-555555555555";
 
 const input: CreateProductRequest = {
   id: "44444444-4444-4444-8444-444444444444",
@@ -21,6 +24,7 @@ describe("createProduct", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(identityService.resolveUserId).mockResolvedValue(userId);
+    vi.mocked(storesService.getPrimaryStoreId).mockResolvedValue(storeId);
   });
 
   it("resolves the internal user id and creates the product under it", async () => {
@@ -36,10 +40,12 @@ describe("createProduct", () => {
     const result = await createProduct(authUserId, tenantId, input);
 
     expect(identityService.resolveUserId).toHaveBeenCalledWith(authUserId);
+    expect(storesService.getPrimaryStoreId).toHaveBeenCalledWith(tenantId);
     expect(repository.createProduct).toHaveBeenCalledWith({
       ...input,
       tenantId,
       createdBy: userId,
+      storeId,
     });
     expect(result).toEqual({
       id: input.id,

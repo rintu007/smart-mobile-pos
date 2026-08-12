@@ -3,8 +3,8 @@
 > **Status:** 🟢 Approved
 > **Module:** POS
 > **Slice:** V1 — this document scopes only M0's minimal first cut, not the full V1 shape (§1)
-> **Version:** 0.2.0
-> **Last updated:** 2026-08-02
+> **Version:** 0.3.0
+> **Last updated:** 2026-08-13
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
 
@@ -25,14 +25,14 @@ built yet either). This is a real, named gap against the full V1 requirement, th
 scope boundary already documented for Authentication's device revocation and Products' category/unit
 fields. §11 states this plainly.
 
-**Also out of scope this sprint:** the stock-ledger effect of a completed sale
+**Also out of scope this sprint:** the mobile till screen UI itself — see §4.
+
+**Closed, Sprint 11:** the stock-ledger effect of a completed sale
 ([WF-002](../../06-workflows/sales-workflows.md#wf-002--complete-a-single-item-cash-sale) requires
-it atomically with the sale, but [backlog.md item 7](../../17-sprints/backlog.md#1-m0--walking-skeleton-fully-decomposed)
-("Stock ledger: opening movement on product creation, sale movement on sale completion... in the
-same transaction as the sale") is its own, later backlog item, depending on this one. Between this
-sprint landing and item 7 landing, a completed sale has no stock effect — an incremental-build gap,
-named here rather than silently produced, matching how Sprint 02→03's Products/Categories/Units
-split already worked the same way. The mobile till screen UI itself is also out of scope — see §4.
+it atomically with the sale) was out of scope when this document was first written — backlog.md
+item 7 was its own, later, dependent backlog item. It has since landed: `POST /api/v1/sales` now
+writes one `sale` stock movement per line item inside the same transaction as the sale itself — see
+[inventory/specification.md](../inventory/specification.md).
 
 ## 2. Business rules
 
@@ -235,3 +235,4 @@ minimal shape (§1).
 | --- | --- | --- |
 | 0.1.0 | 2026-08-01 | First version — written to drive Sprint 05's implementation of `POST /api/v1/sales`. Scope deliberately narrow (cash-only, no trading day/device/tax/discount); the stock-ledger effect and the mobile till screen both named as not-yet-met rather than silently claimed. |
 | 0.2.0 | 2026-08-02 | Sprint 09: mobile till screen (`/pos`) and its local write path built — cart, cash-only completion, `sales`/`sale_line_items`/`sale_payments` + `outbound_queue` written atomically, ADR-0008's local invoice-numbering half implemented as a deliberately narrower slice (no `devices` row, no canonical-number assignment). The server endpoint and the mobile write path are proven independently; nothing yet drains `outbound_queue` to connect them (backlog.md item 9). |
+| 0.3.0 | 2026-08-13 | Sprint 11: closed this document's own named stock-ledger gap — `POST /api/v1/sales` now writes one `sale` stock movement per line item inside the same transaction as the sale, per [inventory/specification.md](../inventory/specification.md). |

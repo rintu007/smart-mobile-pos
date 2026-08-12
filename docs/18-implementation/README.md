@@ -1,8 +1,8 @@
 # Phase 18 — Implementation
 
-> **Status:** 🟡 In progress — Sprint 01 through Sprint 10 all closed; M0 items 7–11 remain, next up
-> **Version:** 0.12.0
-> **Last updated:** 2026-08-12
+> **Status:** 🟡 In progress — Sprint 01 through Sprint 11 all closed; M0 items 8–11 remain, next up
+> **Version:** 0.13.0
+> **Last updated:** 2026-08-13
 > **Owner:** CTO / All engineering roles
 
 ## Charter
@@ -93,3 +93,4 @@ to the 13-step loop or the full Definition of Done. See
 | 0.10.0 | 2026-08-02 | Sprint 08 closed: `GET /api/v1/stores` built and verified live with a cross-tenant RLS proof; mobile fetch-and-cache built — the till screen's real prerequisite, found during planning rather than assumed. Next up is Sprint 09 planning (the till screen itself). |
 | 0.11.0 | 2026-08-02 | Sprint 09 closed: mobile till screen (`/pos`) built and tested against a real Drift database — cart, cash-only sale completion, an atomic multi-row local write (`sales`/`sale_line_items`/`sale_payments`/`outbound_queue`), and ADR-0008's local invoice-numbering half. Server endpoint (Sprint 05) and mobile write path proven independently; the sync engine that connects them (item 9) remains unbuilt. Next up is Sprint 10 planning. |
 | 0.12.0 | 2026-08-12 | Sprint 10 closed: mobile sales-history list/detail (`/sales-history`) built — a founder-directed insertion of Sales & Invoices' minimal local-read slice, triggered by the founder's own first hands-on test of the till screen on a real device. New module specification written first. Also: first real (non-demo, non-deleted) founder account created and the app installed on the founder's own phone for the first time this project — a genuine milestone distinct from every prior sprint's throwaway live-verification pattern. M0 items 7–11 remain open next. |
+| 0.13.0 | 2026-08-13 | Sprint 11 closed: M0 item 7 (stock ledger) built — `POST /api/v1/products` and `POST /api/v1/sales` each write their stock movement (`opening`, `sale`) inside the same transaction as their triggering row. New module specification (`inventory/specification.md`) written first. Live-verified against the real database with throwaway tenants: opening/replay idempotency, a real oversell proving DR-005, and a cross-tenant RLS proof on `stock_movements` itself — 16/16 checks passed. Closes the gap both `products` and `pos` specifications had named since Sprint 04/05. M0 items 8–11 remain open next. |

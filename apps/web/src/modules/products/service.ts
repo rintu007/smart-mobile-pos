@@ -1,4 +1,5 @@
 import * as identityService from "@/modules/identity/service";
+import * as storesService from "@/modules/stores/service";
 import * as repository from "./repository";
 import type { CreateProductRequest } from "./schema";
 
@@ -18,8 +19,12 @@ export async function createProduct(
   // service-to-service is the one sanctioned cross-module path (layering-rules.md §2) — resolves
   // the internal `users.id` this row's `created_by` needs from the session's Supabase auth id.
   const createdBy = await identityService.resolveUserId(authUserId);
+  // Products aren't store-scoped themselves (§3), but the opening stock movement this creation
+  // produces is (docs/modules/inventory/specification.md §1) — resolved server-side, never from
+  // the request, same principle inventory.md's own endpoint states for stock-movement writes.
+  const storeId = await storesService.getPrimaryStoreId(tenantId);
 
-  const product = await repository.createProduct({ ...input, tenantId, createdBy });
+  const product = await repository.createProduct({ ...input, tenantId, createdBy, storeId });
 
   return {
     id: product.id,
