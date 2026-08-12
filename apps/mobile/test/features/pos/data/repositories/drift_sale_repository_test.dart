@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/database/database.dart';
@@ -172,5 +173,63 @@ void main() {
       () => repository.completeSale(id: 'sale-1', storeId: 'store-1', lines: const []),
       throwsA(isA<ArgumentError>()),
     );
+  });
+
+  group('listCompletedSales', () {
+    test('returns an empty list before any sale exists', () async {
+      expect(await repository.listCompletedSales(), isEmpty);
+    });
+
+    test('returns completed sales most-recent-first', () async {
+      await repository.completeSale(id: 'sale-1', storeId: 'store-1', lines: lines);
+      await repository.completeSale(id: 'sale-2', storeId: 'store-1', lines: lines);
+      // Back-to-back `DateTime.now()` calls can land in the same clock tick
+      // on some platforms — set explicit, unambiguous timestamps rather than
+      // rely on real-clock resolution to prove the ordering.
+      await (db.update(db.sales)..where((t) => t.id.equals('sale-1'))).write(
+        SalesCompanion(completedAt: Value(DateTime(2026, 1, 1))),
+      );
+      await (db.update(db.sales)..where((t) => t.id.equals('sale-2'))).write(
+        SalesCompanion(completedAt: Value(DateTime(2026, 1, 2))),
+      );
+
+      final result = await repository.listCompletedSales();
+      expect(result.map((s) => s.id).toList(), ['sale-2', 'sale-1']);
+    });
+  });
+
+  group('getSaleDetail', () {
+    test('returns null for an id that does not exist locally', () async {
+      expect(await repository.getSaleDetail('missing'), isNull);
+    });
+
+    test('returns every line item, with the product name looked up locally', () async {
+      await db
+          .into(db.products)
+          .insert(
+            ProductsCompanion.insert(
+              id: 'product-1',
+              name: 'Filter coffee',
+              priceMinorUnits: 1500,
+            ),
+          );
+      // product-2 ("Sugar") deliberately not inserted locally, to prove the
+      // fallback path.
+      await repository.completeSale(id: 'sale-1', storeId: 'store-1', lines: lines);
+
+      final detail = await repository.getSaleDetail('sale-1');
+
+      expect(detail, isNotNull);
+      expect(detail!.grandTotalMinorUnits, 3500);
+      expect(detail.lines, hasLength(2));
+
+      final coffeeLine = detail.lines.firstWhere((l) => l.productId == 'product-1');
+      expect(coffeeLine.productName, 'Filter coffee');
+      expect(coffeeLine.lineTotalMinorUnits, 3000);
+
+      final sugarLine = detail.lines.firstWhere((l) => l.productId == 'product-2');
+      expect(sugarLine.productName, isNull, reason: 'product-2 was never cached locally');
+      expect(sugarLine.lineTotalMinorUnits, 500);
+    });
   });
 }

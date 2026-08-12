@@ -7,9 +7,11 @@ class CompletedSale {
     required this.id,
     required this.provisionalInvoiceNumber,
     required this.grandTotalMinorUnits,
+    required this.completedAt,
   });
 
   final String id;
   final String provisionalInvoiceNumber;
   final int grandTotalMinorUnits;
+  final DateTime completedAt;
 }

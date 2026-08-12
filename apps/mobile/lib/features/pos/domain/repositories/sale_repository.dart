@@ -1,7 +1,12 @@
 import '../entities/cart_line.dart';
 import '../entities/completed_sale.dart';
+import '../entities/sale_detail.dart';
 
-/// Abstract interface only, per mobile-structure.md §2.
+/// Abstract interface only, per mobile-structure.md §2. Read methods added
+/// Sprint 10 for `sales_history` — `pos` owns the `Sale` concept and its
+/// local table, `sales_history` is a read-only UI layer on top (imported
+/// directly rather than duplicating a parallel entity/repository, per
+/// mobile-structure.md §3's guidance on cross-feature reuse).
 abstract class SaleRepository {
   /// Writes the sale, its line items, and its single cash payment locally
   /// and enqueues a `sale.create` sync operation, atomically — same
@@ -17,4 +22,11 @@ abstract class SaleRepository {
     required String storeId,
     required List<CartLine> lines,
   });
+
+  /// This device's own completed sales, most-recent-first —
+  /// sales-invoices/specification.md §2.
+  Future<List<CompletedSale>> listCompletedSales();
+
+  /// A single sale's line items, or `null` if `id` doesn't exist locally.
+  Future<SaleDetail?> getSaleDetail(String id);
 }

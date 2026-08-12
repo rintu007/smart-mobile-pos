@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.3.0
-> **Last updated:** 2026-08-02
+> **Version:** 0.4.0
+> **Last updated:** 2026-08-12
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
 
@@ -48,10 +48,20 @@ already established.
 
 | Milestone | Modules (decomposition pending) |
 | --- | --- |
-| M1 | Categories, Units, full barcode/SKU search, full stock-movement types, Roles & Permissions enforcement |
+| M1 | Categories, Units, full barcode/SKU search, full stock-movement types, Roles & Permissions enforcement, **Sales & Invoices (full V1 shape — GST invoice fields, canonical numbering at sync, `GET /sales*` server endpoints, permission enforcement)** |
 | M2 | Discount, tax computation, split payment, hold/resume, Trading Day |
 | M3 | Customers, Returns & Refund, conflict-resolution field-merge |
 | M4 | Reports (4), Settings, release-readiness closeout (printer/device testing, load test, adversarial suite in CI) |
+
+**Correction, found 2026-08-12:** this table never listed Sales & Invoices at all, despite
+[dependency-graph.md](../16-milestones/dependency-graph.md) already fixing it as the module
+immediately after "POS core loop" on the project's longest sequential dependency chain — a real
+omission, not a deliberate exclusion. Added to M1 above (its full V1 shape genuinely needs Roles &
+Permissions and the sync engine, both M1/later). **A minimal slice was pulled forward into Sprint
+10**, ahead of M1, at the founder's direct request the moment real device testing surfaced the
+gap — a local-only, this-device's-own-sales list/detail view needing none of M1's actual
+prerequisites. See [sales-invoices/specification.md](../modules/sales-invoices/specification.md)
+§1 for exactly what that minimal slice is and isn't.
 
 ## 3. Ordering rule, restated
 
@@ -67,3 +77,4 @@ specifically.
 | 0.1.0 | 2026-07-31 | M0 fully decomposed into 11 estimated, dependency-ordered items totalling 18.5 person-days (within the Phase 16 estimate); M1–M4 left at module grain, decomposed when reached. |
 | 0.2.0 | 2026-08-02 | Sprint 06 planning found a real gap: this decomposition never listed a mobile sign-in screen as its own item, despite item 11's E2E proof requiring "sign in" as its first step and despite [authentication/specification.md §9](../modules/authentication/specification.md#9-ui-specification) already anticipating the `/auth/login` route. Added item 12 (depends on 2, 3; 1.5 person-days) and updated item 11's dependency list to include it, rather than silently folding the work into an existing item's estimate. Total revised to 20 person-days. |
 | 0.3.0 | 2026-08-02 | Sprint 08 planning found another real gap of the same shape: item 6 (the till screen) cannot create a sale without knowing its own `store_id`, and nothing in this decomposition ever gave the device one. Added item 13 (depends on 2, 12; 1 person-day) and updated item 6's dependency list. Total revised to 21 person-days, now past roadmap.md's 15–20 estimate — named as a pattern (backend-first decomposition under-counts UI connective-tissue work), not just a second isolated miss. |
+| 0.4.0 | 2026-08-12 | §2 correction: Sales & Invoices was never listed at M1–M4 module grain at all, despite dependency-graph.md already fixing its position right after POS core loop. Added to M1. A minimal local-only slice pulled forward into Sprint 10, ahead of M1, at the founder's direct request after real device testing surfaced the gap immediately. |

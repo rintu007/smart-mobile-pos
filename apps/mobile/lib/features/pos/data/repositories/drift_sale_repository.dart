@@ -7,6 +7,7 @@ import '../../../../core/database/database.dart';
 import '../../../../core/invoicing/invoice_number_generator.dart';
 import '../../domain/entities/cart_line.dart';
 import '../../domain/entities/completed_sale.dart';
+import '../../domain/entities/sale_detail.dart';
 import '../../domain/repositories/sale_repository.dart';
 
 /// Concrete implementation, per mobile-structure.md §2. Nothing here calls
@@ -37,6 +38,7 @@ class DriftSaleRepository implements SaleRepository {
           id: existing.id,
           provisionalInvoiceNumber: existing.provisionalInvoiceNumber,
           grandTotalMinorUnits: existing.grandTotalMinorUnits,
+          completedAt: existing.completedAt!,
         );
       }
 
@@ -45,6 +47,7 @@ class DriftSaleRepository implements SaleRepository {
         (sum, line) => sum + line.lineTotalMinorUnits,
       );
       final provisionalInvoiceNumber = await _invoiceNumbers.next();
+      final completedAt = DateTime.now();
 
       await _db
           .into(_db.sales)
@@ -55,7 +58,7 @@ class DriftSaleRepository implements SaleRepository {
               provisionalInvoiceNumber: provisionalInvoiceNumber,
               subtotalMinorUnits: grandTotalMinorUnits,
               grandTotalMinorUnits: grandTotalMinorUnits,
-              completedAt: Value(DateTime.now()),
+              completedAt: Value(completedAt),
             ),
           );
 
@@ -116,7 +119,66 @@ class DriftSaleRepository implements SaleRepository {
         id: id,
         provisionalInvoiceNumber: provisionalInvoiceNumber,
         grandTotalMinorUnits: grandTotalMinorUnits,
+        completedAt: completedAt,
       );
     });
+  }
+
+  @override
+  Future<List<CompletedSale>> listCompletedSales() async {
+    final rows =
+        await (_db.select(_db.sales)
+              ..where((t) => t.status.equals('completed'))
+              ..orderBy([
+                (t) =>
+                    OrderingTerm(expression: t.completedAt, mode: OrderingMode.desc),
+              ]))
+            .get();
+    return rows
+        .map(
+          (row) => CompletedSale(
+            id: row.id,
+            provisionalInvoiceNumber: row.provisionalInvoiceNumber,
+            grandTotalMinorUnits: row.grandTotalMinorUnits,
+            completedAt: row.completedAt!,
+          ),
+        )
+        .toList();
+  }
+
+  @override
+  Future<SaleDetail?> getSaleDetail(String id) async {
+    final sale = await (_db.select(
+      _db.sales,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (sale == null) return null;
+
+    final lineItemRows = await (_db.select(
+      _db.saleLineItems,
+    )..where((t) => t.saleId.equals(id))).get();
+
+    final lines = <SaleLineDetail>[];
+    for (final lineItem in lineItemRows) {
+      final product = await (_db.select(
+        _db.products,
+      )..where((t) => t.id.equals(lineItem.productId))).getSingleOrNull();
+      lines.add(
+        SaleLineDetail(
+          productId: lineItem.productId,
+          productName: product?.name,
+          quantity: lineItem.quantity.round(),
+          unitPriceMinorUnits: lineItem.unitPriceMinorUnits,
+          lineTotalMinorUnits: lineItem.lineTotalMinorUnits,
+        ),
+      );
+    }
+
+    return SaleDetail(
+      id: sale.id,
+      provisionalInvoiceNumber: sale.provisionalInvoiceNumber,
+      completedAt: sale.completedAt!,
+      grandTotalMinorUnits: sale.grandTotalMinorUnits,
+      lines: lines,
+    );
   }
 }
