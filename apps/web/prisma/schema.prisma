@@ -35,10 +35,11 @@ model Tenant {
   // and a follow-up migration corrected).
   createdBy     String    @map("created_by") @db.Uuid
 
-  users    User[]
-  stores   Store[]
-  products Product[]
-  sales    Sale[]
+  users          User[]
+  stores         Store[]
+  products       Product[]
+  sales          Sale[]
+  stockMovements StockMovement[]
 
   @@map("tenants")
 }
@@ -54,14 +55,15 @@ model Store {
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
   createdBy     String    @map("created_by") @db.Uuid
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   // NOT part of the deferred tenant<->user pair above (Tenant.createdBy, User.tenant) -- this is
   // an ordinary, non-deferred FK. In any transaction creating a tenant/store/user together, `user`
   // must be inserted before `store` for this reason. Found the hard way in Sprint 02
   // (docs/18-implementation/implementation-log.md, 2026-08-01) when the insert order assumed the
   // whole tenant/store/user set was deferred just because two of its tables are.
-  user   User   @relation(fields: [createdBy], references: [id], onDelete: Restrict)
-  sales  Sale[]
+  user           User            @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  sales          Sale[]
+  stockMovements StockMovement[]
 
   @@index([tenantId])
   @@map("stores")
@@ -83,10 +85,11 @@ model User {
   // DEFERRED`. This matters for this exact relation since it's half of the tenant/user circular
   // bootstrapping pair — found when a hard-delete of test fixtures failed immediately instead of
   // deferring to commit. See implementation-log.md's 2026-08-01 entry.
-  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: NoAction)
-  storesOwned     Store[]
-  productsCreated Product[]
-  salesCreated    Sale[]
+  tenant                Tenant          @relation(fields: [tenantId], references: [id], onDelete: NoAction)
+  storesOwned           Store[]
+  productsCreated       Product[]
+  salesCreated          Sale[]
+  stockMovementsCreated StockMovement[]
 
   @@index([tenantId])
   @@map("users")
@@ -109,9 +112,10 @@ model Product {
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
   createdBy       String    @map("created_by") @db.Uuid
 
-  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  user          User           @relation(fields: [createdBy], references: [id], onDelete: Restrict)
-  saleLineItems SaleLineItem[]
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user           User            @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  saleLineItems  SaleLineItem[]
+  stockMovements StockMovement[]
 
   @@index([tenantId])
   @@map("products")
@@ -181,4 +185,38 @@ model SalePayment {
 
   @@index([saleId])
   @@map("sale_payments")
+}
+
+/// M0-minimal slice of docs/07-database/schema-server.md's `stock_movements` table — only the
+/// `opening` and `sale` movement types are ever written this sprint (backlog.md item 7).
+/// `adjustment`/`return`, the public `POST`/`GET /stock-movements` and `GET .../stock-balance`
+/// endpoints, `variant_id`/`batch_id`/`serial_number` (V2/V4 stubs), and `reason_code` are all
+/// out of scope — docs/modules/inventory/specification.md §1. `device_id` is omitted, the same
+/// M0-wide gap `Sale` already has (device registration isn't built yet, module registry) —
+/// `createdBy` substitutes for attribution, matching every other M0-minimal table's own precedent.
+model StockMovement {
+  id            String   @id @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  storeId       String   @map("store_id") @db.Uuid
+  productId     String   @map("product_id") @db.Uuid
+  /// NUMERIC(14,3) on schema-server.md; Int here — the same fractional-quantity deferral
+  /// SaleLineItem.quantity already established (Units, which would say whether a product allows
+  /// fractional quantities, is M1 scope). Signed: positive for `opening`, negative for `sale`.
+  quantityDelta Int      @map("quantity_delta")
+  /// `NOT NULL CHECK (movement_type IN ('opening','sale','return','adjustment'))` on
+  /// schema-server.md — no CHECK added here, matching Sale.status/SalePayment.method's own
+  /// precedent of relying on application code rather than a hand-edited migration for this.
+  movementType  String   @map("movement_type")
+  referenceType String?  @map("reference_type")
+  referenceId   String?  @map("reference_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdBy     String   @map("created_by") @db.Uuid
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  store   Store   @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  user    User    @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, storeId, productId])
+  @@map("stock_movements")
 }

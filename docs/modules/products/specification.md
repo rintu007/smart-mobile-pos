@@ -6,8 +6,8 @@
 > [mobile-structure.md](../../08-folder-structure/mobile-structure.md)'s own note that the two
 > groupings are different, valid axes over the same modules)
 > **Slice:** V1 — this document scopes only M0's minimal first cut, not the full V1 shape (§1)
-> **Version:** 0.2.0
-> **Last updated:** 2026-08-02
+> **Version:** 0.3.0
+> **Last updated:** 2026-08-13
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
 
@@ -63,7 +63,7 @@ RLS: tenant-scoped, same template as `stores`
 
 | Method & path | Status |
 | --- | --- |
-| `POST /api/v1/products` | **Implemented this sprint.** Request: `{ id, name, price_minor_units }` only — not the full shape [catalogue.md](../../11-api/endpoints/catalogue.md) documents (see that document's own dated correction note). Requires a valid tenant-scoped session (`requireSession`) — no role/permission check yet (§2). |
+| `POST /api/v1/products` | **Implemented this sprint.** Request: `{ id, name, price_minor_units }` only — not the full shape [catalogue.md](../../11-api/endpoints/catalogue.md) documents (see that document's own dated correction note). Requires a valid tenant-scoped session (`requireSession`) — no role/permission check yet (§2). **Extended Sprint 11:** gains an optional `initial_quantity`, producing an `opening` stock movement in the same transaction — see [inventory/specification.md](../inventory/specification.md). |
 | `GET /products` | **Already documented**, not yet implemented — [catalogue.md](../../11-api/endpoints/catalogue.md). Deferred past this sprint, matching Sprint 02's precedent of shipping create-only first. |
 | `PATCH /products/{id}`, `DELETE /products/{id}` | **Already documented**, not yet implemented — deferred past this sprint. |
 
@@ -169,3 +169,4 @@ built the add flow, reachable directly rather than through a list that doesn't e
 | --- | --- | --- |
 | 0.1.0 | 2026-08-01 | First version — written to drive Sprint 04's implementation of `POST /api/v1/products`. Scope deliberately narrow (name/price only); FR-032/FR-035's category/unit requirement and the mobile local write path both named as not-yet-met rather than silently claimed. |
 | 0.2.0 | 2026-08-02 | Sprint 07: mobile local write path built (`DriftProductRepository`, `/catalogue/add`) — local write and `outbound_queue` enqueue atomic in one Drift transaction, idempotent on `id`, verified against a real on-disk file. Nothing yet drains the queue (sync engine, backlog item 9) — named explicitly, not claimed as full offline support. |
+| 0.3.0 | 2026-08-13 | Sprint 11: `POST /api/v1/products` gains an optional `initial_quantity`, producing one `opening` stock movement in the same transaction as the product row — see [inventory/specification.md](../inventory/specification.md). Mobile still sends no `initial_quantity` (unchanged this sprint), so every mobile-created product gets a zero-quantity opening movement until a later sprint adds the field to `/catalogue/add`. |

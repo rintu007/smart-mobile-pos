@@ -2,8 +2,8 @@
 
 > **Status:** 🟡 In progress
 > **Phase:** 18 — Implementation
-> **Version:** 0.14.0
-> **Last updated:** 2026-08-02
+> **Version:** 0.17.0
+> **Last updated:** 2026-08-13
 > **Owner:** CTO / All engineering roles
 
 Module-by-module record: dates, decisions, deviations, lessons — per this phase's own charter.
@@ -625,6 +625,75 @@ Access Token Hook stamps `tenant_id` at mint/refresh time, not retroactively ont
 already-issued token). Fixed by re-signing-in after onboarding, same pattern Sprint 04/05's scripts
 already used for exactly this reason.
 
+## 2026-08-02 — Sprint 09: mobile till screen, the local write path, and ADR-0008's local half
+
+**What landed:** `apps/mobile/lib/features/pos/` — cart state (`CartController`), the till screen
+(`/pos`), and `DriftSaleRepository.completeSale()` writing `sales`/`sale_line_items`/`sale_payments`
+and enqueuing to `outbound_queue` atomically (a forced-failure test proves the whole transaction
+rolls back together). `InvoiceNumberGenerator` implements ADR-0008's local half
+(`{device_short_id}-{financial_year}-{sequence}`, April 1 rollover) and the new `core/money/Money`
+class. Verified via `flutter test` against a real Drift database (52 tests total, up from 44).
+**A real environment gap, not a code bug**, found while preparing to run this on the founder's own
+device for the first time: no Android SDK/NDK/JDK existed on this machine at all — installed via
+`sdkmanager` cmdline-tools (not full Android Studio), plus a Kotlin cross-drive incremental-compiler
+crash (`kotlin.incremental=false`) and a Gradle daemon OOM on a memory-constrained 16GB machine
+(`-Xmx8G` reduced to `-Xmx2G`), both fixed in `apps/mobile/android/gradle.properties`.
+
+**Retroactive log entry, added 2026-08-13:** this sprint's own DoD checked "implementation-log
+updated," but the entry itself was never actually written — found while adding Sprint 11's own
+entry and reading back through this file's Change Log table, which jumped straight from 0.14.0
+(Sprint 08) past Sprint 09/10 to Sprint 11. Named honestly rather than silently backfilled without
+comment; see [sprint-09.md](../17-sprints/sprint-09.md) for the sprint's own full record, which was
+written correctly at the time.
+
+## 2026-08-12 — Sprint 10: mobile sales history, and the first real founder device/account
+
+**What landed:** `apps/mobile/lib/features/sales_history/` — `/sales-history` and
+`/sales-history/:id`, reading local-only from Sprint 09's own `sales`/`sale_line_items` tables via
+two new `SaleRepository` methods (`listCompletedSales`, `getSaleDetail`). A founder-directed
+insertion of Sales & Invoices' minimal slice, ahead of its M1 grouping, triggered directly by the
+founder's own first hands-on test of the till screen on their real phone ("it works fine, but no
+sell history") — see [modules/README.md](../modules/README.md) Rule 2's second named exception.
+This sprint is also the project's first contact with a real device end to end: USB and wireless
+debugging both proved unreliable against the founder's phone (a Redmi 15C never exposing a working
+ADB interface), so a standalone APK was built and side-loaded instead, via a temporary local file
+server. A real, non-throwaway founder account ("Gadgets Kolkata") was created for this — the first
+account in this project not deleted after its demo. The APK link initially failed after a rebuild
+because the file server cached the old build's `Content-Length` at startup instead of re-`stat`ing
+per request — fixed and reconfirmed working.
+
+**Retroactive log entry, added 2026-08-13** — same gap and same reasoning as Sprint 09's entry just
+above; see [sprint-10.md](../17-sprints/sprint-10.md) for the sprint's own full record.
+
+## 2026-08-13 — Sprint 11: the stock ledger (M0 item 7)
+
+**What landed:** `stock_movements` (M0-minimal columns — no `device_id`, matching `sales`' own
+precedent; `created_by` substitutes for attribution), migration
+`20260812192621_add_stock_movements_m0_minimal` applied live, RLS
+(`supabase/sql/006_rls_stock_movements.sql`) applied live. `POST /api/v1/products` gained an
+optional `initial_quantity`, writing one `opening` movement in the same `prisma.$transaction` as the
+product row (idempotent via a shared id — the movement reuses the product's own id as its own,
+since it's a genuine 1:1 relationship). `POST /api/v1/sales` writes one `sale` movement per line
+item, also inside an explicit transaction — no FK relation exists from `sales` to `stock_movements`
+(schema-server.md links them only loosely via `reference_type`/`reference_id`), so Prisma's
+nested-relation-write sugar didn't apply here the way it does for `sale_line_items`/`sale_payments`.
+
+Since `products` has no `store_id` of its own (M0-minimal, tenant-scoped only) but
+`stock_movements` is store-scoped by design, `stores.getPrimaryStoreId(tenantId)` was added,
+resolving the tenant's one store server-side (ADR-0003) — never accepted from the request, matching
+`inventory.md`'s own stated principle for stock-movement writes generally.
+
+**Live-verified against the real database**, throwaway tenants deleted after: opening-movement
+creation and idempotent replay, a real sale movement with the correct signed delta and
+`reference_id`, a genuine oversell (20 units against a balance of 7) succeeding rather than being
+rejected — DR-005 proven, not just asserted — and a cross-tenant RLS proof reading
+`stock_movements` directly via PostgREST. 16/16 checks passed on the first run; no new bug found.
+
+**A real documentation gap found and fixed in the same pass:** this file's own Change Log had never
+recorded Sprint 09 or Sprint 10 at all, despite both sprints' own DoD checklists claiming
+"implementation-log updated." Backfilled above with a note explaining why, rather than silently
+inserted as if it had always been there.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -644,3 +713,6 @@ already used for exactly this reason.
 | 0.12.0 | 2026-08-02 | Sprint 06: mobile `/auth/login` — the first real Flutter screen — built and verified against real Supabase Auth. Closed the missing-backlog-item gap (item 12) and made the first concrete move against the mobile-UI-deferral risk. Found and fixed a real pre-ship bug (`SignInController`'s async `build()` causing a spurious initial loading flash) via a widget test, and two real environment gaps (disk full, no runnable mobile device locally) — both logged honestly rather than worked around silently. |
 | 0.13.0 | 2026-08-02 | Sprint 07: mobile product creation (`/catalogue/add`) built — local write + `outbound_queue` enqueue atomic and idempotent, verified against a real on-disk file across a fresh connection. Closed backlog item 5's remaining scope and a real route-map.md gap. Found and fixed a real `Product` name collision (Drift's generated row class vs. the domain entity) and diagnosed a real memory-exhaustion issue (33 leftover Chrome processes from Sprint 06's demo) without guessing at the fix. |
 | 0.14.0 | 2026-08-02 | Sprint 08: `GET /api/v1/stores` built and verified live with a cross-tenant RLS proof; mobile fetch-and-cache built (`core/network/`, `core/store_context/`) — the first mobile call to this project's own backend. Closed a real gap found while planning the till screen (no `store_id` source existed) and a stale doc claim (RLS on `stores` was actually shipped Sprint 02, never corrected). |
+| 0.15.0 | 2026-08-13 | *Retroactive.* Sprint 09: mobile till screen (`/pos`) and its atomic local write path built (`sales`/`sale_line_items`/`sale_payments` + `outbound_queue`), ADR-0008's local invoice-numbering half implemented, `flutter test` at 52 tests. First contact with real Android tooling on this machine (SDK/NDK/JDK install, Kotlin cross-drive and Gradle-OOM fixes). This row was never written at the time — added here once the gap was found during Sprint 11's own logging. |
+| 0.16.0 | 2026-08-12 | *Retroactive.* Sprint 10: mobile sales-history (`/sales-history`, `/sales-history/:id`) built, local-only, a founder-directed insertion ahead of M1. First real (non-throwaway) founder account and first real-device APK install/side-load, after USB/wireless debugging both proved unreliable. Also never written at the time — same gap as 0.15.0, closed the same way. |
+| 0.17.0 | 2026-08-13 | Sprint 11: M0 item 7 (stock ledger) built — `stock_movements` table + RLS, `opening`/`sale` movements written server-side inside explicit transactions with their triggering row. Live-verified: idempotent opening-movement creation, a correct sale movement, a real oversell proving DR-005, and a cross-tenant RLS proof — 16/16 checks, no new bug. Found and fixed this file's own two-sprint logging gap (0.15.0/0.16.0) in the same pass. |

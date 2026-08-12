@@ -66,8 +66,8 @@ inside budget, the smallest sprint since Sprint 08.
 - [x] No secret, token, or key written to logs or committed to source.
 - [x] `sales-invoices/specification.md` (new), backlog.md, module registry, implementation-log, and
       READMEs updated in the same PR.
-- [ ] Rebuilt APK installed on the founder's own device, sales history checked against real sales
-      already created there — pending, tracked as this sprint's remaining step.
+- [x] Rebuilt APK installed on the founder's own device, sales history checked against real sales
+      already created there — confirmed by the founder 2026-08-13.
 
 **Explicitly not in this sprint's DoD subset:** GST invoice fields, canonical invoice numbers,
 `GET /sales*` server endpoints, permission enforcement, receipt printing/sharing, M0's own remaining
@@ -100,3 +100,4 @@ analysis — worth watching whether this becomes a recurring, valuable source of
 | --- | --- | --- |
 | 0.1.0 | 2026-08-12 | Sprint 10 planned: minimal local sales-history list/detail, pulled forward ahead of M1 at the founder's direct request after their first real-device test of the till screen surfaced the gap. New module specification written first (`sales-invoices/specification.md`); backlog.md corrected (Sales & Invoices was never listed at M1–M4 module grain at all). |
 | 0.2.0 | 2026-08-12 | Sprint 10 closed: `/sales-history` and `/sales-history/:id` built, `flutter analyze`/`flutter test` clean (52/52, up from 44). PR pending; APK rebuild and reinstall on the founder's own phone tracked as the sprint's final step. |
+| 0.3.0 | 2026-08-13 | Final DoD box ticked: founder confirmed the rebuilt APK's sales history matches real sales made on their own device. Sprint 10 fully done, no open items remain. |

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import * as repository from "./repository";
-import { listStores } from "./service";
+import { listStores, getPrimaryStoreId } from "./service";
 
 vi.mock("./repository");
 
@@ -46,5 +46,27 @@ describe("listStores", () => {
     const result = await listStores(tenantId);
 
     expect(result[0]!.address).toBeNull();
+  });
+});
+
+describe("getPrimaryStoreId", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("returns the id of the tenant's one store", async () => {
+    vi.mocked(repository.listByTenant).mockResolvedValue([
+      {
+        id: "store-1",
+        tenantId,
+        name: "Main Store",
+        address: null,
+        deactivatedAt: null,
+        createdAt: new Date(),
+        createdBy: "user-1",
+      },
+    ] as never);
+
+    await expect(getPrimaryStoreId(tenantId)).resolves.toBe("store-1");
   });
 });

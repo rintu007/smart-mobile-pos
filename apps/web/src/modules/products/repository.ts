@@ -4,19 +4,41 @@ import type { CreateProductRequest } from "./schema";
 // Prisma queries only, no business logic — docs/08-folder-structure/backend-structure.md §2.
 
 export function createProduct(
-  input: CreateProductRequest & { tenantId: string; createdBy: string },
+  input: CreateProductRequest & { tenantId: string; createdBy: string; storeId: string },
 ) {
   // Upsert-on-id, same idempotent-replay mechanism as identity/repository.ts's createOnboarding —
-  // docs/11-api/api-principles.md §3.
-  return prisma.product.upsert({
-    where: { id: input.id },
-    create: {
-      id: input.id,
-      tenantId: input.tenantId,
-      name: input.name,
-      priceMinorUnits: BigInt(input.price_minor_units),
-      createdBy: input.createdBy,
-    },
-    update: {},
+  // docs/11-api/api-principles.md §3. Wrapped in a transaction with the opening stock movement
+  // (backlog.md item 7) so the product and its ledger baseline are created atomically or not at
+  // all — docs/modules/inventory/specification.md §1. The movement reuses the product's own id as
+  // its idempotency key: a 1:1 relationship, so a replay of the same creation request naturally
+  // no-ops both rows together rather than needing separate insert-vs-update detection.
+  return prisma.$transaction(async (tx) => {
+    const product = await tx.product.upsert({
+      where: { id: input.id },
+      create: {
+        id: input.id,
+        tenantId: input.tenantId,
+        name: input.name,
+        priceMinorUnits: BigInt(input.price_minor_units),
+        createdBy: input.createdBy,
+      },
+      update: {},
+    });
+
+    await tx.stockMovement.upsert({
+      where: { id: input.id },
+      create: {
+        id: input.id,
+        tenantId: input.tenantId,
+        storeId: input.storeId,
+        productId: product.id,
+        quantityDelta: input.initial_quantity ?? 0,
+        movementType: "opening",
+        createdBy: input.createdBy,
+      },
+      update: {},
+    });
+
+    return product;
   });
 }
