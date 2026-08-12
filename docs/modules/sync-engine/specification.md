@@ -4,7 +4,7 @@
 > **Module:** Offline Sync Engine
 > **Slice:** V1 — this document scopes only backlog.md item 9's M0-minimal cut, not the full
 > [sync-api.md](../../11-api/sync-api.md) shape (§1)
-> **Version:** 0.1.0
+> **Version:** 0.2.0
 > **Last updated:** 2026-08-13
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
@@ -29,11 +29,14 @@ needs before item 11's end-to-end proof ("...watch it sync...") can be attempted
 than described.
 
 **Deliberately narrow scope, matching the backend/mobile split precedent already established**
-(products: Sprint 04 backend / Sprint 07 mobile; sales: Sprint 05 backend / Sprint 09 mobile): this
-sprint builds the **backend push/pull endpoints only**. Nothing in `apps/mobile` calls them yet —
-the outbound queue still isn't drained, and no mobile sync trigger (connectivity listener, app
-foreground, background timer, per [sync-api.md §7](../../11-api/sync-api.md#7-what-triggers-a-sync-cycle))
-exists. That is the concrete next sprint, not this one — named here rather than implied.
+(products: Sprint 04 backend / Sprint 07 mobile; sales: Sprint 05 backend / Sprint 09 mobile):
+Sprint 13 built the **backend push/pull endpoints only**. **Sprint 14 closes that gap** —
+`apps/mobile/lib/core/sync/` now calls both, draining `outbound_queue` via push and refreshing the
+local `products` cache via pull. The trigger itself is still deliberately narrow: automatic, once
+per app session, right after `storeContextProvider` resolves, plus a manual "Sync now" button —
+not the full connectivity-listener/app-foreground/background-timer trigger set
+[sync-api.md §7](../../11-api/sync-api.md#7-what-triggers-a-sync-cycle) describes, which stays a
+named, deferred Phase 18 tuning decision (per that section's own wording).
 
 **Narrower still than [sync-api.md](../../11-api/sync-api.md) itself**, even for the backend half:
 - Push handles exactly two operation types (`product.create`, `sale.create`) — sync-api.md §2's
@@ -74,13 +77,29 @@ exists. That is the concrete next sprint, not this one — named here rather tha
   actually a plausible, retryable explanation).
 - [api-principles.md §4](../../11-api/api-principles.md#4-pagination--cursor-only): pull is
   cursor-only, `(updated_at, id)` for `products` (a Tier 1 table) — no offset pagination.
+- **Mobile, Sprint 14: no pull cursor is persisted between sync runs.** Every call to `syncNow()`
+  pages `products` from the start, upserting each row by `id` (idempotent — a re-pulled row simply
+  overwrites the locally cached one, per schema-local.md's `products` divergence note). A
+  persisted, resumable cursor is a real efficiency improvement `sync-api.md §6` anticipates, but
+  M0's product-catalogue size makes it unnecessary, and skipping it avoids adding a new local table
+  (and the schema migration that would require) against the founder's own already-installed,
+  persistent app — a deliberate, named trade-off, not an oversight.
+- A queued operation's `outbound_queue` row is only ever updated in response to that operation's
+  own result in the push response — a network failure that never reaches the server (no response
+  at all) leaves every affected row untouched, safe to resend in full on the next attempt.
 
 ## 3. Database tables and relationships
 
-No new table. Push writes through `products`/`stock_movements`/`sales`/`sale_line_items`/
-`sale_payments`/`audit_log` exactly as the direct endpoints already do (Sprints 04, 05, 11, 12) —
-this module owns no storage of its own, only the batch/cursor mechanics around calling existing
-service functions. Pull reads `products` unchanged.
+**Server:** no new table. Push writes through `products`/`stock_movements`/`sales`/
+`sale_line_items`/`sale_payments`/`audit_log` exactly as the direct endpoints already do (Sprints
+04, 05, 11, 12) — this module owns no storage of its own, only the batch/cursor mechanics around
+calling existing service functions. Pull reads `products` unchanged.
+
+**Mobile (Sprint 14):** no new local table either. Push reads `outbound_queue` (already built,
+backlog item 4) and updates each row's own `status`/`attempt_count`/`last_attempted_at`/
+`rejection_reason` per its push result — the exact columns schema-local.md already defines for
+this table's Sync Item state machine, none added. Pull upserts into the local `products` table
+(already built) — no local pull-cursor table, per §2's named trade-off.
 
 ## 4. API contract
 
@@ -114,10 +133,14 @@ copy on this sprint.
 
 ## 7. Offline behaviour
 
-This module *is* the mechanism that makes offline writes eventually durable server-side — but per
-§1, nothing in `apps/mobile` calls it yet, so no mobile-observable offline behaviour exists this
-sprint. The endpoints themselves obviously require connectivity to be called at all, same as any
-`POST`/`GET`.
+This module *is* the mechanism that makes offline writes eventually durable server-side. As of
+Sprint 14: a sync attempt with no connectivity fails the underlying HTTP call, which
+`SyncRepository.syncNow()` lets propagate for a manual "Sync now" tap (surfaced as an inline error
+on the home screen) but deliberately swallows for the automatic on-start trigger (§9) — an
+auto-sync failing at launch must never block the home screen; it simply retries next launch or on
+the next manual tap. `outbound_queue` rows themselves are never touched unless a server response
+was actually received (an operation's own result decides its fate — §2), so a network failure
+mid-push leaves the queue exactly as it was, safe to retry in full.
 
 ## 8. Realtime behaviour
 
@@ -126,7 +149,13 @@ connectivity/foreground/backstop-timer triggers), not a push subscription.
 
 ## 9. UI specification
 
-None this sprint — no mobile screen or background trigger exists yet (§1).
+No dedicated screen — `apps/mobile/lib/app/home_screen.dart` gained a sync-status line (`Not
+synced yet this session.` / a per-run summary / an inline error) and a `sync_now_button`, per
+[route-map.md](../../09-navigation/route-map.md)'s existing placement of cross-cutting status on
+the app shell's own root screen (the same reasoning `store_context_ready`'s status line already
+established, Sprint 08). No new route. An `autoSyncOnStartProvider` (a cached `FutureProvider`,
+Riverpod's idiomatic "run once" mechanism) fires automatically the first time
+`storeContextProvider` resolves in a given app session — not on every rebuild.
 
 ## 10. Test plan
 
@@ -153,8 +182,21 @@ None this sprint — no mobile screen or background trigger exists yet (§1).
      `next_cursor` is `null`.
   5. Cross-tenant: tenant B's pull returns none of tenant A's products.
 
-**Explicitly deferred:** every other operation/entity type (§1), `sync_rejections`, the mobile sync
-trigger and outbound-queue drain (the concrete next sprint), the full six-group push ordering.
+**Sprint 14 scope (mobile):**
+- Repository tests (`sync_repository_test.dart`, against a real in-memory Drift database): an
+  accepted result marks its queue row `synced`; a `DEPENDENCY_NOT_FOUND` result marks it
+  `failed_retrying` and increments `attempt_count`; any other rejection marks it `rejected` with
+  `rejection_reason` set; both `queued` and `failed_retrying` rows are included in one push batch,
+  `synced` rows are not; a sync with an empty queue never calls push at all; pull pages across
+  multiple calls and upserts every row into the local `products` table; pulling an
+  already-cached product updates it in place rather than duplicating it.
+- Widget test (`widget_test.dart`): the home screen's initial sync-status line reads "Not synced
+  yet this session"; tapping "Sync now" against a faked, empty-queue repository shows the resulting
+  summary.
+
+**Explicitly deferred:** every other operation/entity type (§1), `sync_rejections`, the full
+six-group push ordering, sync-api.md §7's full trigger set (connectivity listener, app foreground,
+background timer), a persisted/resumable pull cursor (§2).
 
 ## 11. Traceability
 
@@ -162,11 +204,12 @@ trigger and outbound-queue drain (the concrete next sprint), the full six-group 
 | --- | --- | --- |
 | [sync-api.md §1](../../11-api/sync-api.md#1-push--postsyncpush)–[§5](../../11-api/sync-api.md#5-duplicate-detection--replays-are-free) (push mechanics) | §2, §4, §10 | Met, for the two in-scope operation types only |
 | [sync-api.md §6](../../11-api/sync-api.md#6-pull--getsyncpull) (cursor pull) | §4, §10 | Met, for `products` only |
-| [milestones.md — M0 exit criterion](../../16-milestones/milestones.md#m0--walking-skeleton) ("...watch it sync...") | §10 | Backend half met — the mobile trigger that would make this observable end to end is the next sprint |
-| [sync-api.md §7](../../11-api/sync-api.md#7-what-triggers-a-sync-cycle) (sync-cycle triggers) | — | **Not met** — no mobile trigger exists yet (§1) |
+| [milestones.md — M0 exit criterion](../../16-milestones/milestones.md#m0--walking-skeleton) ("...watch it sync...") | §9, §10 | Met — a device can now actually push its queue and pull products, on-device, observable via the home screen's own sync status |
+| [sync-api.md §7](../../11-api/sync-api.md#7-what-triggers-a-sync-cycle) (sync-cycle triggers) | §9 | **Partially met** — automatic-once-per-session and manual triggers exist; connectivity-listener/app-foreground/background-timer triggers remain a named, deferred Phase 18 tuning decision |
 
 ## Change Log
 
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-08-13 | First version — written to drive Sprint 13's backend-only sync push/pull (backlog.md item 9). Scope deliberately narrow: two push operation types, one pull entity type, no mobile trigger, no `sync_rejections`. |
+| 0.2.0 | 2026-08-13 | Sprint 14: mobile half built — `apps/mobile/lib/core/sync/` drains `outbound_queue` via push and refreshes local `products` via pull, triggered automatically once per session plus a manual "Sync now" button on the home screen. No pull-cursor persistence and no full trigger set (connectivity/foreground/timer) — both named, deliberate trade-offs, not oversights. |
