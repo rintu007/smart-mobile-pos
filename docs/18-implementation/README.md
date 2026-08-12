@@ -1,7 +1,7 @@
 # Phase 18 — Implementation
 
-> **Status:** 🟡 In progress — Sprint 01 through Sprint 12 all closed; M0 items 9–11 remain, next up
-> **Version:** 0.14.0
+> **Status:** 🟡 In progress — Sprint 01 through Sprint 13 all closed; M0 items 10–11 remain (item 9's mobile half still open), next up
+> **Version:** 0.15.0
 > **Last updated:** 2026-08-13
 > **Owner:** CTO / All engineering roles
 
@@ -95,3 +95,4 @@ to the 13-step loop or the full Definition of Done. See
 | 0.12.0 | 2026-08-12 | Sprint 10 closed: mobile sales-history list/detail (`/sales-history`) built — a founder-directed insertion of Sales & Invoices' minimal local-read slice, triggered by the founder's own first hands-on test of the till screen on a real device. New module specification written first. Also: first real (non-demo, non-deleted) founder account created and the app installed on the founder's own phone for the first time this project — a genuine milestone distinct from every prior sprint's throwaway live-verification pattern. M0 items 7–11 remain open next. |
 | 0.13.0 | 2026-08-13 | Sprint 11 closed: M0 item 7 (stock ledger) built — `POST /api/v1/products` and `POST /api/v1/sales` each write their stock movement (`opening`, `sale`) inside the same transaction as their triggering row. New module specification (`inventory/specification.md`) written first. Live-verified against the real database with throwaway tenants: opening/replay idempotency, a real oversell proving DR-005, and a cross-tenant RLS proof on `stock_movements` itself — 16/16 checks passed. Closes the gap both `products` and `pos` specifications had named since Sprint 04/05. M0 items 8–11 remain open next. |
 | 0.14.0 | 2026-08-13 | Sprint 12 closed: M0 item 8 (audit log) built — `POST /api/v1/sales` now writes one `sale.completed` `audit_log` entry inside the same transaction as the sale and its stock movements. New module specification (`audit-log/specification.md`) written first, naming a real, now-visible gap: Sprint 11's stock movements still have zero audit coverage. Live-verified: correct entry shape, idempotent replay, cross-tenant RLS proof — 11/11 checks passed. M0 items 9–11 remain open next. |
+| 0.15.0 | 2026-08-13 | Sprint 13 closed: M0 item 9's backend half (sync engine) built — `POST /api/v1/sync/push` (`product.create`/`sale.create`, dependency-group ordered, per-operation partial-failure results) and `GET /api/v1/sync/pull` (`products`, cursor-paginated). New module specification (`sync-engine/specification.md`) written first. Found and fixed a real cursor-pagination off-by-one bug on the first live attempt (a page landing exactly on `limit` looked identical to a genuinely full page). Live-verified: dependency reordering, `DEPENDENCY_NOT_FOUND` remapping, idempotent replay, a corrected two-page cursor walk, cross-tenant isolation — 14/14 checks passed. Mobile sync trigger/outbound-queue drain remains the concrete next sprint. M0 items 10–11 remain open next. |
