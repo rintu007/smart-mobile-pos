@@ -2,7 +2,7 @@
 
 > **Status:** 🟡 In progress
 > **Phase:** 18 — Implementation
-> **Version:** 0.17.0
+> **Version:** 0.18.0
 > **Last updated:** 2026-08-13
 > **Owner:** CTO / All engineering roles
 
@@ -694,6 +694,27 @@ recorded Sprint 09 or Sprint 10 at all, despite both sprints' own DoD checklists
 "implementation-log updated." Backfilled above with a note explaining why, rather than silently
 inserted as if it had always been there.
 
+## 2026-08-13 — Sprint 12: the audit log (M0 item 8)
+
+**What landed:** `audit_log` (the full schema-server.md column shape — this table was already this
+narrow in the approved design), migration `20260812195944_add_audit_log_m0_minimal` applied live,
+RLS (`supabase/sql/007_rls_audit_log.sql`) applied live. `POST /api/v1/sales` writes exactly one
+`audit_log` row (`action = 'sale.completed'`, `entity_type = 'sale'`) inside the same
+`prisma.$transaction` Sprint 11 already established for the sale's stock movements — reusing the
+sale's own id as the audit row's id, the same 1:1 idempotency-key pattern Sprint 11 used twice over.
+`before_state` is always `null` this sprint (a creation event has no prior state); `after_state`
+snapshots the sale's own computed totals.
+
+**Live-verified against the real database**, throwaway tenants deleted after: the entry's exact
+shape (action/entity/actor/store/before/after), idempotent replay producing no second row, and a
+cross-tenant RLS proof reading `audit_log` directly via PostgREST. 11/11 checks passed, no new bug.
+
+**A real, now-visible gap named, not fixed:** audit-model.md §1 lists ten trigger types; this
+sprint covers exactly one (`sale.completed`). Sprint 11's own `stock_movements` rows — audit-model.md
+§1's own first-listed trigger — have had, and continue to have, zero audit coverage. Named directly
+in `audit-log/specification.md §1` as the concrete next candidate, not silently absorbed into this
+sprint's own narrower, already-estimated scope.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -716,3 +737,4 @@ inserted as if it had always been there.
 | 0.15.0 | 2026-08-13 | *Retroactive.* Sprint 09: mobile till screen (`/pos`) and its atomic local write path built (`sales`/`sale_line_items`/`sale_payments` + `outbound_queue`), ADR-0008's local invoice-numbering half implemented, `flutter test` at 52 tests. First contact with real Android tooling on this machine (SDK/NDK/JDK install, Kotlin cross-drive and Gradle-OOM fixes). This row was never written at the time — added here once the gap was found during Sprint 11's own logging. |
 | 0.16.0 | 2026-08-12 | *Retroactive.* Sprint 10: mobile sales-history (`/sales-history`, `/sales-history/:id`) built, local-only, a founder-directed insertion ahead of M1. First real (non-throwaway) founder account and first real-device APK install/side-load, after USB/wireless debugging both proved unreliable. Also never written at the time — same gap as 0.15.0, closed the same way. |
 | 0.17.0 | 2026-08-13 | Sprint 11: M0 item 7 (stock ledger) built — `stock_movements` table + RLS, `opening`/`sale` movements written server-side inside explicit transactions with their triggering row. Live-verified: idempotent opening-movement creation, a correct sale movement, a real oversell proving DR-005, and a cross-tenant RLS proof — 16/16 checks, no new bug. Found and fixed this file's own two-sprint logging gap (0.15.0/0.16.0) in the same pass. |
+| 0.18.0 | 2026-08-13 | Sprint 12: M0 item 8 (audit log) built — `audit_log` table + RLS, one `sale.completed` entry written server-side inside the same transaction as the sale and its stock movements. Live-verified: correct entry shape, idempotent replay, cross-tenant RLS proof — 11/11 checks, no new bug. Named a real, still-open gap: `stock_movements` has zero audit coverage. |
