@@ -47,6 +47,8 @@ dependencies:
   drift_flutter: ^0.3.1
   supabase_flutter: ^2.16.0
   uuid: ^4.6.0
+  esc_pos_utils_plus: ^2.0.4
+  print_bluetooth_thermal: ^1.2.2
 
 dev_dependencies:
   flutter_test:

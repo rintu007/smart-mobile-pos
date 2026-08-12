@@ -1,4 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Bluetooth ESC/POS receipt printing (Sprint 15, backlog.md item 10) —
+         print_bluetooth_thermal's own required permission set, per its
+         package README. BLUETOOTH_CONNECT/BLUETOOTH_SCAN are the Android
+         12+ runtime permissions the plugin's own isPermissionBluetoothGranted
+         check gates on; BLUETOOTH/BLUETOOTH_ADMIN cover pre-12 devices. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <application
         android:label="mobile"
         android:name="${applicationName}"
