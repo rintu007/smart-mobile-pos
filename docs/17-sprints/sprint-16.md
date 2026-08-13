@@ -1,9 +1,9 @@
 # Sprint 16
 
-> **Dates:** Started 2026-08-13
+> **Dates:** 2026-08-13 – 2026-08-14
 > **Milestone:** M0 — Walking Skeleton (backlog item 11 — the exit criterion itself)
-> **Status:** In progress — blocked on the founder's own execution and, for the print step,
-> physical printer hardware
+> **Status:** In progress — steps 1–7 confirmed working by the founder 2026-08-14; step 8 (print)
+> remains open, blocked on physical printer hardware
 
 ## Goal
 
@@ -60,6 +60,14 @@ result is exactly what this phase anticipated, not scope invented late.
    structure (narrowed to M0's fields, per
    [receipt-printing/specification.md](../modules/receipt-printing/specification.md)).
 
+## Confirmation — 2026-08-14
+
+Founder ran steps 1–7 on the rebuilt APK, on the real "Gadgets Kolkata" account and device: sign
+in, airplane mode, add a product, sell it, reconnect, sync. Confirmed working — no crash, no hang,
+sale and product both reached the server. No new bug found, unlike Sprints 04/05/08/etc.'s own
+first-real-contact pattern of finding something on the first live attempt; the individually-proven
+pieces held together as a sequence on the first real end-to-end run.
+
 ## Blockers — named, not glossed over
 
 - **Step 8 needs a real Bluetooth ESC/POS printer** — confirmed 2026-08-13: the founder does not
@@ -74,20 +82,23 @@ result is exactly what this phase anticipated, not scope invented late.
 
 ## Definition of Done
 
-- [ ] Steps 1–7 run on the founder's own device, confirmed working (product and sale both show
-      `accepted` after sync; no crash or hang at any step).
+- [x] Steps 1–7 run on the founder's own device, confirmed working 2026-08-14 (product and sale
+      both synced; no crash or hang at any step) — reported directly by the founder ("checked and
+      its fine"), no bug found.
 - [ ] Step 8 run against a real printer, physical receipt photographed or described — **pending
       printer hardware, confirmed unavailable as of 2026-08-13**; tracked separately, revisited
       once the founder has one.
-- [ ] Any real bug found during the run is logged and fixed before this sprint (and M0 itself)
+- [x] Any real bug found during the run is logged and fixed before this sprint (and M0 itself)
       closes — matching every prior sprint's own "real HTTP request/live verification" addendum
-      rule, now applied to the full sequence at once rather than one endpoint at a time.
-- [ ] `milestones.md`'s M0 row marked demonstrated once the above is confirmed.
-- [ ] `backlog.md` item 11, `docs/18-implementation/README.md`, and `docs/README.md`'s Phase 17/18
-      status lines updated to record M0's actual closure.
+      rule, now applied to the full sequence at once rather than one endpoint at a time. None found
+      this run.
+- [ ] `milestones.md`'s M0 row marked demonstrated — **not yet**: M0's own exit criterion is the
+      full sequence including the physical print, so M0 stays open until step 8 closes too.
+- [x] `backlog.md` item 11 and this document updated to record steps 1–7's confirmation.
 
 ## Change Log
 
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-08-13 | Sprint 16 opened: M0's own exit-criterion sequence scripted precisely against what Sprints 01–15 actually built; rebuilt APK prepared and re-served. Waiting on the founder to run steps 1–7 now and step 8 once a physical printer is available. |
+| 0.2.0 | 2026-08-14 | Steps 1–7 confirmed working by the founder — no bug found. Step 8 (physical print) remains open, still blocked on printer hardware; M0 itself stays open until it closes too. |

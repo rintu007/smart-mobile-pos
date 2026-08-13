@@ -2,8 +2,8 @@
 
 > **Status:** 🟡 In progress
 > **Phase:** 18 — Implementation
-> **Version:** 0.21.0
-> **Last updated:** 2026-08-13
+> **Version:** 0.22.0
+> **Last updated:** 2026-08-14
 > **Owner:** CTO / All engineering roles
 
 Module-by-module record: dates, decisions, deviations, lessons — per this phase's own charter.
@@ -803,6 +803,28 @@ encoder tests (real ESC/POS encoding via `TestWidgetsFlutterBinding.ensureInitia
 there is no real Bluetooth adapter in CI or this dev machine to test against directly).
 `flutter analyze` clean. This is the first M0 module with zero backend component.
 
+## 2026-08-13/14 — Sprint 16: M0's end-to-end proof (item 11), steps 1–7
+
+**What landed:** no new app code — item 11 exercises capabilities already built across Sprints
+01–15. Wrote the exact step-by-step script for
+[milestones.md — M0](../16-milestones/milestones.md#m0--walking-skeleton)'s exit criterion, cross-
+referenced against the actual screens/providers each step touches (`autoSyncOnStartProvider`'s
+`sync_status` line as the concrete "watch it sync" signal, rather than an ambiguous instruction).
+Rebuilt the release APK carrying every Sprint 11–15 change and re-served it via the same local file
+share Sprint 10 established.
+
+**Confirmed 2026-08-14:** the founder ran steps 1–7 (sign in, airplane mode, add a product, sell
+it, reconnect, sync) on the real "Gadgets Kolkata" account and device. Worked cleanly — no crash,
+no hang, both the product and the sale reached the server. **No new bug found** — worth recording
+precisely because this is the first time every individually-proven Sprint 01–14 piece has run
+together as one real sequence, and unlike several of those sprints' own first-real-contact
+findings (Sprint 04's `requireSession` bug, Sprint 10's file-server `Content-Length` bug), nothing
+broke at the seams this time.
+
+**Still open:** step 8 (printing the physical receipt) — blocked on Bluetooth ESC/POS printer
+hardware, which the founder confirmed 2026-08-13 they don't yet have. M0 itself stays open until
+this closes too; tracked in [sprint-16.md](../17-sprints/sprint-16.md), not silently dropped.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -829,3 +851,4 @@ there is no real Bluetooth adapter in CI or this dev machine to test against dir
 | 0.19.0 | 2026-08-13 | Sprint 13: M0 item 9's backend half (sync engine) built — `POST /sync/push` (`product.create`/`sale.create`, dependency-ordered, per-operation results) and `GET /sync/pull` (`products`, cursor-paginated, this codebase's first). Found and fixed a real cursor off-by-one bug live (a full-looking last page). 14/14 checks passed. Mobile trigger/outbound-queue drain remains the next sprint. |
 | 0.20.0 | 2026-08-13 | Sprint 14: M0 item 9's mobile half built — `core/sync/` drains `outbound_queue` and refreshes local `products`, triggered automatically once per session plus a manual button. Deliberately no persisted pull cursor, avoiding a schema migration against the founder's real installed app. `flutter test` 60/60, `flutter analyze` clean. Item 9 done in full. |
 | 0.21.0 | 2026-08-13 | Sprint 15: M0 item 10's software half built — Bluetooth ESC/POS receipt printing (`ReceiptFormatter`, `EscPosReceiptEncoder`, `BluetoothPrinterRepository`), a print action on `/sales-history/:id`. `flutter test` 75/75, `flutter analyze` clean. Physical-printer verification (MTS-01) named as a founder action, not run — no hardware available, matching device-matrix.md §3's own precedent. First M0 module with zero backend component. |
+| 0.22.0 | 2026-08-14 | Sprint 16: M0 item 11 (end-to-end proof), steps 1–7, confirmed working by the founder — no new bug found, the first time every Sprint 01–14 piece ran together as one real sequence. Step 8 (physical print) remains open, blocked on printer hardware; M0 itself stays open until it closes. |
