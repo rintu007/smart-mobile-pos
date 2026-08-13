@@ -2,7 +2,7 @@
 
 > **Status:** 🟡 In progress
 > **Phase:** 18 — Implementation
-> **Version:** 0.22.0
+> **Version:** 0.23.0
 > **Last updated:** 2026-08-14
 > **Owner:** CTO / All engineering roles
 
@@ -825,6 +825,33 @@ broke at the seams this time.
 hardware, which the founder confirmed 2026-08-13 they don't yet have. M0 itself stays open until
 this closes too; tracked in [sprint-16.md](../17-sprints/sprint-16.md), not silently dropped.
 
+**A real process decision, asked and answered rather than assumed:** with M0's last open item
+blocked purely on hardware neither side controls, the question of whether M1 should begin now or
+wait was put to the founder directly (not decided unilaterally, since it means bending
+`modules/README.md` Rule 2's own literal wording — "M1 onward builds one row at a time" presumes M0
+is actually done first). Founder chose to start M1 now. Recorded as Rule 2's third exception, not a
+silent reinterpretation.
+
+## 2026-08-14 — Sprint 17: Categories, the first M1 module
+
+**What landed:** [backlog.md's M1 decomposition](../17-sprints/backlog.md#2-m1--fully-decomposed-2026-08-14-now-that-m0-has-reached-this-point)
+(8 items, 15.5 person-days, matching M0's own decomposition depth) written in the same pass as this
+sprint's own planning. `categories` table (full column list — this table needed no M0-minimal
+narrowing) + RLS, `POST`/`GET /api/v1/categories`, matching every prior M0 creation/list endpoint's
+own idempotency and cursor-pagination mechanisms exactly — no new pattern invented. Deliberately
+narrow, matching Products' own Sprint 04 precedent: create+list only, no `PATCH`/`DELETE` (which
+would need a state-transition idempotency mechanism — `client_operation_id` + `idempotency_keys` —
+that doesn't exist anywhere in this codebase yet, every M0 mutation having been a creation), no
+permission enforcement (Roles & Permissions is deliberately the last M1 item, per
+dependency-graph.md §3's "woven through every node, not sequential" framing).
+
+**Live-verified against the real database**, throwaway tenants deleted after: idempotent creation,
+a corrected cursor-pagination walk (built with the peek-ahead fix from the start, rather than found
+live a second time), and a cross-tenant RLS proof. 9/9 checks passed, no new bug.
+
+**First module under M1's own governance:** Rule 2 ("one module at a time") applies literally
+again from this sprint onward — no exception needed or invoked, unlike every M0 sprint.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -852,3 +879,4 @@ this closes too; tracked in [sprint-16.md](../17-sprints/sprint-16.md), not sile
 | 0.20.0 | 2026-08-13 | Sprint 14: M0 item 9's mobile half built — `core/sync/` drains `outbound_queue` and refreshes local `products`, triggered automatically once per session plus a manual button. Deliberately no persisted pull cursor, avoiding a schema migration against the founder's real installed app. `flutter test` 60/60, `flutter analyze` clean. Item 9 done in full. |
 | 0.21.0 | 2026-08-13 | Sprint 15: M0 item 10's software half built — Bluetooth ESC/POS receipt printing (`ReceiptFormatter`, `EscPosReceiptEncoder`, `BluetoothPrinterRepository`), a print action on `/sales-history/:id`. `flutter test` 75/75, `flutter analyze` clean. Physical-printer verification (MTS-01) named as a founder action, not run — no hardware available, matching device-matrix.md §3's own precedent. First M0 module with zero backend component. |
 | 0.22.0 | 2026-08-14 | Sprint 16: M0 item 11 (end-to-end proof), steps 1–7, confirmed working by the founder — no new bug found, the first time every Sprint 01–14 piece ran together as one real sequence. Step 8 (physical print) remains open, blocked on printer hardware; M0 itself stays open until it closes. |
+| 0.23.0 | 2026-08-14 | Sprint 17: first M1 module — Categories (`categories` table, `POST`/`GET /categories`) built and live-verified, 9/9 checks. M1 fully decomposed (8 items) in the same pass, founder-directed after M0's last item was confirmed blocked purely on external hardware. Rule 2 governs literally again. |

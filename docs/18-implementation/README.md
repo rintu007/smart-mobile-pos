@@ -1,8 +1,9 @@
 # Phase 18 — Implementation
 
-> **Status:** 🟡 In progress — Sprint 01 through Sprint 15 all closed; M0 item 11 (end-to-end proof) remains, next up
-> **Version:** 0.17.0
-> **Last updated:** 2026-08-13
+> **Status:** 🟡 In progress — M0 done except item 11's physical-print step (blocked on printer
+> hardware, tracked separately); M1 underway, Sprint 17 (Categories) closed
+> **Version:** 0.19.0
+> **Last updated:** 2026-08-14
 > **Owner:** CTO / All engineering roles
 
 ## Charter
@@ -98,3 +99,5 @@ to the 13-step loop or the full Definition of Done. See
 | 0.15.0 | 2026-08-13 | Sprint 13 closed: M0 item 9's backend half (sync engine) built — `POST /api/v1/sync/push` (`product.create`/`sale.create`, dependency-group ordered, per-operation partial-failure results) and `GET /api/v1/sync/pull` (`products`, cursor-paginated). New module specification (`sync-engine/specification.md`) written first. Found and fixed a real cursor-pagination off-by-one bug on the first live attempt (a page landing exactly on `limit` looked identical to a genuinely full page). Live-verified: dependency reordering, `DEPENDENCY_NOT_FOUND` remapping, idempotent replay, a corrected two-page cursor walk, cross-tenant isolation — 14/14 checks passed. Mobile sync trigger/outbound-queue drain remains the concrete next sprint. M0 items 10–11 remain open next. |
 | 0.16.0 | 2026-08-13 | Sprint 14 closed: M0 item 9's mobile half built — `apps/mobile/lib/core/sync/` drains `outbound_queue` via `POST /sync/push` and refreshes local `products` via `GET /sync/pull`, triggered automatically once per session plus a manual "Sync now" button on the home screen. Deliberately no persisted pull cursor (would have needed a schema migration against the founder's own real, already-installed app) and no full connectivity/foreground/timer trigger set — both named trade-offs. `flutter test` 60/60 (up from 52), `flutter analyze` clean. Backlog.md item 9 done in full. M0 items 10–11 remain open next. |
 | 0.17.0 | 2026-08-13 | Sprint 15 closed: M0 item 10's software half built — Bluetooth ESC/POS receipt printing (`ReceiptFormatter`, `EscPosReceiptEncoder` via `esc_pos_utils_plus`, `BluetoothPrinterRepository` via `print_bluetooth_thermal`), a print action on `/sales-history/:id`. `flutter test` 75/75 (up from 60), `flutter analyze` clean. Physical-printer verification (MTS-01) named as a founder action, not run — no Bluetooth ESC/POS hardware available in this environment, same category as device-matrix.md §3's physical reference device. M0 item 11 (the end-to-end proof) remains open next — the last item. |
+| 0.18.0 | 2026-08-14 | Sprint 16: M0 item 11's steps 1–7 (sign in, add a product, sell offline, reconnect, sync) run for real on the founder's own device and confirmed working — no new bug found, the first time every Sprint 01–14 piece ran together as one sequence. Step 8 (physical print) remains open, blocked on printer hardware the founder confirmed they don't have yet. Founder directed M1 to begin regardless — asked and answered plainly (modules/README.md Rule 2's third exception) — rather than holding all work until a printer exists. |
+| 0.19.0 | 2026-08-14 | Sprint 17 closed: first M1 module — `categories` table + `POST`/`GET /api/v1/categories` built, live-verified (idempotent creation, cursor pagination, cross-tenant RLS proof, 9/9 checks). M1 fully decomposed into 8 items (15.5 person-days) in the same pass. Rule 2 governs literally again — no exception needed for this module. |
