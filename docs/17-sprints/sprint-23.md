@@ -71,6 +71,13 @@ the same single-day cadence as every smaller one before it.
   which Next.js's own dynamic-segment matching resolved `/users/invite` to `users/[id]/route.ts`
   (`id: "invite"`) instead of the intended static path — a `405`, not a `404`, since that file
   exists but only exports `DELETE`. Fixed with a static `users/invite/route.ts` sibling.
+- **A real CI-only bug, found on this PR's own build check**: `core/auth/admin-client.ts`
+  constructs its Supabase client at module-load time; every Route Handler now transitively imports
+  it via `requirePermission`, so `next build`'s page-data collection step throws
+  `supabaseKey is required` the moment `SUPABASE_SERVICE_ROLE_KEY` isn't set — which the `build`
+  job's CI env never set, since no prior sprint's code ever needed it. Fixed by adding a
+  placeholder value alongside the four that already exist there, the same pattern this exact job
+  already used for `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 
 ## Definition of Done
 
@@ -147,3 +154,4 @@ founder's shared production project.
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-08-14 | Sprint 23 planned and built same-day: `user_store_roles`, `GET/POST/PATCH/DELETE /users*`, `GET /audit-log`, and permission enforcement retrofitted across every existing endpoint. Three real gaps found and closed in the same pass (onboarding's missing role, `GET /audit-log` never built, invite mechanism underspecified). Live-verified 12/12 for the role-management chain; `POST /users/invite` confirmed separately before hitting Supabase's own email rate limit. A real routing bug (`/users/invite` resolving to `users/[id]`) found and fixed live. `vitest` 74/74. |
+| 0.1.1 | 2026-08-14 | Fixed a real CI-only failure found on this PR's own `build` check: the new `core/auth/admin-client.ts` throws at module-load time without `SUPABASE_SERVICE_ROLE_KEY`, which the `build` job's CI env never set — added a placeholder, same pattern the job already used for the other four Supabase/DB env vars. |
