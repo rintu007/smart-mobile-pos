@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 12 — Security Design
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-30
+> **Version:** 0.1.1
+> **Last updated:** 2026-08-14
 > **Owner:** Security Engineer / CTO
 > **Approved by:** _pending_
 
@@ -66,8 +66,22 @@ speculative generality for a product whose entire V1 role set is three fixed, we
 if V4's multi-outlet or franchise scenarios need finer-grained permissions, that is a redesign
 input for whenever that scope is actually reached, not a V1 concern.
 
+## Implementation note (Sprint 23)
+
+This design is implemented via `core/auth/session.ts`'s `requirePermission` — every Route Handler
+calls it in place of the bare `requireSession`, naming its own required roles inline as that call's
+own argument (steps 1/3/4/5 of §2 above, in one function). See
+[roles-permissions/specification.md](../modules/roles-permissions/specification.md) for the full
+implementation record, including two real, live-verified proofs of this document's own claims:
+DR-017's "never cached, always resolved fresh" (a user's already-issued token immediately reflects
+a role change on its very next request, with no re-sign-in), and this document's own §3 layered
+enforcement (a deactivated user is denied at step 4 — no active role resolves — even though nothing
+in `user_store_roles` itself was touched). Step 2 (device revocation) remains unimplemented — no
+`devices` table exists in code yet, a continuing, separately-named gap (module registry).
+
 ## Change Log
 
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | 7-step fail-closed evaluation order; 4-layer enforcement table with explicit bypassability per layer; rationale for flat roles over general RBAC. |
+| 0.1.1 | 2026-08-14 | Added an implementation note: this design is now built (Sprint 23, `requirePermission`), with two of its own claims (DR-017's fresh-resolution guarantee, the layered deactivation check) proven live rather than only asserted on paper. |

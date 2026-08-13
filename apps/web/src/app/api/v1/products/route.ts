@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSession } from "@/core/auth/session";
+import { requirePermission } from "@/core/auth/session";
 import { ApiError } from "@/core/errors/api-error";
 import { createProduct, listProducts } from "@/modules/products/service";
 import { createProductRequestSchema, listProductsQuerySchema } from "@/modules/products/schema";
@@ -9,7 +9,7 @@ import { createProductRequestSchema, listProductsQuerySchema } from "@/modules/p
 
 export async function POST(request: NextRequest) {
   try {
-    const { authUserId, tenantId } = await requireSession(request);
+    const { authUserId, tenantId } = await requirePermission(request, ["manager", "owner"]);
 
     const body = await request.json();
     const parsed = createProductRequestSchema.safeParse(body);
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const { tenantId } = await requireSession(request);
+    const { tenantId } = await requirePermission(request, ["cashier", "manager", "owner"]);
 
     const { searchParams } = new URL(request.url);
     const parsed = listProductsQuerySchema.safeParse({

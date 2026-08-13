@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSession } from "@/core/auth/session";
+import { requirePermission } from "@/core/auth/session";
 import { ApiError } from "@/core/errors/api-error";
 import { pullProducts } from "@/modules/sync/service";
 import { syncPullQuerySchema } from "@/modules/sync/schema";
@@ -10,7 +10,7 @@ import { syncPullQuerySchema } from "@/modules/sync/schema";
 
 export async function GET(request: NextRequest) {
   try {
-    const { tenantId } = await requireSession(request);
+    const { tenantId } = await requirePermission(request, ["cashier", "manager", "owner"]);
 
     const { searchParams } = new URL(request.url);
     const parsed = syncPullQuerySchema.safeParse({

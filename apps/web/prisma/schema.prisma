@@ -43,6 +43,7 @@ model Tenant {
   auditLogEntries AuditLog[]
   categories      Category[]
   units           Unit[]
+  userStoreRoles  UserStoreRole[]
 
   @@map("tenants")
 }
@@ -68,6 +69,7 @@ model Store {
   sales           Sale[]
   stockMovements  StockMovement[]
   auditLogEntries AuditLog[]
+  userStoreRoles  UserStoreRole[]
 
   @@index([tenantId])
   @@map("stores")
@@ -97,9 +99,37 @@ model User {
   auditLogEntriesActed  AuditLog[]
   categoriesCreated     Category[]
   unitsCreated          Unit[]
+  roleAssignments       UserStoreRole[] @relation("UserStoreRoleUser")
+  roleAssignmentsMade   UserStoreRole[] @relation("UserStoreRoleAssigner")
 
   @@index([tenantId])
   @@map("users")
+}
+
+/// docs/07-database/schema-server.md's `user_store_roles` table — assigns a role
+/// (cashier/manager/owner) to a user at a store. Module: Roles & Permissions (Sprint 23,
+/// backlog.md item 7). No `CHECK` on `role`, matching StockMovement.movementType's own precedent
+/// of relying on application code (Zod), not a hand-edited migration, for a small fixed-value set.
+/// The documented partial index `(user_id, store_id) WHERE revoked_at IS NULL` is built as an
+/// ordinary index here instead — Prisma's schema DSL has no partial-index syntax, and this is a
+/// size/speed optimisation, not a correctness requirement, at this project's current scale.
+model UserStoreRole {
+  id         String    @id @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  storeId    String    @map("store_id") @db.Uuid
+  role       String
+  assignedBy String    @map("assigned_by") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz
+
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user     User   @relation("UserStoreRoleUser", fields: [userId], references: [id], onDelete: Cascade)
+  store    Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  assigner User   @relation("UserStoreRoleAssigner", fields: [assignedBy], references: [id], onDelete: Restrict)
+
+  @@index([userId, storeId])
+  @@map("user_store_roles")
 }
 
 /// M1 Sprint 19's extension of docs/07-database/schema-server.md's `products` table —

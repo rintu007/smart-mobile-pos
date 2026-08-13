@@ -3,7 +3,7 @@
 > **Status:** 🟢 Approved
 > **Module:** Units
 > **Slice:** V1 — this document scopes only Sprint 18's minimal first cut, not the full V1 shape (§1)
-> **Version:** 0.2.0
+> **Version:** 0.3.0
 > **Last updated:** 2026-08-14
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
@@ -35,10 +35,10 @@ in [catalogue.md](../../11-api/endpoints/catalogue.md), including the `UNIT_FRAC
 conflict (`allows_fractional` becomes immutable once any product references the unit) and the
 state-transition idempotency mechanism ([api-principles.md §3](../../11-api/api-principles.md#3-idempotency--two-mechanisms-matched-to-two-kinds-of-mutation))
 that still doesn't exist anywhere in this codebase (Sprint 17 named this gap; it remains open,
-not rebuilt or worked around here) — are deferred, named here rather than silently produced. No
-permission check beyond a valid, tenant-scoped session: [Roles & Permissions](../../17-sprints/backlog.md)
-is its own later M1 item (item 7), deliberately last so it retrofits a stable surface — the same
-scope boundary Categories and every M0 module already used for the identical reason.
+not rebuilt or worked around here) — are deferred, named here rather than silently produced.
+**Permission-checked as of Sprint 23**: `POST /units` requires Manager/Owner, `GET /units` any
+role, per [roles-permissions/specification.md](../roles-permissions/specification.md) — the M1
+item 7 retrofit this section originally named as still pending.
 
 ## 2. Business rules
 
@@ -80,7 +80,7 @@ No FK from `products.unit_id` yet — that column doesn't exist until
 
 | Method & path | Status |
 | --- | --- |
-| `POST /api/v1/units` | **Implemented this sprint.** Request: `{ id, name, symbol, allows_fractional? }` (defaults to `false`). Requires a valid tenant-scoped session (`requireSession`) — no role/permission check yet (§2). |
+| `POST /api/v1/units` | **Implemented Sprint 18.** Request: `{ id, name, symbol, allows_fractional? }` (defaults to `false`). Requires Manager/Owner (`requirePermission`, Sprint 23 — §2). |
 | `GET /api/v1/units` | **Implemented this sprint.** Cursor-paginated per [api-principles.md §4](../../11-api/api-principles.md#4-pagination--cursor-only), `(created_at, id)` — same reasoning as Categories: a Tier 1 table normally cursors on `(updated_at, id)`, but `updated_at` doesn't exist yet (§3), so `created_at` is used until `PATCH` adds it. |
 | `PATCH /api/v1/units/{id}`, `DELETE /api/v1/units/{id}` | **Already documented** in [catalogue.md](../../11-api/endpoints/catalogue.md), **not implemented, and not needed this sprint** — see §1. |
 
@@ -151,3 +151,4 @@ now requires picking a unit created here.
 | --- | --- | --- |
 | 0.1.0 | 2026-08-14 | First version — written to drive Sprint 18's minimal `POST`/`GET /units`. Scope deliberately narrow: create+list only, no `PATCH`/`DELETE`, no permission enforcement, no mobile UI — mirrors Categories (Sprint 17) exactly. |
 | 0.2.0 | 2026-08-14 | Sprint 20 (backlog item 4): mobile UI built — `/catalogue/units` list+create screen, local `Units` Drift table (read cache only). §7 corrected: creation calls the server directly (online-only), same reasoning as Categories' identical correction. |
+| 0.3.0 | 2026-08-14 | Sprint 23: permission enforcement applied — `POST /units` now requires Manager/Owner, `GET /units` any role. |

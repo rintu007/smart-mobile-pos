@@ -9,8 +9,9 @@ import type { CreateUnitRequest } from "./schema";
 /**
  * docs/modules/units/specification.md#4-api-contract.
  *
- * No permission check beyond a valid tenant-scoped session — Roles & Permissions doesn't exist
- * yet (§1 of the spec), the same named scope boundary Categories (Sprint 17) already used.
+ * Permission enforcement (Manager/Owner for creation, any role for listing) is applied by the
+ * Route Handler's own `requirePermission` call (Sprint 23, docs/modules/roles-permissions/specification.md),
+ * not here — this service function itself has no role-checking code of its own.
  */
 export async function createUnit(
   authUserId: string,

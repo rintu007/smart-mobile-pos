@@ -3,7 +3,7 @@
 > **Status:** 🟢 Approved
 > **Module:** Company & Store Setup
 > **Slice:** V1
-> **Version:** 0.2.0
+> **Version:** 0.3.0
 > **Last updated:** 2026-08-02
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
@@ -32,10 +32,11 @@ respectively) and are explicitly out of scope here.
   ([ADR-0003](../../adr/ADR-0003-multi-outlet-modelled-from-day-one.md)).
 - A tenant cannot be created without simultaneously creating its first store and its first user —
   there is no intermediate state where a `tenants` row exists with no store or no user.
-- The signing-up identity does **not** receive a formal Owner role as part of this module — that's
-  `user_store_roles`, owned by the not-yet-built Roles & Permissions module. This is a named scope
-  boundary (see [identity.md's Onboarding section, step 5](../../11-api/endpoints/identity.md#onboarding)),
-  not an oversight.
+- **As of Sprint 23, the signing-up identity does receive a formal Owner role as part of this
+  module** — onboarding's own transaction now also creates a `user_store_roles` row (`role:
+  'owner'`), closing the gap this section originally named (see
+  [identity.md's Onboarding section, step 5](../../11-api/endpoints/identity.md#onboarding),
+  [roles-permissions/specification.md](../roles-permissions/specification.md)).
 - `stores.name`/`stores.address` and `tenants.name` are free text, no uniqueness constraint across
   tenants (two different shops can share a name) — only `users.auth_user_id` is globally unique.
 
@@ -58,7 +59,7 @@ module's own migration work is additive (RLS on `stores`), not a repeat of that 
 | Method & path | Status |
 | --- | --- |
 | `POST /api/v1/onboarding` | **To be implemented this sprint.** Full contract in [identity.md's Onboarding section](../../11-api/endpoints/identity.md#onboarding) — not repeated here to avoid two sources of truth for the same contract; this module is one of its two owners (alongside `users`, which [Authentication](../authentication/specification.md) owns). |
-| `GET /stores` | **Implemented Sprint 08.** [identity.md](../../11-api/endpoints/identity.md#stores). Returns `{ data: [{ id, name, address }], next_cursor: null }` — always exactly one row per tenant in V1 (ADR-0003), envelope shaped to match `api-principles.md §4`'s list convention even though no pagination is ever actually needed here. Built as the mobile till screen's prerequisite: the client needs its `store_id` to create a sale, and nothing before Sprint 08 gave it one. |
+| `GET /stores` | **Implemented Sprint 08.** [identity.md](../../11-api/endpoints/identity.md#stores). Returns `{ data: [{ id, name, address }], next_cursor: null }` — always exactly one row per tenant in V1 (ADR-0003), envelope shaped to match `api-principles.md §4`'s list convention even though no pagination is ever actually needed here. Built as the mobile till screen's prerequisite: the client needs its `store_id` to create a sale, and nothing before Sprint 08 gave it one. Requires any active role (`requirePermission`, Sprint 23). |
 | `PATCH /stores/{id}` | **Already documented**, not yet implemented — [identity.md](../../11-api/endpoints/identity.md#stores). Deferred past this sprint (§10) — Sprint 02 is create-only, matching [backlog.md](../../17-sprints/backlog.md) item 3's "minimal write path" framing. |
 
 ## 5. Validation rules (client and server)
@@ -157,3 +158,4 @@ project-wide, tracked to Phase 14/18).
 | --- | --- | --- |
 | 0.1.0 | 2026-08-01 | First version — written to drive Sprint 02's implementation of `POST /api/v1/onboarding`. Scope deliberately narrow: tenant+store creation only, `PATCH /stores/{id}` explicitly deferred. |
 | 0.2.0 | 2026-08-02 | Sprint 08: `GET /api/v1/stores` implemented and verified live (cross-tenant RLS proof), mobile fetch-and-cache built. Fixed a stale §3 claim ("RLS on stores not yet built") that was actually true only until Sprint 02 shipped it and was never corrected. |
+| 0.3.0 | 2026-08-14 | Sprint 23: onboarding now also creates the initial `owner` role row (closing this document's own named gap); `GET /stores` now requires any active role. |

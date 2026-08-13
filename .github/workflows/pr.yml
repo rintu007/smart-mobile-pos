@@ -57,6 +57,13 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "placeholder"
           DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
           DIRECT_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
+          # Added Sprint 23: core/auth/admin-client.ts constructs a Supabase client at module-load
+          # time (`createClient(url, key)`), which throws synchronously ("supabaseKey is
+          # required") if this is empty/undefined — found live when this build job failed on
+          # Sprint 23's PR, since every route now transitively imports it via `requirePermission`.
+          # A placeholder value is sufficient: `next build`'s page-data collection only constructs
+          # the client, it never actually calls Supabase with it.
+          SUPABASE_SERVICE_ROLE_KEY: "placeholder"
 
   mobile-analyze-test:
     runs-on: ubuntu-latest

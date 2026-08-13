@@ -4,7 +4,7 @@
 > **Module:** Offline Sync Engine
 > **Slice:** V1 — this document scopes only backlog.md item 9's M0-minimal cut, not the full
 > [sync-api.md](../../11-api/sync-api.md) shape (§1)
-> **Version:** 0.2.0
+> **Version:** 0.3.0
 > **Last updated:** 2026-08-13
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
@@ -105,8 +105,8 @@ this table's Sync Item state machine, none added. Pull upserts into the local `p
 
 | Method & path | Status |
 | --- | --- |
-| `POST /api/v1/sync/push` | **Implemented this sprint.** Request: `{ operations: [{ type, client_operation_id, payload }] }`, `type ∈ {'product.create', 'sale.create'}`, `payload` validated against the exact same Zod schema the direct endpoint uses (`createProductRequestSchema` / `createSaleRequestSchema`) — per sync-api.md §1's "push does not define a second, parallel request schema." Response: `{ results: [{ client_operation_id, status: 'accepted' \| 'rejected', entity_id?, error? }] }`, one result per submitted operation, in the request's own original order. |
-| `GET /api/v1/sync/pull` | **Implemented this sprint**, `entity_type=products` only. `?entity_type=products&cursor=<opaque>&limit=<n, default 50, max 200>` → `{ data: [...], next_cursor }`, per api-principles.md §4. Any other `entity_type` value is rejected with `VALIDATION_FAILED` (422) — not a silent empty result. |
+| `POST /api/v1/sync/push` | **Implemented this sprint.** Request: `{ operations: [{ type, client_operation_id, payload }] }`, `type ∈ {'product.create', 'sale.create'}`, `payload` validated against the exact same Zod schema the direct endpoint uses (`createProductRequestSchema` / `createSaleRequestSchema`) — per sync-api.md §1's "push does not define a second, parallel request schema." Response: `{ results: [{ client_operation_id, status: 'accepted' \| 'rejected', entity_id?, error? }] }`, one result per submitted operation, in the request's own original order. Requires any active role (`requirePermission`, Sprint 23) — sync is a device-level mechanism, not itself a permission-matrix.md capability, so the check here is simply "has an active, non-deactivated role at all," meaningfully blocking a revoked user even from syncing. |
+| `GET /api/v1/sync/pull` | **Implemented this sprint**, `entity_type=products` only. `?entity_type=products&cursor=<opaque>&limit=<n, default 50, max 200>` → `{ data: [...], next_cursor }`, per api-principles.md §4. Any other `entity_type` value is rejected with `VALIDATION_FAILED` (422) — not a silent empty result. Requires any active role (Sprint 23), same reasoning as push. |
 | Every other entity type's pull, `sync_rejections`, the full six-group push ordering | **Already documented** in [sync-api.md](../../11-api/sync-api.md), **not implemented, and not needed this sprint** — see §1. |
 
 ## 5. Validation rules (client and server)
@@ -213,3 +213,4 @@ background timer), a persisted/resumable pull cursor (§2).
 | --- | --- | --- |
 | 0.1.0 | 2026-08-13 | First version — written to drive Sprint 13's backend-only sync push/pull (backlog.md item 9). Scope deliberately narrow: two push operation types, one pull entity type, no mobile trigger, no `sync_rejections`. |
 | 0.2.0 | 2026-08-13 | Sprint 14: mobile half built — `apps/mobile/lib/core/sync/` drains `outbound_queue` via push and refreshes local `products` via pull, triggered automatically once per session plus a manual "Sync now" button on the home screen. No pull-cursor persistence and no full trigger set (connectivity/foreground/timer) — both named, deliberate trade-offs, not oversights. |
+| 0.3.0 | 2026-08-14 | Sprint 23: permission enforcement applied — both `POST /sync/push` and `GET /sync/pull` now require any active, non-deactivated role. |

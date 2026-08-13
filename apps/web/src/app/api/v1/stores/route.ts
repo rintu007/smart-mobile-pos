@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSession } from "@/core/auth/session";
+import { requirePermission } from "@/core/auth/session";
 import { ApiError } from "@/core/errors/api-error";
 import { listStores } from "@/modules/stores/service";
 
@@ -9,7 +9,7 @@ import { listStores } from "@/modules/stores/service";
 
 export async function GET(request: NextRequest) {
   try {
-    const { tenantId } = await requireSession(request);
+    const { tenantId } = await requirePermission(request, ["cashier", "manager", "owner"]);
 
     const stores = await listStores(tenantId);
     // No pagination needed in practice (ADR-0003: exactly one store per tenant in V1), but the

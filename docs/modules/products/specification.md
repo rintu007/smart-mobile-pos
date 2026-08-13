@@ -6,7 +6,7 @@
 > [mobile-structure.md](../../08-folder-structure/mobile-structure.md)'s own note that the two
 > groupings are different, valid axes over the same modules)
 > **Slice:** V1 — this document scopes only M0's minimal first cut, not the full V1 shape (§1)
-> **Version:** 0.6.0
+> **Version:** 0.7.0
 > **Last updated:** 2026-08-14
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
@@ -62,10 +62,10 @@ overridden, the same pattern this document's own §11 already used for M0's orig
 - Creation is idempotent on the client-generated `id` ([ADR-0007](../../adr/ADR-0007-client-generated-uuid-primary-keys.md)):
   replaying the same request with the same `id` returns the original row unchanged, never a
   duplicate or an error — same mechanism Sprint 02 already established for `POST /api/v1/onboarding`.
-- No permission check beyond a valid, tenant-scoped session (§4) — [Roles & Permissions](../../17-sprints/backlog.md)
-  is explicitly M1 scope, so the "Manager, Owner" permission [catalogue.md](../../11-api/endpoints/catalogue.md)
-  documents for the full V1 endpoint cannot be enforced yet; this is a named scope boundary, the
-  same pattern Sprint 02 used for Company & Store Setup's signing-up user getting no formal role.
+- **Permission-checked as of Sprint 23**: `POST /products` requires Manager/Owner, `GET /products`
+  any role — exactly the "Manager, Owner"/"any role" split [catalogue.md](../../11-api/endpoints/catalogue.md)
+  already documented, now enforced by the Route Handler's own `requirePermission` call, per
+  [roles-permissions/specification.md](../roles-permissions/specification.md).
 
 ## 3. Database tables and relationships
 
@@ -87,8 +87,8 @@ needed this sprint — the table's own policy already covers every column added.
 
 | Method & path | Status |
 | --- | --- |
-| `POST /api/v1/products` | **Implemented.** Request: `{ id, name, price_minor_units, category_id?, unit_id?, sku?, barcode?, hsn_sac_code? }` — the last five added Sprint 19, all optional (§1's dated correction). Requires a valid tenant-scoped session (`requireSession`) — no role/permission check yet (§2). A provided `category_id`/`unit_id` must reference a row under the same tenant (`NOT_FOUND` if not); `sku`/`barcode` are rejected with `SKU_ALREADY_ASSIGNED`/`BARCODE_ALREADY_ASSIGNED` (409) if another product in the same tenant already has it. **Extended Sprint 11:** gains an optional `initial_quantity`, producing an `opening` stock movement in the same transaction — see [inventory/specification.md](../inventory/specification.md). |
-| `GET /api/v1/products` | **Implemented Sprint 21** (backlog item 5). Query params: `search` (matches `name`/`sku`, case-insensitive), `category_id` (exact), `barcode` (exact) — all optional and combinable. Cursor-paginated on `(updated_at, id)`, per [api-principles.md §4](../../11-api/api-principles.md#4-pagination--cursor-only). Requires a valid tenant-scoped session — no role/permission check yet (§2). **Not what the till's own barcode scan/search/category-filter call** — those resolve against the mobile local cache (§7, §9): this endpoint serves any future non-offline-critical consumer (e.g. a `/catalogue` list screen, not yet built). |
+| `POST /api/v1/products` | **Implemented.** Request: `{ id, name, price_minor_units, category_id?, unit_id?, sku?, barcode?, hsn_sac_code? }` — the last five added Sprint 19, all optional (§1's dated correction). Requires Manager/Owner (`requirePermission`, Sprint 23 — §2). A provided `category_id`/`unit_id` must reference a row under the same tenant (`NOT_FOUND` if not); `sku`/`barcode` are rejected with `SKU_ALREADY_ASSIGNED`/`BARCODE_ALREADY_ASSIGNED` (409) if another product in the same tenant already has it. **Extended Sprint 11:** gains an optional `initial_quantity`, producing an `opening` stock movement in the same transaction — see [inventory/specification.md](../inventory/specification.md). |
+| `GET /api/v1/products` | **Implemented Sprint 21** (backlog item 5). Query params: `search` (matches `name`/`sku`, case-insensitive), `category_id` (exact), `barcode` (exact) — all optional and combinable. Cursor-paginated on `(updated_at, id)`, per [api-principles.md §4](../../11-api/api-principles.md#4-pagination--cursor-only). Requires any role (`requirePermission`, Sprint 23 — §2). **Not what the till's own barcode scan/search/category-filter call** — those resolve against the mobile local cache (§7, §9): this endpoint serves any future non-offline-critical consumer (e.g. a `/catalogue` list screen, not yet built). |
 | `PATCH /products/{id}`, `DELETE /products/{id}` | **Already documented**, not yet implemented — deferred past this sprint. |
 
 **Mobile local write path — built [Sprint 07](../../17-sprints/sprint-07.md).**
@@ -292,3 +292,4 @@ category/unit picker UI (backlog item 4).
 | 0.4.0 | 2026-08-14 | Sprint 19 (backlog item 3): `category_id`/`unit_id`/`sku`/`barcode`/`hsn_sac_code` added to `POST /api/v1/products`, all optional — a deliberate, dated correction against backlog.md item 3's "required" wording, found by querying live production data before writing code: 4 real products already exist without these fields, and mobile can't supply them until backlog item 4's catalogue UI ships. Closes FR-033 in full; FR-032/FR-035's *required* half stays open, named, tracked to a follow-up sprint once item 4 exists. Added `SKU_ALREADY_ASSIGNED` alongside the pre-existing `BARCODE_ALREADY_ASSIGNED`. Live-verified: legacy shape still works (the regression check), full-shape creation, idempotent replay, `NOT_FOUND` for missing/cross-tenant category_id/unit_id, both uniqueness conflicts, per-tenant (not global) uniqueness — 9/9 checks, no new bug. |
 | 0.5.0 | 2026-08-14 | Sprint 20 (backlog item 4): `/catalogue/add` extended with required Category/Unit dropdowns, sourced from the new mobile catalogue screens. A UI-level requirement only — the server endpoint itself stays optional (§1). Local `Products` table gains nullable `category_id`/`unit_id` columns; the `product.create` sync-push payload now carries real values, no backend change needed since Sprint 19 already accepts them. |
 | 0.6.0 | 2026-08-14 | Sprint 21 (backlog item 5): `GET /api/v1/products` implemented (`search`/`category_id`/`barcode`, cursor-paginated), live-verified 7/7. Till screen gains a search field, category filter chips, and a barcode-scan button (FR-034/FR-036/NFR-002) — all resolved against the local cache, not this new endpoint, per those FRs' "Fully offline" classification. Found and fixed a real Sprint 20 gap: the sync pull response never carried `category_id`/`unit_id`/`sku`/`barcode` down to devices at all. `/pos/scan` added to route-map.md as a dated correction. `flutter test` 94/94. |
+| 0.7.0 | 2026-08-14 | Sprint 23: permission enforcement applied — `POST /products` now requires Manager/Owner, `GET /products` any role, per [roles-permissions/specification.md](../roles-permissions/specification.md). |

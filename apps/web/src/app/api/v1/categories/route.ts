@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSession } from "@/core/auth/session";
+import { requirePermission } from "@/core/auth/session";
 import { ApiError } from "@/core/errors/api-error";
 import { createCategory, listCategories } from "@/modules/categories/service";
 import { createCategoryRequestSchema, listCategoriesQuerySchema } from "@/modules/categories/schema";
@@ -10,7 +10,7 @@ import { createCategoryRequestSchema, listCategoriesQuerySchema } from "@/module
 
 export async function POST(request: NextRequest) {
   try {
-    const { authUserId, tenantId } = await requireSession(request);
+    const { authUserId, tenantId } = await requirePermission(request, ["manager", "owner"]);
 
     const body = await request.json();
     const parsed = createCategoryRequestSchema.safeParse(body);
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const { tenantId } = await requireSession(request);
+    const { tenantId } = await requirePermission(request, ["cashier", "manager", "owner"]);
 
     const { searchParams } = new URL(request.url);
     const parsed = listCategoriesQuerySchema.safeParse({
