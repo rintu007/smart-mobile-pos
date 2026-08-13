@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 11 — API Design
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-30
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-14
 > **Owner:** Principal Next.js Engineer
 > **Approved by:** _pending_
 
@@ -13,13 +13,23 @@ is no `PATCH` or `DELETE` endpoint for a stock movement, anywhere in this API** 
 schema's own revoked `UPDATE`/`DELETE` privileges. A correction is always a **new** movement with an
 opposite-signed `quantity_delta` and `movement_type = 'adjustment'`, never an edit.
 
+**Implementation note (Sprint 22, [inventory/specification.md](../../modules/inventory/specification.md)):**
+built as `POST`/`GET /api/v1/stock-movements` and `GET /api/v1/products/{id}/stock-balance`. One
+deviation from this document's original table, found while writing that spec: `POST
+/stock-movements` does **not** actually accept `movement_type: 'opening'`, despite this table's own
+"reachable by a client only for `opening` and `adjustment`" wording below — every product already
+gets exactly one `opening` movement automatically at creation (`POST /products`), so there is no
+live workflow needing a second, client-initiated one; `opening` is rejected at the request-schema
+layer (`422 VALIDATION_FAILED`), not with `DIRECT_SALE_MOVEMENT_FORBIDDEN`. No permission enforcement
+exists yet for either endpoint below — Roles & Permissions (M1 backlog item 7) hasn't been built.
+
 ---
 
 | Method & path | Permission | Offline | Idempotent | Notes |
 | --- | --- | --- | --- | --- |
-| `POST /stock-movements` | Manager, Owner (Inventory Staff role is a Phase 05 persona, not yet a distinct system role — see [user-stories.md](../../03-functional-requirements/user-stories.md)'s persona-vs-role clarification; access follows Manager permission until a dedicated role ships) | **Yes — queued** | Creation | Records one ledger entry: `opening`, `adjustment` (requires `reason_code`), `sale`, or `return`. **`sale`/`return` movements are never posted via this endpoint directly** — they are created server-side as a side effect of `POST /sales` and `POST /returns` completing, inside the same transaction, so a sale and its stock consequence can never exist independently. This endpoint is reachable by a client only for `opening` and `adjustment`. |
-| `GET /stock-movements` | Manager, Owner | Read cached | N/A | Filters: `product_id`, `date_from`, `date_to`, `movement_type`. Cursor-paginated on `(created_at, id)` — Tier 2, no `updated_at`. Used for the movement-history view, not for balance calculation (see below). |
-| `GET /products/{id}/stock-balance` | Any authenticated role | Read cached (see note) | N/A | Returns the **current derived balance** — `SUM(quantity_delta)` per [stock-ledger.md](../../07-database/stock-ledger.md) — computed server-side, never by the client summing a locally cached movement list, since a client's local cache may be incomplete relative to other devices' synced movements. Offline, the client shows its own last-known cached balance with the staleness treatment from [state-presentation.md](../../10-design-system/state-presentation.md), explicitly not a live recomputation. |
+| `POST /stock-movements` | Manager, Owner (Inventory Staff role is a Phase 05 persona, not yet a distinct system role — see [user-stories.md](../../03-functional-requirements/user-stories.md)'s persona-vs-role clarification; access follows Manager permission until a dedicated role ships) — **not yet enforced in code, see implementation note above** | **No — online-only, no mobile UI consumes this endpoint yet** | Creation | Records one ledger entry: `adjustment` (requires `reason_code`) — the only type actually creatable via this endpoint, see implementation note above. **`sale`/`return` movements are never posted via this endpoint directly** — they are created server-side as a side effect of `POST /sales` and `POST /returns` completing, inside the same transaction, so a sale and its stock consequence can never exist independently. `opening` movements are likewise never posted via this endpoint — see implementation note above. |
+| `GET /stock-movements` | Manager, Owner — **not yet enforced in code** | Read cached (see note) | N/A | Filters: `product_id`, `date_from`, `date_to`, `movement_type` (all four values, `opening` included). Cursor-paginated on `(created_at, id)` — Tier 2, no `updated_at`. Used for the movement-history view, not for balance calculation (see below). No mobile UI consumes this endpoint yet. |
+| `GET /products/{id}/stock-balance` | Any authenticated role | Read cached (see note) | N/A | Returns the **current derived balance** — `SUM(quantity_delta)` per [stock-ledger.md](../../07-database/stock-ledger.md) — computed server-side, never by the client summing a locally cached movement list, since a client's local cache may be incomplete relative to other devices' synced movements. Offline, the client shows its own last-known cached balance with the staleness treatment from [state-presentation.md](../../10-design-system/state-presentation.md), explicitly not a live recomputation. No mobile UI consumes this endpoint yet. |
 
 ## Request/response shape — `POST /stock-movements` (adjustment)
 
@@ -79,3 +89,4 @@ endpoint), never blocked at the API layer.
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial inventory endpoint set: opening/adjustment creation, movement history, derived balance. No update/delete, matching the ledger's schema-level guarantee. |
+| 0.2.0 | 2026-08-14 | Sprint 22: built and live-verified (9/9). Correction: `POST /stock-movements` does not accept `movement_type: 'opening'` after all — see the implementation note above; every product already gets one automatically at creation, so there is no live caller for a second, direct one. Permission enforcement remains unbuilt (M1 backlog item 7); no mobile UI consumes any of these three endpoints yet. |

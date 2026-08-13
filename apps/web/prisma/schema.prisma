@@ -205,26 +205,30 @@ model SalePayment {
   @@map("sale_payments")
 }
 
-/// M0-minimal slice of docs/07-database/schema-server.md's `stock_movements` table — only the
-/// `opening` and `sale` movement types are ever written this sprint (backlog.md item 7).
-/// `adjustment`/`return`, the public `POST`/`GET /stock-movements` and `GET .../stock-balance`
-/// endpoints, `variant_id`/`batch_id`/`serial_number` (V2/V4 stubs), and `reason_code` are all
-/// out of scope — docs/modules/inventory/specification.md §1. `device_id` is omitted, the same
-/// M0-wide gap `Sale` already has (device registration isn't built yet, module registry) —
-/// `createdBy` substitutes for attribution, matching every other M0-minimal table's own precedent.
+/// Still-partial slice of docs/07-database/schema-server.md's `stock_movements` table.
+/// `variant_id`/`batch_id`/`serial_number` (V2/V4 stubs) remain out of scope —
+/// docs/modules/inventory/specification.md §3. `device_id` is omitted, the same M0-wide gap `Sale`
+/// already has (device registration isn't built yet, module registry) — `createdBy` substitutes
+/// for attribution, matching every other table's own precedent.
 model StockMovement {
   id            String   @id @db.Uuid
   tenantId      String   @map("tenant_id") @db.Uuid
   storeId       String   @map("store_id") @db.Uuid
   productId     String   @map("product_id") @db.Uuid
   /// NUMERIC(14,3) on schema-server.md; Int here — the same fractional-quantity deferral
-  /// SaleLineItem.quantity already established (Units, which would say whether a product allows
-  /// fractional quantities, is M1 scope). Signed: positive for `opening`, negative for `sale`.
+  /// SaleLineItem.quantity already established (Units' allows_fractional flag isn't wired into any
+  /// quantity field yet, this one included). Signed: positive for opening/most corrective
+  /// adjustments, negative for sale/most reductive adjustments.
   quantityDelta Int      @map("quantity_delta")
   /// `NOT NULL CHECK (movement_type IN ('opening','sale','return','adjustment'))` on
   /// schema-server.md — no CHECK added here, matching Sale.status/SalePayment.method's own
   /// precedent of relying on application code rather than a hand-edited migration for this.
   movementType  String   @map("movement_type")
+  /// Added Sprint 22 (backlog.md item 6). `NOT NULL` only when `movementType = 'adjustment'` on
+  /// schema-server.md — enforced in the service layer (ADJUSTMENT_REASON_REQUIRED), not a Postgres
+  /// CHECK, the same precedent movementType itself already set. One of a fixed five-value list
+  /// (docs/modules/inventory/specification.md §2), not DB-enforced as an enum either.
+  reasonCode    String?  @map("reason_code")
   referenceType String?  @map("reference_type")
   referenceId   String?  @map("reference_id") @db.Uuid
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
@@ -236,6 +240,7 @@ model StockMovement {
   user    User    @relation(fields: [createdBy], references: [id], onDelete: Restrict)
 
   @@index([tenantId, storeId, productId])
+  @@index([tenantId, storeId, createdAt])
   @@map("stock_movements")
 }
 
