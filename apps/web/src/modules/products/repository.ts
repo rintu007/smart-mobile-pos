@@ -3,6 +3,17 @@ import type { CreateProductRequest } from "./schema";
 
 // Prisma queries only, no business logic — docs/08-folder-structure/backend-structure.md §2.
 
+// docs/modules/products/specification.md §2 — a provided category_id/unit_id must reference a
+// row that exists under the *same* tenant (tenant-scoped, same as sync/pos's own product-existence
+// checks), never validated by name/global uniqueness.
+export function findCategoryById(tenantId: string, id: string) {
+  return prisma.category.findFirst({ where: { id, tenantId } });
+}
+
+export function findUnitById(tenantId: string, id: string) {
+  return prisma.unit.findFirst({ where: { id, tenantId } });
+}
+
 export function createProduct(
   input: CreateProductRequest & { tenantId: string; createdBy: string; storeId: string },
 ) {
@@ -20,6 +31,11 @@ export function createProduct(
         tenantId: input.tenantId,
         name: input.name,
         priceMinorUnits: BigInt(input.price_minor_units),
+        categoryId: input.category_id,
+        unitId: input.unit_id,
+        sku: input.sku,
+        barcode: input.barcode,
+        hsnSacCode: input.hsn_sac_code,
         createdBy: input.createdBy,
       },
       update: {},

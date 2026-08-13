@@ -49,7 +49,7 @@ single complete list, not a duplicate source of truth — module documents link 
 | Code | Module |
 | --- | --- |
 | `LAST_OWNER_CANNOT_BE_REMOVED`, `ALREADY_ONBOARDED` | [identity.md](endpoints/identity.md) |
-| `CATEGORY_IN_USE`, `BARCODE_ALREADY_ASSIGNED`, `UNIT_FRACTIONAL_FLAG_LOCKED` | [catalogue.md](endpoints/catalogue.md) |
+| `CATEGORY_IN_USE`, `BARCODE_ALREADY_ASSIGNED`, `SKU_ALREADY_ASSIGNED`, `UNIT_FRACTIONAL_FLAG_LOCKED` | [catalogue.md](endpoints/catalogue.md) |
 | `ADJUSTMENT_REASON_REQUIRED`, `DIRECT_SALE_MOVEMENT_FORBIDDEN` | [inventory.md](endpoints/inventory.md) |
 | `CUSTOMER_IDENTIFIER_REQUIRED`, `PHONE_ALREADY_ASSIGNED` | [customers.md](endpoints/customers.md) |
 | `TRADING_DAY_NOT_OPEN`, `TRADING_DAY_ALREADY_OPEN`, `SALE_IMMUTABLE` | [sales.md](endpoints/sales.md) |
@@ -64,3 +64,4 @@ single complete list, not a duplicate source of truth — module documents link 
 | 0.1.1 | 2026-07-31 | Added `SETTINGS_CONFLICT` (defined by Phase 13's conflict-resolution policy) to the module-specific index — changelog corrected to actually reflect this, since the code had already been added to the table without a version bump. |
 | 0.1.2 | 2026-08-01 | Added `ALREADY_ONBOARDED` (defined by identity.md's new Onboarding section) to the module-specific index. |
 | 0.1.3 | 2026-08-01 | Added `PAYMENT_AMOUNT_MISMATCH` (financial-integrity code, defined by Sprint 05's M0-minimal `POST /sales`). |
+| 0.1.4 | 2026-08-14 | Added `SKU_ALREADY_ASSIGNED` to the module-specific index — Sprint 19's `(tenant_id, sku)` unique constraint on `products` needed the same treatment `BARCODE_ALREADY_ASSIGNED` already got, rather than surfacing as an unhandled 500. |

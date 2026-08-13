@@ -2,7 +2,7 @@
 
 > **Status:** 🟡 In progress
 > **Phase:** 18 — Implementation
-> **Version:** 0.24.0
+> **Version:** 0.25.0
 > **Last updated:** 2026-08-14
 > **Owner:** CTO / All engineering roles
 
@@ -868,6 +868,33 @@ protect against.
 a correctly-peeked cursor-pagination walk, and a cross-tenant RLS proof. 9/9 checks passed, no new
 bug — the first sprint in this project to reuse a prior sprint's module shape almost verbatim.
 
+## 2026-08-14 — Sprint 19: extend Products with category_id/unit_id/sku/barcode/hsn_sac_code
+
+**What landed:** `products` extended with `category_id`, `unit_id` (nullable FK, existence-
+validated against the caller's own tenant), `sku`, `barcode` (each unique per tenant), and
+`hsn_sac_code`. `POST /api/v1/products` accepts all five as optional. Added `SKU_ALREADY_ASSIGNED`
+(catalogue.md/error-catalogue.md) as the sibling of the pre-existing `BARCODE_ALREADY_ASSIGNED`,
+rather than let a real sku collision surface as an unhandled 500.
+
+**Real, dated correction found before writing any code:** backlog.md item 3 said these fields
+should be `NOT NULL`/required, matching FR-032's literal wording. Querying the live production
+database first (a five-minute check, not an afterthought) found 4 real products already created —
+from Sprint 16's own founder-run device proof — with no category or unit. Making the columns
+`NOT NULL` today would have failed the migration outright or demanded a backfill with no
+authorised default value, and making the *API* fields required would have 422-rejected the
+founder's own already-working mobile app (which still can't supply them — `/catalogue/add`'s
+category/unit picker is backlog item 4, not built yet) on its very next product creation. Shipped
+optional instead; the "required" half of FR-032/FR-035 stays a named, open gap for a follow-up
+sprint once item 4 exists to actually supply real values.
+
+**Live-verified against the real database**, throwaway tenants deleted after, including the
+regression check this sprint cared about most: the exact `{id, name, price_minor_units}` shape
+mobile already sends still returns `201` with every new field `null`. Also verified: full-shape
+creation, idempotent replay, `NOT_FOUND` for a missing/cross-tenant `category_id`/`unit_id`,
+`BARCODE_ALREADY_ASSIGNED`/`SKU_ALREADY_ASSIGNED` on a same-tenant collision, and that the same
+barcode is accepted for a different tenant (uniqueness is per-tenant, not global). 9/9 checks
+passed, no new bug.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -897,3 +924,4 @@ bug — the first sprint in this project to reuse a prior sprint's module shape 
 | 0.22.0 | 2026-08-14 | Sprint 16: M0 item 11 (end-to-end proof), steps 1–7, confirmed working by the founder — no new bug found, the first time every Sprint 01–14 piece ran together as one real sequence. Step 8 (physical print) remains open, blocked on printer hardware; M0 itself stays open until it closes. |
 | 0.23.0 | 2026-08-14 | Sprint 17: first M1 module — Categories (`categories` table, `POST`/`GET /categories`) built and live-verified, 9/9 checks. M1 fully decomposed (8 items) in the same pass, founder-directed after M0's last item was confirmed blocked purely on external hardware. Rule 2 governs literally again. |
 | 0.24.0 | 2026-08-14 | Sprint 18: second M1 module — Units (`units` table, `POST`/`GET /units`) built and live-verified, 9/9 checks, direct sibling of Categories. `PATCH`/`DELETE`/`UNIT_FRACTIONAL_FLAG_LOCKED` deferred for the same reason Categories' were. |
+| 0.25.0 | 2026-08-14 | Sprint 19: `products` extended with `category_id`/`unit_id`/`sku`/`barcode`/`hsn_sac_code`, all optional — a dated correction against backlog.md item 3's "required" wording, found by querying live production data (4 real products, no category/unit) before writing code. Live-verified 9/9, including a regression proof that mobile's unchanged request shape still works. Added `SKU_ALREADY_ASSIGNED`. |

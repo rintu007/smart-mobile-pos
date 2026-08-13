@@ -93,6 +93,7 @@ every subsequent endpoint document, only its one deviation (if any) is called ou
 | --- | --- | --- |
 | `CATEGORY_IN_USE` | 409 | Delete attempted on a category with active products. |
 | `BARCODE_ALREADY_ASSIGNED` | 409 | `barcode` collides with another active product in the same tenant. |
+| `SKU_ALREADY_ASSIGNED` | 409 | `sku` collides with another product in the same tenant — the natural sibling of `BARCODE_ALREADY_ASSIGNED`, added Sprint 19 alongside `sku`'s own `(tenant_id, sku)` unique constraint rather than left as an unhandled 500. |
 | `UNIT_FRACTIONAL_FLAG_LOCKED` | 409 | `allows_fractional` change attempted on a unit already referenced by a product. |
 
 ## Change Log
@@ -101,3 +102,4 @@ every subsequent endpoint document, only its one deviation (if any) is called ou
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial catalogue endpoint set: categories, units, products. product_variants deliberately has no endpoint yet. |
 | 0.1.1 | 2026-08-01 | Correction found planning Sprint 04: this document's `POST /products` shape is the full V1 contract, but backlog.md scopes M0 to name/price only and defers Categories/Units to M1 — noted inline rather than narrowing this section, since it's still the correct eventual shape. |
+| 0.1.2 | 2026-08-14 | Sprint 19: `category_id`/`unit_id`/`sku`/`barcode`/`hsn_sac_code` added to `POST /api/v1/products`, all optional rather than this document's own `NOT NULL` shape — see [products/specification.md §1](../../modules/products/specification.md#1-purpose-and-business-context)'s dated correction. Added `SKU_ALREADY_ASSIGNED`, the sibling of `BARCODE_ALREADY_ASSIGNED` this sprint's own `(tenant_id, sku)` unique constraint needed. |

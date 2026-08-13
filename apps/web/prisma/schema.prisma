@@ -102,14 +102,21 @@ model User {
   @@map("users")
 }
 
-/// M0-minimal slice of docs/07-database/schema-server.md's `products` table — name/price only.
-/// `category_id`/`unit_id`/`sku`/`barcode`/`hsn_sac_code`/`deactivated_at` are real columns in the
-/// full V1 design but are added once Categories/Units (M1 — backlog.md's own scope split) exist for
-/// the first two to reference, per docs/modules/products/specification.md §1/§3.
+/// M1 Sprint 19's extension of docs/07-database/schema-server.md's `products` table —
+/// `category_id`/`unit_id`/`sku`/`barcode`/`hsn_sac_code` added (backlog.md item 3), all nullable
+/// rather than the full design's `NOT NULL`, per docs/modules/products/specification.md §1's
+/// dated correction: 4 real products already exist in production without them, and mobile's
+/// `/catalogue/add` (the only place a human picks a category/unit) can't supply them until
+/// backlog.md item 4 ships. `deactivated_at` already existed from the M0-minimal slice.
 model Product {
   id              String    @id @db.Uuid
   tenantId        String    @map("tenant_id") @db.Uuid
+  categoryId      String?   @map("category_id") @db.Uuid
+  unitId          String?   @map("unit_id") @db.Uuid
   name            String
+  sku             String?
+  barcode         String?
+  hsnSacCode      String?   @map("hsn_sac_code")
   /// BIGINT per ADR-0006 (money as integer minor units) — matches schema-server.md exactly, unlike
   /// the mobile Drift schema's deliberate `int64→int` simplification (Sprint 03), since Prisma/
   /// Postgres BigInt has no equivalent web-JS-precision reason to deviate from the approved design.
@@ -120,10 +127,14 @@ model Product {
   createdBy       String    @map("created_by") @db.Uuid
 
   tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  category       Category?       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  unit           Unit?           @relation(fields: [unitId], references: [id], onDelete: Restrict)
   user           User            @relation(fields: [createdBy], references: [id], onDelete: Restrict)
   saleLineItems  SaleLineItem[]
   stockMovements StockMovement[]
 
+  @@unique([tenantId, sku])
+  @@unique([tenantId, barcode])
   @@index([tenantId])
   @@map("products")
 }
@@ -265,8 +276,9 @@ model Category {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   createdBy String   @map("created_by") @db.Uuid
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  user   User   @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user     User      @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  products Product[]
 
   @@index([tenantId])
   @@map("categories")
@@ -279,16 +291,17 @@ model Category {
 /// server.md's own `NOT NULL DEFAULT false`) even though nothing enforces its immutability yet —
 /// that enforcement (`UNIT_FRACTIONAL_FLAG_LOCKED`) is a `PATCH`-only concern, deferred with it.
 model Unit {
-  id                String   @id @db.Uuid
-  tenantId          String   @map("tenant_id") @db.Uuid
-  name              String
-  symbol            String
-  allowsFractional  Boolean  @default(false) @map("allows_fractional")
-  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
-  createdBy         String   @map("created_by") @db.Uuid
+  id               String   @id @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  name             String
+  symbol           String
+  allowsFractional Boolean  @default(false) @map("allows_fractional")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdBy        String   @map("created_by") @db.Uuid
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  user   User   @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user     User      @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  products Product[]
 
   @@index([tenantId])
   @@map("units")
