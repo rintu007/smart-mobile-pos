@@ -206,4 +206,35 @@ void main() {
     expect(products.single.name, 'New name');
     expect(products.single.priceMinorUnits, 200);
   });
+
+  test('a pulled product carries category_id/unit_id/sku/barcode into the local cache (Sprint 21 fix)', () async {
+    final repo = SyncRepository(
+      db,
+      (operations) async => const SyncPushResponse([]),
+      ({cursor}) async => const SyncPullPage(
+        products: [
+          PulledProduct(
+            id: 'p1',
+            name: 'Amul Milk',
+            priceMinorUnits: 2800,
+            categoryId: 'cat-1',
+            unitId: 'unit-1',
+            sku: 'AML-500',
+            barcode: '8901234567890',
+          ),
+        ],
+        nextCursor: null,
+      ),
+    );
+
+    await repo.syncNow();
+
+    final product = await (db.select(
+      db.products,
+    )..where((t) => t.id.equals('p1'))).getSingle();
+    expect(product.categoryId, 'cat-1');
+    expect(product.unitId, 'unit-1');
+    expect(product.sku, 'AML-500');
+    expect(product.barcode, '8901234567890');
+  });
 }

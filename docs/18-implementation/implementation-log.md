@@ -2,7 +2,7 @@
 
 > **Status:** 🟡 In progress
 > **Phase:** 18 — Implementation
-> **Version:** 0.26.0
+> **Version:** 0.27.0
 > **Last updated:** 2026-08-14
 > **Owner:** CTO / All engineering roles
 
@@ -926,6 +926,28 @@ screen test files, plus the existing `drift_product_repository_test.dart`/
 Drift multi-instance warning across test files remains the same benign, debug-only false positive
 noted in prior sprints.
 
+## 2026-08-14 — Sprint 21: barcode/SKU search — GET /products (server), till scan/search/filter (mobile)
+
+**What landed:** `GET /api/v1/products` (`search` matching `name`/`sku`, `category_id`/`barcode`
+exact filters, cursor-paginated on `(updated_at, id)`) — live-verified, 7/7 checks, no new bug.
+Till screen (`/pos`) gains a search field, category filter chips, and a barcode-scan button
+(`/pos/scan`, a thin `mobile_scanner` camera view) — all resolved against the local `products`/
+`categories` cache, never this new endpoint, since [FR-034](../03-functional-requirements/functional-requirements.md)/
+[FR-036](../03-functional-requirements/functional-requirements.md) are explicitly "Fully offline"
+and [NFR-002](../03-functional-requirements/non-functional-requirements.md) sets a p95 ≤ 800 ms
+budget a network call couldn't meet anyway. Local `Products` table gains nullable `sku`/`barcode`
+(schema v2 → v3, this project's second non-destructive local migration).
+
+**Real gap found and fixed in the same pass:** extending the sync pull for this feature surfaced
+that Sprint 20 added `category_id`/`unit_id`/`sku`/`barcode` to both `products` tables but never
+extended `pullProducts`' response or the mobile parsing/upsert to actually carry them — only a
+product's own creating device ever had real values. Fixed in `sync/service.ts` and the mobile
+`sync_dto.dart`/`sync_api.dart`/`sync_repository.dart` in this same PR, not deferred.
+
+`BarcodeScanScreen` itself (real camera hardware) is not unit/widget tested — the same boundary
+already drawn for Bluetooth printing's `printer_picker_dialog.dart`. `flutter analyze` clean;
+`flutter test` 94/94; web `tsc`/`eslint`/`vitest` all clean.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -957,3 +979,4 @@ noted in prior sprints.
 | 0.24.0 | 2026-08-14 | Sprint 18: second M1 module — Units (`units` table, `POST`/`GET /units`) built and live-verified, 9/9 checks, direct sibling of Categories. `PATCH`/`DELETE`/`UNIT_FRACTIONAL_FLAG_LOCKED` deferred for the same reason Categories' were. |
 | 0.25.0 | 2026-08-14 | Sprint 19: `products` extended with `category_id`/`unit_id`/`sku`/`barcode`/`hsn_sac_code`, all optional — a dated correction against backlog.md item 3's "required" wording, found by querying live production data (4 real products, no category/unit) before writing code. Live-verified 9/9, including a regression proof that mobile's unchanged request shape still works. Added `SKU_ALREADY_ASSIGNED`. |
 | 0.26.0 | 2026-08-14 | Sprint 20: mobile `/catalogue/categories`/`/catalogue/units` built, `/catalogue/add` now requires a category/unit selection. First-ever local schema migration (non-destructive `onUpgrade`). Found and corrected a real gap: category/unit creation is online-only (no sync-push type exists for either), resolved via `shop_settings`' own existing precedent rather than a new pattern. `flutter analyze`/`flutter test` (89/89) clean, no new bug. |
+| 0.27.0 | 2026-08-14 | Sprint 21: `GET /api/v1/products` built and live-verified (7/7); till screen gains search/category-filter/barcode-scan, resolved locally per FR-034/FR-036's "Fully offline" classification. Found and fixed a real Sprint 20 gap: sync pull never carried category_id/unit_id/sku/barcode to devices. Second local schema migration (v2→v3). `flutter test` 94/94, web suites clean. |

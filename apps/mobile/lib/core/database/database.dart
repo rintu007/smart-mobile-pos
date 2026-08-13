@@ -44,12 +44,12 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
-  // The first-ever schema change in this project (Sprint 01 through Sprint
-  // 19 all shipped as schemaVersion 1) — a real founder device already has
-  // real local data from Sprint 16's own end-to-end proof, so this must be a
-  // genuine, non-destructive migration, not a reinstall-and-recreate.
+  // The first schema change was Sprint 20 (schemaVersion 1 -> 2); Sprint 21
+  // (backlog.md item 5) adds `sku`/`barcode` to `products` for the till's
+  // offline barcode-scan lookup. Same non-destructive-migration discipline —
+  // a real founder device already has real local data.
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => m.createAll(),
@@ -59,6 +59,10 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(units);
         await m.addColumn(products, products.categoryId);
         await m.addColumn(products, products.unitId);
+      }
+      if (from < 3) {
+        await m.addColumn(products, products.sku);
+        await m.addColumn(products, products.barcode);
       }
     },
   );

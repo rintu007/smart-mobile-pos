@@ -29,4 +29,14 @@ abstract class ProductRepository {
   /// or pulled so far; there is no product pull-sync yet, so this can be a
   /// strict subset of the tenant's full catalogue.
   Future<List<Product>> listAll();
+
+  /// Exact-match barcode lookup against the local cache — the till's own
+  /// scan-resolution path (Sprint 21, backlog item 5). Deliberately local,
+  /// never a network call: FR-034/FR-036 classify barcode/category lookup as
+  /// "Fully offline," and NFR-002's p95 ≤ 800 ms budget rules out a round
+  /// trip anyway. `null` if no product in the local cache has this barcode —
+  /// which includes the case where the actual match exists on the server but
+  /// hasn't synced down to this device yet, indistinguishable from "no such
+  /// barcode" from here.
+  Future<Product?> findByBarcode(String barcode);
 }

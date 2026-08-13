@@ -120,6 +120,10 @@ class SyncRepository {
                 id: Value(product.id),
                 name: Value(product.name),
                 priceMinorUnits: Value(product.priceMinorUnits),
+                categoryId: Value(product.categoryId),
+                unitId: Value(product.unitId),
+                sku: Value(product.sku),
+                barcode: Value(product.barcode),
               ),
             );
         count++;

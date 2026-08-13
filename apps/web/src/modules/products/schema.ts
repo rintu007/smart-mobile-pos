@@ -22,3 +22,18 @@ export const createProductRequestSchema = z.object({
 });
 
 export type CreateProductRequest = z.infer<typeof createProductRequestSchema>;
+
+// docs/modules/products/specification.md §4 (Sprint 21, backlog.md item 5) — query params for
+// GET /api/v1/products. `search` matches name/sku (catalogue.md); `barcode` is an exact match
+// (the latency-critical scan-resolution path per NFR-002 — though the till's own barcode scan
+// resolves against the mobile local cache, not this endpoint, since FR-034/FR-036 are "Fully
+// offline"; this endpoint serves any future non-offline-critical consumer).
+export const listProductsQuerySchema = z.object({
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().positive().max(200).default(50),
+  search: z.string().trim().min(1).max(200).optional(),
+  category_id: z.string().uuid().optional(),
+  barcode: z.string().trim().min(1).max(100).optional(),
+});
+
+export type ListProductsQuery = z.infer<typeof listProductsQuerySchema>;

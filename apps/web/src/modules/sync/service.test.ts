@@ -131,6 +131,10 @@ describe("pullProducts", () => {
     id,
     name: "P",
     priceMinorUnits: BigInt(100),
+    categoryId: null,
+    unitId: null,
+    sku: null,
+    barcode: null,
     createdAt: updatedAt,
     updatedAt,
   });
@@ -179,6 +183,30 @@ describe("pullProducts", () => {
     await expect(pullProducts(tenantId, "not-a-real-cursor!!", 50)).rejects.toMatchObject({
       status: 422,
       code: "VALIDATION_FAILED",
+    });
+  });
+
+  it("carries category_id/unit_id/sku/barcode through the pull response (Sprint 21 fix)", async () => {
+    const row = {
+      id: "p1",
+      name: "Amul Milk",
+      priceMinorUnits: BigInt(2800),
+      categoryId: "cat-1",
+      unitId: "unit-1",
+      sku: "AML-500",
+      barcode: "8901234567890",
+      createdAt: new Date("2026-08-01T00:00:00Z"),
+      updatedAt: new Date("2026-08-01T00:00:00Z"),
+    };
+    vi.mocked(repository.listProductsForSync).mockResolvedValue([row] as never);
+
+    const result = await pullProducts(tenantId, undefined, 50);
+
+    expect(result.data[0]).toMatchObject({
+      category_id: "cat-1",
+      unit_id: "unit-1",
+      sku: "AML-500",
+      barcode: "8901234567890",
     });
   });
 });

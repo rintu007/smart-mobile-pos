@@ -105,4 +105,19 @@ class DriftProductRepository implements ProductRepository {
         )
         .toList();
   }
+
+  @override
+  Future<Product?> findByBarcode(String barcode) async {
+    final row = await (_db.select(
+      _db.products,
+    )..where((t) => t.barcode.equals(barcode))).getSingleOrNull();
+    if (row == null) return null;
+    return Product(
+      id: row.id,
+      name: row.name,
+      priceMinorUnits: row.priceMinorUnits,
+      categoryId: row.categoryId,
+      unitId: row.unitId,
+    );
+  }
 }

@@ -42,16 +42,33 @@ class SyncPushResponse {
 }
 
 /// One `products` row from `GET /sync/pull?entity_type=products`.
+///
+/// `categoryId`/`unitId`/`sku`/`barcode` added Sprint 21 — fixing a real gap
+/// found while wiring the till's barcode-scan lookup: Sprint 20 added these
+/// columns to both the server and local `products` tables, but this pull
+/// response never carried them, so a product created on *another* device (or
+/// directly against the server) pulled down with all four null regardless of
+/// what the server actually held. Only this device's own locally-created
+/// products ever had real values. Fixed in the same pass as the barcode
+/// feature that made the gap visible, not left for a later sprint.
 class PulledProduct {
   const PulledProduct({
     required this.id,
     required this.name,
     required this.priceMinorUnits,
+    this.categoryId,
+    this.unitId,
+    this.sku,
+    this.barcode,
   });
 
   final String id;
   final String name;
   final int priceMinorUnits;
+  final String? categoryId;
+  final String? unitId;
+  final String? sku;
+  final String? barcode;
 }
 
 class SyncPullPage {

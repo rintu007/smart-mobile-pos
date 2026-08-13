@@ -43,6 +43,9 @@ class _FakeProductRepository implements ProductRepository {
 
   @override
   Future<List<Product>> listAll() async => [];
+
+  @override
+  Future<Product?> findByBarcode(String barcode) async => null;
 }
 
 const _categories = [Category(id: 'cat-1', name: 'Dairy')];

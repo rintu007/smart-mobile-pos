@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 09 — Navigation
-> **Version:** 0.1.3
+> **Version:** 0.1.4
 > **Last updated:** 2026-08-14
 > **Owner:** UI-UX Lead / Principal Flutter Engineer
 > **Approved by:** _pending_
@@ -30,6 +30,7 @@ invented fresh here.
 | Route | Permission | Offline | Notes |
 | --- | --- | --- | --- |
 | `/pos` | Cashier+ | Yes | Home route |
+| `/pos/scan` | Cashier+ | Yes | Barcode-scan camera view — missing from the original decomposition (found building Sprint 21, same shape as `/catalogue/add`'s own Sprint 07 correction); pops with the scanned code, resolved against the local cache by `/pos` itself, per [FR-034](../03-functional-requirements/functional-requirements.md)/[FR-036](../03-functional-requirements/functional-requirements.md) |
 | `/pos/hold` | Cashier+ | Yes | Held-carts list |
 | `/pos/discount` | Cashier+ (approval gated inline above threshold) | Yes | [FR-029](../03-functional-requirements/functional-requirements.md) |
 | `/pos/split-payment` | Cashier+ | Yes | [FR-028](../03-functional-requirements/functional-requirements.md) |
@@ -97,3 +98,4 @@ none are left blank pending "figure out later."
 | 0.1.1 | 2026-07-31 | **Correction:** the route count was originally miscounted as "4 pre-shell + 34 shell" (38 total); recounting the tables above gives 6 + 35 = 41. No routes were added or removed — the earlier figure simply undercounted what was already here. |
 | 0.1.2 | 2026-08-02 | **Correction:** added `/catalogue/add`, missing from the original decomposition — `/catalogue/:id` covered an existing product's detail/edit but nothing covered creating a new one, found while planning Sprint 07's mobile product-creation screen. Total is now 6 pre-shell + 36 shell = 42. |
 | 0.1.3 | 2026-08-14 | **Correction, found building Sprint 20:** `/catalogue/categories`/`/catalogue/units` were marked flatly "Offline: Yes," but the sync engine has no `category.create`/`unit.create` push operation type (only `product.create`/`sale.create` exist) — building that is real backend scope this sprint didn't do. Both routes are offline-capable for *reads* (a local cache) but require connectivity to *create* — corrected here rather than left overstated, same reasoning as `categories/specification.md §7`'s identical correction. |
+| 0.1.4 | 2026-08-14 | **Correction, found building Sprint 21:** added `/pos/scan`, missing from the original decomposition — the barcode-scan camera view backlog item 5 needed had no route at all until now, same shape as `/catalogue/add`'s own Sprint 07 gap. |
