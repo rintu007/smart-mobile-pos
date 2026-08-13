@@ -2,7 +2,7 @@
 
 > **Status:** 🟡 In progress
 > **Phase:** 18 — Implementation
-> **Version:** 0.23.0
+> **Version:** 0.24.0
 > **Last updated:** 2026-08-14
 > **Owner:** CTO / All engineering roles
 
@@ -852,6 +852,22 @@ live a second time), and a cross-tenant RLS proof. 9/9 checks passed, no new bug
 **First module under M1's own governance:** Rule 2 ("one module at a time") applies literally
 again from this sprint onward — no exception needed or invoked, unlike every M0 sprint.
 
+## 2026-08-14 — Sprint 18: Units, the second M1 module
+
+**What landed:** `units` table (full column list — `id`, `tenant_id`, `name`, `symbol`,
+`allows_fractional`, `created_at`, `created_by`) + RLS, `POST`/`GET /api/v1/units`, built as a
+direct sibling of Sprint 17's Categories module — identical idempotent-creation and peeked-cursor
+pagination mechanisms, no new pattern invented, no dependency on Categories itself. Deliberately
+narrow, same scope cut as Categories: create+list only, no `PATCH`/`DELETE` (same missing
+state-transition idempotency mechanism named in Sprint 17), no permission enforcement.
+`allows_fractional`'s immutability rule (`UNIT_FRACTIONAL_FLAG_LOCKED`) is named in the
+specification but enforces nothing yet — there is no `PATCH` and no `products.unit_id` for it to
+protect against.
+
+**Live-verified against the real database**, throwaway tenants deleted after: idempotent creation,
+a correctly-peeked cursor-pagination walk, and a cross-tenant RLS proof. 9/9 checks passed, no new
+bug — the first sprint in this project to reuse a prior sprint's module shape almost verbatim.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -880,3 +896,4 @@ again from this sprint onward — no exception needed or invoked, unlike every M
 | 0.21.0 | 2026-08-13 | Sprint 15: M0 item 10's software half built — Bluetooth ESC/POS receipt printing (`ReceiptFormatter`, `EscPosReceiptEncoder`, `BluetoothPrinterRepository`), a print action on `/sales-history/:id`. `flutter test` 75/75, `flutter analyze` clean. Physical-printer verification (MTS-01) named as a founder action, not run — no hardware available, matching device-matrix.md §3's own precedent. First M0 module with zero backend component. |
 | 0.22.0 | 2026-08-14 | Sprint 16: M0 item 11 (end-to-end proof), steps 1–7, confirmed working by the founder — no new bug found, the first time every Sprint 01–14 piece ran together as one real sequence. Step 8 (physical print) remains open, blocked on printer hardware; M0 itself stays open until it closes. |
 | 0.23.0 | 2026-08-14 | Sprint 17: first M1 module — Categories (`categories` table, `POST`/`GET /categories`) built and live-verified, 9/9 checks. M1 fully decomposed (8 items) in the same pass, founder-directed after M0's last item was confirmed blocked purely on external hardware. Rule 2 governs literally again. |
+| 0.24.0 | 2026-08-14 | Sprint 18: second M1 module — Units (`units` table, `POST`/`GET /units`) built and live-verified, 9/9 checks, direct sibling of Categories. `PATCH`/`DELETE`/`UNIT_FRACTIONAL_FLAG_LOCKED` deferred for the same reason Categories' were. |

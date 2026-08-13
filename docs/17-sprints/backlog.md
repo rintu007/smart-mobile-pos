@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.12.0
+> **Version:** 0.13.0
 > **Last updated:** 2026-08-14
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
@@ -56,7 +56,7 @@ reached it — M2–M4 stay at module grain below.
 | # | Item | Depends on | Estimate (person-days) |
 | --- | --- | --- | --- |
 | 1 | `categories` table + `POST`/`GET`/`PATCH`/`DELETE /categories` (server) — [catalogue.md](../11-api/endpoints/catalogue.md), `CATEGORY_IN_USE` on delete-while-referenced | — | 1 |
-| 2 | `units` table + `POST`/`GET`/`PATCH`/`DELETE /units` (server) — same shape as item 1, `allows_fractional` immutable once referenced (`UNIT_FRACTIONAL_FLAG_LOCKED`) | — | 1 |
+| 2 | `units` table + `POST`/`GET /units` (server) — done, [Sprint 18](sprint-18.md); `PATCH`/`DELETE`, `allows_fractional` immutability (`UNIT_FRACTIONAL_FLAG_LOCKED`) deferred, same reason item 1's `PATCH`/`DELETE` are | — | 1 |
 | 3 | Extend `products`: `category_id`/`unit_id` (required, FK), `sku`/`barcode`/`hsn_sac_code` (optional) — closes FR-032/FR-033/FR-035 against `POST /api/v1/products` | 1, 2 | 1.5 |
 | 4 | Mobile: categories/units local tables + CRUD screens (`/catalogue/categories`, `/catalogue/units`), `/catalogue/add` updated to require a category/unit selection | 1, 2, 3 | 2 |
 | 5 | Full barcode/SKU search: `GET /products?search=&category_id=` (server) + mobile barcode scan (`mobile_scanner`, already a pubspec dependency, unused until now) wired into the till's product picker — FR-034/FR-036 | 3, 4 | 2 |
@@ -109,3 +109,4 @@ specifically.
 | 0.10.0 | 2026-08-13 | Item 11 (end-to-end proof) opened — [Sprint 16](sprint-16.md): the exact step-by-step script written, a rebuilt APK carrying every Sprint 11–15 change re-served to the founder. In progress — blocked on the founder's own execution and, for the print step, physical printer hardware. |
 | 0.11.0 | 2026-08-14 | Item 11 steps 1–7 confirmed working by the founder — no bug found on the first real end-to-end run. Step 8 (physical print) remains open, blocked on printer hardware; M0 stays open until it closes too. |
 | 0.12.0 | 2026-08-14 | M1 fully decomposed (8 items, 15.5 person-days) — founder directed M1 to begin now despite item 11's physical-print step remaining open (external hardware, not engineering work; see modules/README.md Rule 2's third exception). |
+| 0.13.0 | 2026-08-14 | Item 2 (units) done — [Sprint 18](sprint-18.md): `POST`/`GET /units` built and live-verified, direct sibling of item 1 (Categories). `PATCH`/`DELETE`/`UNIT_FRACTIONAL_FLAG_LOCKED` deferred for the same reason Categories' were. M1 now has items 3–8 remaining. |
