@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.11.0
+> **Version:** 0.12.0
 > **Last updated:** 2026-08-14
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
@@ -44,24 +44,47 @@ persistence, device-to-store binding) that a backend-only walking skeleton never
 honestly rather than absorbed into an existing item's estimate, same reasoning item 12's correction
 already established.
 
-## 2. M1–M4 — module grain only, decomposed when reached
+## 2. M1 — fully decomposed 2026-08-14, now that M0 has reached this point
+
+M0 closed for planning purposes on 2026-08-14 — every item except backlog item 11's physical-print
+step (blocked on printer hardware the founder doesn't yet own, tracked separately in
+[sprint-16.md](sprint-16.md), not blocking further work per the founder's own direction, see
+[modules/README.md](../modules/README.md) Rule 2's third exception). Per this document's own
+stated practice (§ intro), M1 is decomposed to item grain only now that planning has actually
+reached it — M2–M4 stay at module grain below.
+
+| # | Item | Depends on | Estimate (person-days) |
+| --- | --- | --- | --- |
+| 1 | `categories` table + `POST`/`GET`/`PATCH`/`DELETE /categories` (server) — [catalogue.md](../11-api/endpoints/catalogue.md), `CATEGORY_IN_USE` on delete-while-referenced | — | 1 |
+| 2 | `units` table + `POST`/`GET`/`PATCH`/`DELETE /units` (server) — same shape as item 1, `allows_fractional` immutable once referenced (`UNIT_FRACTIONAL_FLAG_LOCKED`) | — | 1 |
+| 3 | Extend `products`: `category_id`/`unit_id` (required, FK), `sku`/`barcode`/`hsn_sac_code` (optional) — closes FR-032/FR-033/FR-035 against `POST /api/v1/products` | 1, 2 | 1.5 |
+| 4 | Mobile: categories/units local tables + CRUD screens (`/catalogue/categories`, `/catalogue/units`), `/catalogue/add` updated to require a category/unit selection | 1, 2, 3 | 2 |
+| 5 | Full barcode/SKU search: `GET /products?search=&category_id=` (server) + mobile barcode scan (`mobile_scanner`, already a pubspec dependency, unused until now) wired into the till's product picker — FR-034/FR-036 | 3, 4 | 2 |
+| 6 | Full stock-movement types: `adjustment` movement + `reason_code`, public `POST`/`GET /stock-movements`, `GET /products/{id}/stock-balance` — the endpoints [inventory/specification.md §1](../modules/inventory/specification.md#1-purpose-and-business-context) named as deferred past Sprint 11 | 3 | 2 |
+| 7 | Roles & Permissions: `user_store_roles` table, role assignment, enforcement retrofitted across every endpoint built so far (products, sales, categories, units, stock-movements, sync, audit-log reads) — the one deliberately-last item so it retrofits a stable surface rather than a moving one, per [dependency-graph.md §3](../16-milestones/dependency-graph.md#3-the-three-cross-cutting-concerns--deliberately-not-on-the-critical-path)'s own "woven through every node, not sequential" framing | 1–6 | 3 |
+| 8 | Sales & Invoices, full V1 shape: GST invoice fields, canonical invoice numbers assigned at sync, `GET /sales*` server endpoints, permission enforcement | 7 | 3 |
+
+**Total: 15.5 person-days.** Item 8's GST fields genuinely need tax computation (M2 scope) to be
+fully meaningful — named here rather than assumed away; item 8's own specification will state
+precisely which GST fields can land now (invoice numbering, read endpoints, permissions) versus
+which need M2's tax module first, the same honesty pattern M0's own specs used throughout.
+
+**Correction, found 2026-08-12 (kept for history):** this section never listed Sales & Invoices at
+all before this version, despite [dependency-graph.md](../16-milestones/dependency-graph.md)
+already fixing it as the module immediately after "POS core loop." **A minimal slice was pulled
+forward into Sprint 10**, ahead of M1, at the founder's direct request the moment real device
+testing surfaced the gap — a local-only, this-device's-own-sales list/detail view needing none of
+M1's actual prerequisites. See
+[sales-invoices/specification.md](../modules/sales-invoices/specification.md) §1 for exactly what
+that minimal slice is and isn't; item 8 above is what remains.
+
+## 2a. M2–M4 — module grain only, decomposed when reached
 
 | Milestone | Modules (decomposition pending) |
 | --- | --- |
-| M1 | Categories, Units, full barcode/SKU search, full stock-movement types, Roles & Permissions enforcement, **Sales & Invoices (full V1 shape — GST invoice fields, canonical numbering at sync, `GET /sales*` server endpoints, permission enforcement)** |
 | M2 | Discount, tax computation, split payment, hold/resume, Trading Day |
 | M3 | Customers, Returns & Refund, conflict-resolution field-merge |
 | M4 | Reports (4), Settings, release-readiness closeout (printer/device testing, load test, adversarial suite in CI) |
-
-**Correction, found 2026-08-12:** this table never listed Sales & Invoices at all, despite
-[dependency-graph.md](../16-milestones/dependency-graph.md) already fixing it as the module
-immediately after "POS core loop" on the project's longest sequential dependency chain — a real
-omission, not a deliberate exclusion. Added to M1 above (its full V1 shape genuinely needs Roles &
-Permissions and the sync engine, both M1/later). **A minimal slice was pulled forward into Sprint
-10**, ahead of M1, at the founder's direct request the moment real device testing surfaced the
-gap — a local-only, this-device's-own-sales list/detail view needing none of M1's actual
-prerequisites. See [sales-invoices/specification.md](../modules/sales-invoices/specification.md)
-§1 for exactly what that minimal slice is and isn't.
 
 ## 3. Ordering rule, restated
 
@@ -85,3 +108,4 @@ specifically.
 | 0.9.0 | 2026-08-13 | Item 10 software done — [Sprint 15](sprint-15.md): receipt formatting, ESC/POS encoding, and Bluetooth transport all built and unit-tested. Physical-printer verification (MTS-01) named as a founder action, not run — no hardware available. M0 now has only item 11 remaining. |
 | 0.10.0 | 2026-08-13 | Item 11 (end-to-end proof) opened — [Sprint 16](sprint-16.md): the exact step-by-step script written, a rebuilt APK carrying every Sprint 11–15 change re-served to the founder. In progress — blocked on the founder's own execution and, for the print step, physical printer hardware. |
 | 0.11.0 | 2026-08-14 | Item 11 steps 1–7 confirmed working by the founder — no bug found on the first real end-to-end run. Step 8 (physical print) remains open, blocked on printer hardware; M0 stays open until it closes too. |
+| 0.12.0 | 2026-08-14 | M1 fully decomposed (8 items, 15.5 person-days) — founder directed M1 to begin now despite item 11's physical-print step remaining open (external hardware, not engineering work; see modules/README.md Rule 2's third exception). |

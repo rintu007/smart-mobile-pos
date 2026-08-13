@@ -41,6 +41,7 @@ model Tenant {
   sales           Sale[]
   stockMovements  StockMovement[]
   auditLogEntries AuditLog[]
+  categories      Category[]
 
   @@map("tenants")
 }
@@ -93,6 +94,7 @@ model User {
   salesCreated          Sale[]
   stockMovementsCreated StockMovement[]
   auditLogEntriesActed  AuditLog[]
+  categoriesCreated     Category[]
 
   @@index([tenantId])
   @@map("users")
@@ -248,4 +250,22 @@ model AuditLog {
   @@index([tenantId, entityType, entityId])
   @@index([tenantId, createdAt])
   @@map("audit_log")
+}
+
+/// M1 Sprint 17's minimal slice of docs/07-database/schema-server.md's `categories` table —
+/// create+list only (backlog.md item 1). `deactivated_at`/`updated_at` are real columns in the
+/// full V1 design but are added once `PATCH`/`DELETE /categories` land, per
+/// docs/modules/categories/specification.md §3.
+model Category {
+  id        String   @id @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdBy String   @map("created_by") @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user   User   @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@map("categories")
 }

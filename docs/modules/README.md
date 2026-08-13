@@ -1,8 +1,8 @@
 # Module Registry
 
 > **Status:** 🔵 In review
-> **Version:** 0.15.0
-> **Last updated:** 2026-08-13
+> **Version:** 0.17.0
+> **Last updated:** 2026-08-14
 > **Owner:** CTO
 
 The operational tracker for every business module. The strategic rationale for the ordering lives
@@ -24,7 +24,7 @@ sections defined in [Documentation Standards](../00-governance/documentation-sta
 | Company & Store Setup | V1 | 🟢 [spec](company-store-setup/specification.md) | 🔨 (`POST /api/v1/onboarding` live, demoed against real infrastructure; `GET /api/v1/stores` live and verified with a cross-tenant RLS proof, mobile fetch-and-cache built (Sprint 08); `PATCH /stores/{id}` deferred) | Authentication |
 | Roles & Permissions | V1 | ⚪ | ⚪ | Authentication |
 | Audit Log | V1 | 🟢 [spec](audit-log/specification.md) | 🔨 (one `sale.completed` entry written server-side, atomic with the sale itself — Sprint 12; every other audit-model.md §1 trigger, including Sprint 11's own stock movements, has no audit coverage yet — named gap) | Authentication |
-| Categories | V1 | ⚪ | ⚪ | Store Setup |
+| Categories | V1 | 🟢 [spec](categories/specification.md) | 🔨 (`POST`/`GET /api/v1/categories` live — Sprint 17, create+list only, live-verified with idempotent creation, cursor pagination, and a cross-tenant RLS proof; `PATCH`/`DELETE`, `products.category_id`, mobile UI, and permission enforcement all deferred — first M1 module, Rule 2 governs literally, no exception) | Store Setup |
 | Units | V1 | ⚪ | ⚪ | Store Setup |
 | Products | V1 | 🟢 [spec](products/specification.md) | 🔨 (`POST /api/v1/products` live, name/price only; mobile local write path (`/catalogue/add`) live, verified against a real on-disk file (Sprint 07); a locally-created product now actually syncs to the server (Sprint 14's mobile trigger draining `outbound_queue`); `GET`/`PATCH`/`DELETE`, category/unit deferred) | Categories, Units *(named exception — see spec §1: M0's minimal slice doesn't wait on either, per the M0 exception below)* |
 | Inventory — Stock Ledger | V1 | 🟢 [spec](inventory/specification.md) | 🔨 (`opening` movement on product creation, `sale` movement on sale completion, each server-side and atomic with its triggering row — Sprint 11; no adjustment workflow, no public stock-movement/balance endpoints, no mobile UI) | Products |
@@ -83,6 +83,17 @@ Restaurant module · Salon module · Analytics · Accountant role & accounting e
    change to how this rule works. Named honestly rather than silently treated as already covered;
    Rule 2 reverts to governing literally (one module at a time, M0 aside) once both M0 and this
    insertion are done.
+
+   **A third exception, added 2026-08-14, ending the M0 exception itself:** backlog.md item 11's
+   own last step — printing a physical receipt — remains open, blocked on Bluetooth ESC/POS printer
+   hardware the founder doesn't yet own ([sprint-16.md](../17-sprints/sprint-16.md)), so M0 is not
+   *literally* done by this rule's own original wording. Every other step of item 11 (sign in, add
+   a product, sell it fully offline, reconnect, sync) has been run for real on the founder's own
+   device and confirmed working, with no bug found. Founder-directed decision, asked and answered
+   plainly rather than assumed: M1 begins now regardless, and the physical-print step stays tracked
+   separately (in `sprint-16.md`) until printer hardware exists to close it — it does not block M1.
+   This is a one-off judgment call about *this specific* remaining item (external hardware, not
+   engineering work), not a reinterpretation of what "M0 done" means for any future milestone.
 3. A module reaches ✅ only when every Definition of Done box is ticked.
 4. This table is updated in the same pull request as the work it describes.
 
@@ -105,3 +116,5 @@ Restaurant module · Salon module · Analytics · Accountant role & accounting e
 | 0.13.0 | 2026-08-13 | Offline Sync Engine specification authored and approved; moved to 🔨: `POST /sync/push` (`product.create`/`sale.create`) and `GET /sync/pull` (`products`) built (Sprint 13) — backlog.md item 9's backend half. Found and fixed a real cursor-pagination off-by-one bug live. Products/POS rows updated: the backend half of sync now exists, but no mobile trigger calls it yet, so on-device writes still aren't actually connected to the server. |
 | 0.14.0 | 2026-08-13 | Offline Sync Engine row updated: mobile trigger built (Sprint 14) — `outbound_queue` now actually drains via `POST /sync/push`, local `products` refreshed via `GET /sync/pull`, backlog.md item 9 done in full. Products/POS rows updated: on-device writes are now actually connected to the server, closing the gap Sprint 13 named. |
 | 0.15.0 | 2026-08-13 | Receipt & Printing specification authored and approved; moved to 🔨: Bluetooth ESC/POS receipt printing built (Sprint 15) — backlog.md item 10's software half. Physical-printer verification (MTS-01) named as a founder action, not run, matching device-matrix.md §3's own precedent for hardware this project can't test without the founder's own equipment. |
+| 0.16.0 | 2026-08-14 | Rule 2's third exception added: M0's own end-to-end proof (item 11) has one step still open (physical receipt printing, blocked on hardware the founder doesn't own), but the founder directed M1 to begin now regardless — asked and answered plainly, not assumed. M1 planning begins this version. |
+| 0.17.0 | 2026-08-14 | Categories specification authored and approved; moved to 🔨: `POST`/`GET /categories` built (Sprint 17), live-verified — the first M1 module, Rule 2 governing literally again with no exception needed. |
