@@ -4,13 +4,14 @@
 > **Module:** Audit Log
 > **Slice:** V1 — this document scopes only backlog.md item 8's M0-minimal cut, not the full V1
 > shape (§1)
-> **Version:** 0.1.0
-> **Last updated:** 2026-08-13
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-14
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
 
 All eleven sections per [documentation-standards.md §7](../../00-governance/documentation-standards.md#7-module-specification-template).
-Written to drive [Sprint 12](../../17-sprints/sprint-12.md) — specification before code, per
+Written to drive [Sprint 12](../../17-sprints/sprint-12.md); updated to drive
+[Sprint 23](../../17-sprints/sprint-23.md)'s `GET /audit-log` — specification before code, per
 [docs/README.md](../../README.md)'s non-negotiable rule #1.
 
 ---
@@ -37,9 +38,15 @@ M0's own exit criterion's literal wording ("an audit-log entry... for the comple
 expanding scope mid-item is exactly the kind of silent scope creep this project's practice avoids.
 Named directly here instead, as the concrete next candidate once M0's own remaining items close.
 
-Also out of scope: any `GET /audit-log` read endpoint (audit-model.md §3's Owner/Manager-only read
-restriction needs Roles & Permissions, which doesn't exist — M1 scope), and any mobile UI (this is
-an online-only reporting surface per audit-model.md §3, never a till feature).
+**Sprint 23 update:** `GET /audit-log` is now built — see §4/§9/§10/§11 below, added when Roles &
+Permissions ([roles-permissions/specification.md](../roles-permissions/specification.md)) closed
+the exact dependency this section named. Every other audit-model.md §1 trigger besides
+`sale.completed` and Sprint 23's own new `user.created`/`user_store_role.assigned`/`user.deactivated`
+entries — stock movements, returns, trading-day transitions, device/settings changes — still has no
+audit coverage, unchanged from this section's original finding.
+
+Still out of scope: any mobile UI (this is an online-only reporting surface per audit-model.md §3,
+never a till feature) — `GET /audit-log` itself is a back-office, API-only capability (§9).
 
 ## 2. Business rules
 
@@ -74,43 +81,61 @@ RLS: tenant-scoped, same template as every other M0-minimal table
 
 ## 4. API contract
 
-No new endpoint. `POST /api/v1/sales` is the only API surface this sprint touches, and its
-request/response shape is unchanged — the audit entry it now also writes is invisible to the
-caller, same as Sprint 11's stock movement. `GET /audit-log` (audit-model.md §3's read surface)
-remains undocumented at the endpoint-contract level and unbuilt (§1).
+`POST /api/v1/sales` is unchanged since Sprint 12 — its request/response shape never carried the
+audit entry it writes. **Built this sprint:** `GET /api/v1/audit-log` (Manager, Owner) —
+cursor-paginated on `(created_at, id)`, filters `entity_type`/`entity_id`/`date_from`/`date_to`, per
+[identity.md](../../11-api/endpoints/identity.md#audit-log)'s own already-documented contract. No
+request-shape surprises found: the endpoint's actual implementation matches what Phase 11 already
+specified.
 
 ## 5. Validation rules (client and server)
 
-None new — every field on the audit-log row is derived entirely from already-validated `POST
-/sales` input (§4/§5 of [pos/specification.md](../pos/specification.md)), never from new request
-input.
+`cursor`/`limit`/`entity_type`/`entity_id`/`date_from`/`date_to` — the same Zod conventions
+(`.int().positive().max(200).default(50)` for `limit`; `.datetime()` for the date filters) every
+other cursor-paginated, filterable list endpoint in this codebase already uses (e.g.
+`stock-movements/schema.ts`'s `listStockMovementsQuerySchema`). None new beyond that.
 
 ## 6. Error handling and user-facing messages
 
-None new. An audit-log write is never independently rejectable; it either commits with the sale or
-the whole transaction (sale, stock movements, and audit entry together) rolls back.
+`VALIDATION_FAILED` (422) for a malformed cursor or filter, `PERMISSION_DENIED` (403) for a Cashier
+calling this endpoint (enforced by the Route Handler's own `requirePermission` call, per
+[roles-permissions/specification.md](../roles-permissions/specification.md)) — both the same
+cross-cutting codes every other endpoint already uses, nothing new. `POST /sales`'s own write
+remains never independently rejectable, unchanged since Sprint 12.
 
 ## 7. Offline behaviour
 
-Rides `POST /sales`'s own connectivity model unchanged (currently requires connectivity; no mobile
-offline queue path calls it yet). No independent offline behaviour exists for this module.
+`POST /sales` is unchanged. `GET /audit-log` is an **online-only, back-office read** — no mobile
+screen calls it (§9), the same position every other Sprint 23 endpoint is left in.
 
 ## 8. Realtime behaviour
 
-None specified for V1 in this sprint's scope — audit-model.md §3 describes this as an
-online-only, API-read reporting surface, not a live-push feature.
+None specified for V1 — audit-model.md §3 describes this as an online-only, API-read reporting
+surface, not a live-push feature; `GET /audit-log` is polled on demand, not pushed, now that it
+exists.
 
 ## 9. UI specification
 
-None this sprint — no `GET /audit-log` endpoint and no mobile screen exist yet (§1).
+None this sprint — no mobile screen calls `GET /audit-log` (§7); it stands as its own tested,
+documented capability, the same "built, not yet consumed" position `GET /products` was left in
+after Sprint 21.
 
 ## 10. Test plan
 
-**Sprint 12 scope:**
-- No new unit tests were needed in `pos/service.test.ts` — that file mocks `./repository` entirely,
-  and the audit-log write lives inside `repository.ts`'s own transaction, matching Sprint 11's
-  stock-movement precedent (proven live instead, not unit-mocked).
-- **Live verification, real database, throwaway tenants (deleted after):**
+**Sprint 12 scope (unchanged, still passing):** see the three Sprint 12 live-verification items
+below.
+
+**Sprint 23 scope:**
+- Unit tests (`audit-log/service.test.ts`, 4 tests): peek-and-trim pagination, filter pass-through,
+  malformed-cursor rejection.
+- **Live verification, real database, throwaway tenants (deleted after):** as Owner, `GET
+  /audit-log` returns `200` and shows the expected `user_store_role.assigned` entries from a
+  session's own role changes; a Cashier-role caller → `403 PERMISSION_DENIED`; a second tenant's
+  session reads zero of the first tenant's rows — folded into
+  [roles-permissions/specification.md §10](../roles-permissions/specification.md#10-test-plan)'s
+  own 12-check run rather than repeated here, since every check exercising `GET /audit-log`
+  necessarily also exercises the role/permission machinery that spec already documents.
+- **Sprint 12 scope (original, still passing):**
   1. `POST /sales` for a real sale → exactly one `audit_log` row exists, `action = 'sale.completed'`,
      `entity_type = 'sale'`, `entity_id` = the sale's id, `actor_user_id` = the creating user,
      `store_id` = the sale's store, `before_state` is `null`, `after_state` matches the sale's own
@@ -121,20 +146,22 @@ None this sprint — no `GET /audit-log` endpoint and no mobile screen exist yet
   3. Cross-tenant RLS: a second tenant's session reads zero of the first tenant's `audit_log` rows
      via PostgREST directly.
 
-**Explicitly deferred:** every other audit-model.md §1 trigger (§1's named gap), `GET /audit-log`,
-any mobile UI.
+**Explicitly deferred:** every other audit-model.md §1 trigger besides `sale.completed` and Sprint
+23's own new role/user-management triggers — stock movements, returns, trading-day, device,
+settings changes (§1's continuing gap); any mobile UI.
 
 ## 11. Traceability
 
 | Requirement | Covered by | Status |
 | --- | --- | --- |
-| [DR-025](../../03-functional-requirements/business-rules.md) (sale produces exactly one audit entry, same transaction) | §2, §10 | Met, for `sale.completed` only — **not met** for stock movements/returns/trading-day/role/device/settings/user changes (§1) |
+| [DR-025](../../03-functional-requirements/business-rules.md) (sale produces exactly one audit entry, same transaction) | §2, §10 | Met, for `sale.completed` only — **not met** for stock movements/returns/trading-day/device/settings changes (§1) |
 | [milestones.md — M0 exit criterion](../../16-milestones/milestones.md#m0--walking-skeleton) (audit-log entry present and correct for the completed sale) | §10 | Met |
 | [audit-model.md §2](../../07-database/audit-model.md#2-what-is-stored-per-entry) (actor/action/entity/timestamp/before-after stored) | §3, §10 | Met |
-| [audit-model.md §3](../../07-database/audit-model.md#3-who-can-read-it) (Owner/Manager-only read) | — | **Not met this sprint** — no read endpoint exists yet, named future scope (§1) |
+| [audit-model.md §3](../../07-database/audit-model.md#3-who-can-read-it) (Owner/Manager-only read) | §4, §6, §10 | **Met this sprint** — `GET /audit-log` built, live-verified, Cashier rejected with `PERMISSION_DENIED` |
 
 ## Change Log
 
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-08-13 | First version — written to drive Sprint 12's minimal `sale.completed` audit-log write (backlog.md item 8). Scope deliberately narrow: one trigger only, no read endpoint, no mobile UI. Named a real, now-visible gap: `stock_movements` (Sprint 11) has no audit coverage, and won't after this sprint either. |
+| 0.2.0 | 2026-08-14 | Sprint 23: `GET /api/v1/audit-log` built and live-verified — closes the gap this document's own §1 named (blocked on Roles & Permissions, now built). `audit-model.md §3`'s Owner/Manager-only read restriction now enforced and proven. Every other named gap (stock-movement/returns/trading-day/device/settings audit coverage) remains open, unchanged. |

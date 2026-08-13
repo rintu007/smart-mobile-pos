@@ -39,8 +39,9 @@ function formatProduct(product: {
 /**
  * docs/modules/products/specification.md#4-api-contract.
  *
- * No permission check beyond a valid tenant-scoped session — Roles & Permissions doesn't exist yet
- * (§2 of the spec), a named scope boundary, not an oversight.
+ * Permission enforcement (Manager/Owner for creation, any role for listing) is applied by the
+ * Route Handler's own `requirePermission` call (Sprint 23, docs/modules/roles-permissions/specification.md),
+ * not here — this service function itself has no role-checking code of its own.
  */
 export async function createProduct(
   authUserId: string,

@@ -3,7 +3,7 @@
 > **Status:** 🟢 Approved
 > **Module:** POS
 > **Slice:** V1 — this document scopes only M0's minimal first cut, not the full V1 shape (§1)
-> **Version:** 0.4.0
+> **Version:** 0.5.0
 > **Last updated:** 2026-08-13
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
@@ -57,8 +57,9 @@ the same transaction — see [audit-log/specification.md](../audit-log/specifica
 - Creation is idempotent on the client-generated `id` — replaying the same request with the same
   `id` returns the original sale unchanged, without re-running price validation (a price that moved
   *after* a legitimate first success must not turn a replay into a spurious `PRICE_MISMATCH`).
-- No permission check beyond a valid, tenant-scoped session — Roles & Permissions is still M1 scope,
-  the same named boundary Products' spec already states.
+- **Permission-checked as of Sprint 23**: `POST /sales` requires any role (Cashier, Manager, and
+  Owner may all "complete a sale" per [permission-matrix.md](../../05-personas/permission-matrix.md)),
+  per [roles-permissions/specification.md](../roles-permissions/specification.md).
 
 ## 3. Database tables and relationships
 
@@ -103,7 +104,7 @@ RLS: tenant-scoped, same template as `stores`/`products`
 
 | Method & path | Status |
 | --- | --- |
-| `POST /api/v1/sales` | **Implemented this sprint.** Request: `{ id, store_id, provisional_invoice_number, line_items: [{ product_id, quantity, client_unit_price_minor_units }], payments: [{ method: "cash", amount_minor_units }] }` only — not the full shape [sales.md](../../11-api/endpoints/sales.md) documents (see that document's own dated correction note). Requires a valid tenant-scoped session (`requireSession`) — no role/permission check yet, no Trading Day precondition. |
+| `POST /api/v1/sales` | **Implemented this sprint.** Request: `{ id, store_id, provisional_invoice_number, line_items: [{ product_id, quantity, client_unit_price_minor_units }], payments: [{ method: "cash", amount_minor_units }] }` only — not the full shape [sales.md](../../11-api/endpoints/sales.md) documents (see that document's own dated correction note). Requires any role (`requirePermission`, Sprint 23), no Trading Day precondition. |
 | `GET /sales/{id}`, `GET /sales`, `GET /sales/lookup` | **Already documented**, not yet implemented — deferred past this sprint. |
 
 **Mobile till screen (`apps/mobile/lib/features/pos/`) — built Sprint 09.** Sprint 05 deferred it
@@ -241,3 +242,4 @@ minimal shape (§1).
 | 0.2.0 | 2026-08-02 | Sprint 09: mobile till screen (`/pos`) and its local write path built — cart, cash-only completion, `sales`/`sale_line_items`/`sale_payments` + `outbound_queue` written atomically, ADR-0008's local invoice-numbering half implemented as a deliberately narrower slice (no `devices` row, no canonical-number assignment). The server endpoint and the mobile write path are proven independently; nothing yet drains `outbound_queue` to connect them (backlog.md item 9). |
 | 0.3.0 | 2026-08-13 | Sprint 11: closed this document's own named stock-ledger gap — `POST /api/v1/sales` now writes one `sale` stock movement per line item inside the same transaction as the sale, per [inventory/specification.md](../inventory/specification.md). |
 | 0.4.0 | 2026-08-13 | Sprint 12: closed the audit-log gap (DR-025, backlog.md item 8) — `POST /api/v1/sales` now also writes one `sale.completed` audit-log entry in the same transaction, per [audit-log/specification.md](../audit-log/specification.md). |
+| 0.5.0 | 2026-08-14 | Sprint 23: permission enforcement applied — `POST /sales` now requires any active role (Cashier, Manager, or Owner). |

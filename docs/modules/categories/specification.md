@@ -3,7 +3,7 @@
 > **Status:** 🟢 Approved
 > **Module:** Categories
 > **Slice:** V1 — this document scopes only Sprint 17's minimal first cut, not the full V1 shape (§1)
-> **Version:** 0.2.0
+> **Version:** 0.3.0
 > **Last updated:** 2026-08-14
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
@@ -34,9 +34,9 @@ the state-transition idempotency mechanism ([api-principles.md §3](../../11-api
 neither of which exists anywhere in this codebase yet (no endpoint has needed
 `idempotency_keys`/`client_operation_id`-based state-transition idempotency before — every M0
 mutation so far has been a creation, not an edit) — are deferred, named here rather than silently
-produced. No permission check beyond a valid, tenant-scoped session: [Roles & Permissions](../../17-sprints/backlog.md)
-is its own later M1 item (item 7), deliberately last so it retrofits a stable surface — the same
-scope boundary every M0 module already used for the identical reason.
+produced. **Permission-checked as of Sprint 23**: `POST /categories` requires Manager/Owner, `GET
+/categories` any role, per [roles-permissions/specification.md](../roles-permissions/specification.md)
+— the M1 item 7 retrofit this section originally named as still pending.
 
 ## 2. Business rules
 
@@ -73,7 +73,7 @@ No FK from `products.category_id` yet — that column doesn't exist until
 
 | Method & path | Status |
 | --- | --- |
-| `POST /api/v1/categories` | **Implemented this sprint.** Request: `{ id, name }`. Requires a valid tenant-scoped session (`requireSession`) — no role/permission check yet (§2). |
+| `POST /api/v1/categories` | **Implemented Sprint 17.** Request: `{ id, name }`. Requires Manager/Owner (`requirePermission`, Sprint 23 — §2). |
 | `GET /api/v1/categories` | **Implemented this sprint.** Cursor-paginated per [api-principles.md §4](../../11-api/api-principles.md#4-pagination--cursor-only), `(created_at, id)` — a Tier 1 table normally cursors on `(updated_at, id)`, but `updated_at` doesn't exist yet (§3), so `created_at` is used until `PATCH` adds it. |
 | `PATCH /api/v1/categories/{id}`, `DELETE /api/v1/categories/{id}` | **Already documented** in [catalogue.md](../../11-api/endpoints/catalogue.md), **not implemented, and not needed this sprint** — see §1. |
 
@@ -151,3 +151,4 @@ idempotency, `products.category_id`, mobile UI.
 | --- | --- | --- |
 | 0.1.0 | 2026-08-14 | First version — written to drive Sprint 17's minimal `POST`/`GET /categories`. Scope deliberately narrow: create+list only, no `PATCH`/`DELETE`, no permission enforcement, no mobile UI — all named, matching M0's own products-module precedent exactly. |
 | 0.2.0 | 2026-08-14 | Sprint 20 (backlog item 4): mobile UI built — `/catalogue/categories` list+create screen, local `Categories` Drift table (read cache only). §7 corrected: creation calls the server directly (online-only) rather than through `outbound_queue`, since no `category.create` sync-push operation type exists — a named, dated deviation from schema-local.md's full design, not a silent gap. |
+| 0.3.0 | 2026-08-14 | Sprint 23: permission enforcement applied — `POST /categories` now requires Manager/Owner, `GET /categories` any role. |

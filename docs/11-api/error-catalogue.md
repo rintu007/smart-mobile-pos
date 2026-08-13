@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 11 — API Design
-> **Version:** 0.1.3
-> **Last updated:** 2026-08-01
+> **Version:** 0.1.5
+> **Last updated:** 2026-08-14
 > **Owner:** Principal Next.js Engineer
 > **Approved by:** _pending_
 
@@ -48,7 +48,7 @@ single complete list, not a duplicate source of truth — module documents link 
 
 | Code | Module |
 | --- | --- |
-| `LAST_OWNER_CANNOT_BE_REMOVED`, `ALREADY_ONBOARDED` | [identity.md](endpoints/identity.md) |
+| `LAST_OWNER_CANNOT_BE_REMOVED`, `ALREADY_ONBOARDED`, `EMAIL_ALREADY_REGISTERED` | [identity.md](endpoints/identity.md) |
 | `CATEGORY_IN_USE`, `BARCODE_ALREADY_ASSIGNED`, `SKU_ALREADY_ASSIGNED`, `UNIT_FRACTIONAL_FLAG_LOCKED` | [catalogue.md](endpoints/catalogue.md) |
 | `ADJUSTMENT_REASON_REQUIRED`, `DIRECT_SALE_MOVEMENT_FORBIDDEN` | [inventory.md](endpoints/inventory.md) |
 | `CUSTOMER_IDENTIFIER_REQUIRED`, `PHONE_ALREADY_ASSIGNED` | [customers.md](endpoints/customers.md) |
@@ -65,3 +65,4 @@ single complete list, not a duplicate source of truth — module documents link 
 | 0.1.2 | 2026-08-01 | Added `ALREADY_ONBOARDED` (defined by identity.md's new Onboarding section) to the module-specific index. |
 | 0.1.3 | 2026-08-01 | Added `PAYMENT_AMOUNT_MISMATCH` (financial-integrity code, defined by Sprint 05's M0-minimal `POST /sales`). |
 | 0.1.4 | 2026-08-14 | Added `SKU_ALREADY_ASSIGNED` to the module-specific index — Sprint 19's `(tenant_id, sku)` unique constraint on `products` needed the same treatment `BARCODE_ALREADY_ASSIGNED` already got, rather than surfacing as an unhandled 500. |
+| 0.1.5 | 2026-08-14 | Sprint 23: `PERMISSION_DENIED` and `LAST_OWNER_CANNOT_BE_REMOVED` (both already reserved) implemented for the first time. Added `EMAIL_ALREADY_REGISTERED` to the module-specific index — `POST /users/invite`'s own Supabase-Admin duplicate-email rejection needed a named code, the same pattern `BARCODE_ALREADY_ASSIGNED`/`SKU_ALREADY_ASSIGNED` already set. |

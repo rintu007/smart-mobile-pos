@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 11 — API Design
-> **Version:** 0.2.0
-> **Last updated:** 2026-08-01
+> **Version:** 0.3.0
+> **Last updated:** 2026-08-14
 > **Owner:** Principal Next.js Engineer
 > **Approved by:** _pending_
 
@@ -49,13 +49,13 @@ connectivity requirement; this is that step's concrete API contract.
    (`supabase.auth.refreshSession()` or equivalent) immediately after a successful response to
    obtain a token that actually carries `tenant_id`; every subsequent tenant-scoped request depends
    on this refresh having happened.
-5. **No `user_store_roles` row is created here.** Roles & Permissions
-   ([modules/README.md](../../modules/README.md)) is a separate, not-yet-built module — the
-   signing-up user is not yet formally an "Owner" in any enforceable sense, since nothing enforces
-   role checks until that module exists. This is a deliberate, named scope boundary, not an
-   oversight: per [docs/README.md](../../README.md)'s "one module at a time" rule, Roles &
-   Permissions is built when its own turn in the module order comes up, not folded into this one
-   because it happens to be convenient right now.
+5. **Sprint 23 update: a `user_store_roles` row is now created here too**, in the same
+   transaction — `role: 'owner'`, reusing `user_id` as this row's own id (a natural 1:1, per
+   [roles-permissions/specification.md §3](../../modules/roles-permissions/specification.md#3-database-tables-and-relationships)).
+   Before Sprint 23, this section correctly noted that no such row was created, since Roles &
+   Permissions didn't exist yet; that gap is now closed — the onboarding user is formally the
+   Owner the moment onboarding completes, and every permission check added since Sprint 23
+   recognises them as such immediately.
 
 **Retry behaviour:** a retry with the *same* `tenant_id`/`store_id`/`user_id` (e.g. a client that
 never received the first response) is a normal idempotent replay — `INSERT ... ON CONFLICT (id) DO
@@ -82,12 +82,20 @@ constraint, rather than silently merged or treated as equivalent to the first ca
 
 ## Users & roles
 
+**Implementation note (Sprint 23, [roles-permissions/specification.md](../../modules/roles-permissions/specification.md)):**
+all four rows below are built and live-verified. **`POST /users/invite`'s mechanism is corrected
+from this section's original wording** — there is no separate "pending record" state at all.
+Supabase Admin's `inviteUserByEmail` creates the (unconfirmed) Auth identity **synchronously** and
+returns its real `auth_user_id` immediately; the `users` row is created against that id in the same
+call. "The invitee completes signup" now just means they set a password and start using an
+identity that already fully exists in this system — not a later linking step.
+
 | Method & path | Permission | Offline | Idempotent | Notes |
 | --- | --- | --- | --- | --- |
-| `GET /users` | Manager, Owner | Read cached | N/A | Returns each user's current role per [user_store_roles](../../07-database/schema-server.md), filtered to non-revoked assignments. |
-| `POST /users/invite` | Owner | No | Creation mechanism (client `id`) | Creates a pending user record; actual Supabase Auth identity is established when the invitee completes signup — this endpoint records intent, not a live account. |
+| `GET /users` | Manager, Owner | Read cached | N/A | Returns each user's current role per [user_store_roles](../../07-database/schema-server.md), filtered to non-revoked assignments and joined against `deactivated_at`. |
+| `POST /users/invite` | Owner | No | Creation mechanism (client `id`) | Creates the Auth identity via `admin.inviteUserByEmail`, then the `users` row and its initial `user_store_roles` row, transactionally, against that identity's real `auth_user_id` — see the implementation note above. |
 | `PATCH /users/{id}/role` | Owner | No | State-transition | Writes a **new** `user_store_roles` row and sets `revoked_at` on the prior one — roles are versioned, never updated in place, per [DR-019](../../03-functional-requirements/business-rules.md)–[DR-021](../../03-functional-requirements/business-rules.md), preserving who-could-do-what-when for audit. |
-| `DELETE /users/{id}` | Owner | No | State-transition | Sets `deactivated_at` (Tier 1 soft delete) — never a hard delete, per [ADR-0009](../../adr/ADR-0009-soft-delete-for-reference-data-no-delete-for-ledger-data.md). |
+| `DELETE /users/{id}` | Owner | No | State-transition | Sets `deactivated_at` (Tier 1 soft delete) — never a hard delete, per [ADR-0009](../../adr/ADR-0009-soft-delete-for-reference-data-no-delete-for-ledger-data.md). Role resolution excludes a deactivated user's assignments by construction; no separate role-revocation write is needed or performed. |
 
 ## Devices
 
@@ -99,9 +107,16 @@ constraint, rather than silently merged or treated as equivalent to the first ca
 
 ## Audit log
 
+**Built this sprint** (Sprint 23) — see [audit-log/specification.md](../../modules/audit-log/specification.md).
+**Correction to this table's own Permission cell**: it read "Owner" only, inconsistent with
+[permission-matrix.md](../../05-personas/permission-matrix.md)/[audit-model.md §3](../../07-database/audit-model.md#3-who-can-read-it)'s
+already-established "Owner **and Manager**, not Cashier" — a stale Phase-11 cell, not a newer,
+more-restrictive decision; corrected to match the two documents that actually derived this rule,
+implemented and live-verified as Manager+Owner.
+
 | Method & path | Permission | Offline | Idempotent | Notes |
 | --- | --- | --- | --- | --- |
-| `GET /audit-log` | Owner | Read cached (list is typically viewed back-office, online) | N/A | Cursor-paginated on `(tenant_id, created_at)`. Filters: `entity_type`, `entity_id`, `date_from`, `date_to`. This table is **never written to directly by any client-facing endpoint** — every mutating endpoint across every module writes its own audit row server-side as part of the same transaction as the business mutation, per [BR-009](../../02-business-requirements/business-requirements.md). There is no `POST /audit-log`. |
+| `GET /audit-log` | Manager, Owner | Read cached (list is typically viewed back-office, online) | N/A | Cursor-paginated on `(created_at, id)`. Filters: `entity_type`, `entity_id`, `date_from`, `date_to`. This table is **never written to directly by any client-facing endpoint** — every mutating endpoint across every module writes its own audit row server-side as part of the same transaction as the business mutation, per [BR-009](../../02-business-requirements/business-requirements.md). There is no `POST /audit-log`. |
 
 ## Errors specific to this module
 
@@ -109,6 +124,7 @@ constraint, rather than silently merged or treated as equivalent to the first ca
 | --- | --- | --- |
 | `DEVICE_REVOKED` | 401 | See [authentication.md §4](../authentication.md#4-device-binding-and-revocation--checked-on-every-request-not-only-at-token-mint). |
 | `LAST_OWNER_CANNOT_BE_REMOVED` | 409 | `PATCH /users/{id}/role` or `DELETE /users/{id}` would leave the tenant with zero active Owners — rejected outright, since that is an unrecoverable lockout, not a business choice to allow. |
+| `EMAIL_ALREADY_REGISTERED` | 409 | **New (Sprint 23).** `POST /users/invite`'s `email` already has a Supabase Auth identity — Supabase Admin's own duplicate-email rejection, translated to a named code. |
 | `ALREADY_ONBOARDED` | 409 | See the Onboarding section above. |
 
 ## Change Log
@@ -117,3 +133,4 @@ constraint, rather than silently merged or treated as equivalent to the first ca
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial identity/device/audit endpoint set. |
 | 0.2.0 | 2026-08-01 | Added the Onboarding section (`POST /api/v1/onboarding`) — a genuine gap found at Phase 18 implementation time: nothing in this phase previously specified how the very first tenant/store/user rows are created, only the sign-in flow for an identity that already has them. |
+| 0.3.0 | 2026-08-14 | Sprint 23: `GET/POST/PATCH/DELETE /users*` and `GET /audit-log` all built and live-verified. Onboarding now also creates the initial `owner` role row. `POST /users/invite`'s mechanism corrected — no separate "pending record" state, Supabase Admin's `inviteUserByEmail` creates the real identity synchronously. Audit log's Permission cell corrected from "Owner" to "Manager, Owner" (a stale Phase-11 cell, inconsistent with permission-matrix.md/audit-model.md's own already-established rule). Added `EMAIL_ALREADY_REGISTERED`. |

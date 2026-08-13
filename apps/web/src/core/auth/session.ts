@@ -1,6 +1,10 @@
 import type { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { ApiError } from "@/core/errors/api-error";
+import * as identityService from "@/modules/identity/service";
+import * as storesService from "@/modules/stores/service";
+import * as rolesService from "@/modules/roles/service";
+import type { Role } from "@/modules/roles/schema";
 
 // The mobile API contract (app/api/v1/*) is called with `Authorization: Bearer <token>`, never
 // cookies -- a mobile client has no cookie jar in the browser-session sense. Cookie-based
@@ -115,4 +119,49 @@ export async function requireSession(request: NextRequest): Promise<Authenticate
   }
 
   return { authUserId: user.id, tenantId };
+}
+
+/**
+ * Resolves the authenticated, tenant-scoped, **role-checked** session for a Route Handler request
+ * — the "one place those steps are added to later" `requireSession`'s own docstring already
+ * promised. Implements steps 1, 3, 4, and 5 of
+ * docs/12-security/authorisation-model.md §2's evaluation order: (1)/(3) via `requireSession`
+ * above, (4) resolve the current role from `user_store_roles` (docs/modules/roles-permissions/specification.md),
+ * (5) check it against `allowedRoles` — the static per-endpoint permission table, expressed here as
+ * this function's own call-site argument rather than a separate lookup table, since every Route
+ * Handler already names its own required roles inline. Step 2 (device revocation) remains
+ * unimplemented — no `devices` table exists in code yet, a continuing, named gap (module registry).
+ *
+ * Fail-closed throughout (DR-017): no active role resolved, or the resolved role isn't in
+ * `allowedRoles`, both throw `403 PERMISSION_DENIED` — never a silent allow.
+ *
+ * **Accepted redundancy:** this re-resolves `userId`/`storeId` via `identityService`/`storesService`,
+ * which the called service function almost always resolves again for its own purposes — a second
+ * round trip per request, not eliminated by threading the values through, to avoid changing every
+ * existing service function's signature for a low-traffic, single-founder-scale product
+ * (docs/modules/roles-permissions/specification.md §2).
+ */
+export interface AuthorizedSession extends AuthenticatedSession {
+  userId: string;
+  storeId: string;
+  role: Role;
+}
+
+export async function requirePermission(
+  request: NextRequest,
+  allowedRoles: readonly Role[],
+): Promise<AuthorizedSession> {
+  const session = await requireSession(request);
+  const userId = await identityService.resolveUserId(session.authUserId);
+  const storeId = await storesService.getPrimaryStoreId(session.tenantId);
+  const role = await rolesService.resolveActiveRole(session.tenantId, userId, storeId);
+
+  if (!role) {
+    throw new ApiError(403, "PERMISSION_DENIED", "No active role assigned at this store.");
+  }
+  if (!allowedRoles.includes(role)) {
+    throw new ApiError(403, "PERMISSION_DENIED", `Role '${role}' cannot perform this action.`);
+  }
+
+  return { ...session, userId, storeId, role };
 }

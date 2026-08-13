@@ -42,8 +42,9 @@ function formatStockMovement(movement: {
  * 'adjustment' — see §1 for why 'opening' is excluded at the schema layer entirely rather than
  * rejected here alongside 'sale'/'return'.
  *
- * No permission check beyond a valid tenant-scoped session — Roles & Permissions doesn't exist yet
- * (§4 of the spec), the same named scope boundary every M1 module before it has used.
+ * Permission enforcement (Manager/Owner for both creation and listing, per inventory.md's own
+ * documented Permission column) is applied by the Route Handler's own `requirePermission` call
+ * (Sprint 23, docs/modules/roles-permissions/specification.md), not here.
  */
 export async function createStockMovement(
   authUserId: string,

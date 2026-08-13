@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireSession } from "@/core/auth/session";
+import { requirePermission } from "@/core/auth/session";
 import { ApiError } from "@/core/errors/api-error";
 import { createSale } from "@/modules/pos/service";
 import { createSaleRequestSchema } from "@/modules/pos/schema";
@@ -9,7 +9,7 @@ import { createSaleRequestSchema } from "@/modules/pos/schema";
 
 export async function POST(request: NextRequest) {
   try {
-    const { authUserId, tenantId } = await requireSession(request);
+    const { authUserId, tenantId } = await requirePermission(request, ["cashier", "manager", "owner"]);
 
     const body = await request.json();
     const parsed = createSaleRequestSchema.safeParse(body);
