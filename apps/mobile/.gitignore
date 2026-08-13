@@ -43,6 +43,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+/android/build/
+/android/.kotlin/
 
 # Machine-specific SDK path — every checkout writes its own, per Flutter's own convention
 /android/local.properties
