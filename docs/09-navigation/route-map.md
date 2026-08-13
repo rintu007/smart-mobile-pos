@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 09 — Navigation
-> **Version:** 0.1.2
-> **Last updated:** 2026-08-02
+> **Version:** 0.1.3
+> **Last updated:** 2026-08-14
 > **Owner:** UI-UX Lead / Principal Flutter Engineer
 > **Approved by:** _pending_
 
@@ -50,8 +50,8 @@ invented fresh here.
 | `/catalogue` | Cashier+ (view), Manager+ (edit) | Yes | Product list |
 | `/catalogue/add` | Manager+ (edit) | Yes | Add a product — omitted from the original route list (added 2026-08-02, Sprint 07 planning); `/catalogue/:id` covered viewing/editing an *existing* product but nothing covered creating a new one |
 | `/catalogue/:id` | Cashier+ (view), Manager+ (edit) | Yes | Product detail |
-| `/catalogue/categories` | Manager+ | Yes | |
-| `/catalogue/units` | Manager+ | Yes | |
+| `/catalogue/categories` | Manager+ | Partially — see 2026-08-14 correction below | Built Sprint 20 |
+| `/catalogue/units` | Manager+ | Partially — see 2026-08-14 correction below | Built Sprint 20 |
 | `/catalogue/inventory` | Cashier+ (view) | Yes | Stock balance list — [BR-024](../02-business-requirements/business-requirements.md) |
 | `/catalogue/inventory/opening-stock` | Manager+ | Yes | [FR-040](../03-functional-requirements/functional-requirements.md) |
 | `/catalogue/inventory/:productId/adjust` | Manager+ | Yes | [FR-043](../03-functional-requirements/functional-requirements.md) |
@@ -96,3 +96,4 @@ none are left blank pending "figure out later."
 | 0.1.0 | 2026-07-30 | Initial route map: 6 pre-shell + 35 shell routes (13 Till, 9 Catalogue, 5 Reports, 8 Settings) — 41 total. |
 | 0.1.1 | 2026-07-31 | **Correction:** the route count was originally miscounted as "4 pre-shell + 34 shell" (38 total); recounting the tables above gives 6 + 35 = 41. No routes were added or removed — the earlier figure simply undercounted what was already here. |
 | 0.1.2 | 2026-08-02 | **Correction:** added `/catalogue/add`, missing from the original decomposition — `/catalogue/:id` covered an existing product's detail/edit but nothing covered creating a new one, found while planning Sprint 07's mobile product-creation screen. Total is now 6 pre-shell + 36 shell = 42. |
+| 0.1.3 | 2026-08-14 | **Correction, found building Sprint 20:** `/catalogue/categories`/`/catalogue/units` were marked flatly "Offline: Yes," but the sync engine has no `category.create`/`unit.create` push operation type (only `product.create`/`sale.create` exist) — building that is real backend scope this sprint didn't do. Both routes are offline-capable for *reads* (a local cache) but require connectivity to *create* — corrected here rather than left overstated, same reasoning as `categories/specification.md §7`'s identical correction. |

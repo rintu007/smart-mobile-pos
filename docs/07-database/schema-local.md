@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 07 — Database Design
-> **Version:** 0.1.3
-> **Last updated:** 2026-08-02
+> **Version:** 0.1.4
+> **Last updated:** 2026-08-14
 > **Owner:** Principal Flutter Engineer / PostgreSQL Architect
 > **Approved by:** _pending_
 
@@ -39,7 +39,8 @@ actual V1 tables:
 | Server table | Local divergence |
 | --- | --- |
 | `tenants`, `stores` | Cached read-only; a device stores exactly one row of each (its own tenant/store), not a list. |
-| `products`, `categories`, `units` | Full local read/write copy, matching the server shape (`updated_at` retained, needed both to detect a newer pulled version **and** to know a locally-made edit is pending outbound sync) — see the corrected classification above; this is not a read-only cache. |
+| `products` | Full local read/write copy, matching the server shape (`updated_at` retained, needed both to detect a newer pulled version **and** to know a locally-made edit is pending outbound sync) — see the corrected classification above; this is not a read-only cache. Queued via `outbound_queue` (`product.create`), per the sync engine's actual support. |
+| `categories`, `units` | **Correction, found building Sprint 20 (2026-08-14):** this row previously claimed the same full read/write, queued-via-`outbound_queue` shape as `products`. In fact the sync engine has no `category.create`/`unit.create` push operation type — only `product.create`/`sale.create` exist. Built instead the same way `shop_settings` below already does: full local read cache, but **the write path is not offline-capable** — creating a category/unit calls the server directly and caches the result locally only on success, never queued. This is not a new pattern invented for this correction; it's `shop_settings`' own already-approved precedent, applied here for the identical reason. |
 | `product_variants`, `batches` | Read-only cache, currently always empty (no V1 write path for anyone — see classification above); no `updated_at`/`created_by` tracking needed locally beyond a single `synced_at` column. |
 | `users`, `user_store_roles`, `devices` | Cached **only for the current device's own user** and any names needed for display (e.g. "approved by X") — not a full tenant-wide user list, to avoid syncing other staff's session/device metadata to every phone unnecessarily. |
 | `audit_log` | **Not synced to devices as a readable cache at all.** Devices write new audit entries (queued outbound) but never pull audit history down — the audit log is a server/reporting concern, not something a till needs to browse. `audit-model.md` states who *can* read it (via the API, online), which is not the same as it living on-device. |
@@ -114,3 +115,4 @@ redesign — the server schema already holds the full history regardless.
 | 0.1.1 | 2026-07-31 | **Correction, found during Phase 13:** `categories`/`units`/`products` were misclassified as server-authoritative (grouped with identity data under an FR-019 justification that only actually applies to role changes). Reclassified as client-editable, matching [endpoints/catalogue.md](../11-api/endpoints/catalogue.md)'s already-specified offline write path — no design changed, the schema-local.md classification was simply wrong and now matches Phase 11. |
 | 0.1.2 | 2026-07-31 | **Correction, found during a pre-Phase-18 documentation audit:** the divergence table omitted `customers` and `shop_settings` entirely, despite both being listed in the entity-classification table above it. Added. |
 | 0.1.3 | 2026-08-02 | Sprint 09: `local_provisional_sequence` built. Added `device_identity`, a local-only table not previously listed in this document — the local half of ADR-0008's device-scoped numbering, needed the moment a real mobile write path (the till screen) had to produce a real invoice number. |
+| 0.1.4 | 2026-08-14 | **Correction, found building Sprint 20:** `categories`/`units` were grouped with `products` as "full local read/write copy... queued via outbound_queue," but the sync engine never gained a `category.create`/`unit.create` push type. Split their divergence-table row out from `products`' own and corrected it to match `shop_settings`' already-approved "read cache, online-only write" shape instead. |

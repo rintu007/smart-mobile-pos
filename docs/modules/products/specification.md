@@ -6,7 +6,7 @@
 > [mobile-structure.md](../../08-folder-structure/mobile-structure.md)'s own note that the two
 > groupings are different, valid axes over the same modules)
 > **Slice:** V1 — this document scopes only M0's minimal first cut, not the full V1 shape (§1)
-> **Version:** 0.4.0
+> **Version:** 0.5.0
 > **Last updated:** 2026-08-14
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
@@ -156,6 +156,17 @@ screen is composed in patterns.md), so it follows components.md §1/§2's generi
 states. The product **list** screen (`/catalogue`) itself is not yet built — this sprint only
 built the add flow, reachable directly rather than through a list that doesn't exist yet.
 
+**Extended Sprint 20** (backlog item 4): the screen gains two required dropdowns, Category and
+Unit, sourced from the new [`/catalogue/categories`](../categories/specification.md#9-ui-specification)/
+[`/catalogue/units`](../units/specification.md#9-ui-specification) local caches — form validation
+rejects submission until both are selected. This is a **UI-level** requirement only
+(`ProductRepository.createProduct`'s own docstring): the server's `POST /api/v1/products` still
+accepts both as optional (§1's Sprint 19 correction). A tenant with zero categories/units shows an
+empty dropdown with no way to proceed from this screen alone — the Manager is expected to visit
+`/catalogue/categories`/`/catalogue/units` first (reachable from the home screen, same as
+`/catalogue/add` itself); no inline "create one now" shortcut was built this sprint, a real, minor
+UX gap named rather than silently absorbed.
+
 ## 10. Test plan
 
 **Sprint 19 scope:**
@@ -222,3 +233,4 @@ category/unit picker UI (backlog item 4).
 | 0.2.0 | 2026-08-02 | Sprint 07: mobile local write path built (`DriftProductRepository`, `/catalogue/add`) — local write and `outbound_queue` enqueue atomic in one Drift transaction, idempotent on `id`, verified against a real on-disk file. Nothing yet drains the queue (sync engine, backlog item 9) — named explicitly, not claimed as full offline support. |
 | 0.3.0 | 2026-08-13 | Sprint 11: `POST /api/v1/products` gains an optional `initial_quantity`, producing one `opening` stock movement in the same transaction as the product row — see [inventory/specification.md](../inventory/specification.md). Mobile still sends no `initial_quantity` (unchanged this sprint), so every mobile-created product gets a zero-quantity opening movement until a later sprint adds the field to `/catalogue/add`. |
 | 0.4.0 | 2026-08-14 | Sprint 19 (backlog item 3): `category_id`/`unit_id`/`sku`/`barcode`/`hsn_sac_code` added to `POST /api/v1/products`, all optional — a deliberate, dated correction against backlog.md item 3's "required" wording, found by querying live production data before writing code: 4 real products already exist without these fields, and mobile can't supply them until backlog item 4's catalogue UI ships. Closes FR-033 in full; FR-032/FR-035's *required* half stays open, named, tracked to a follow-up sprint once item 4 exists. Added `SKU_ALREADY_ASSIGNED` alongside the pre-existing `BARCODE_ALREADY_ASSIGNED`. Live-verified: legacy shape still works (the regression check), full-shape creation, idempotent replay, `NOT_FOUND` for missing/cross-tenant category_id/unit_id, both uniqueness conflicts, per-tenant (not global) uniqueness — 9/9 checks, no new bug. |
+| 0.5.0 | 2026-08-14 | Sprint 20 (backlog item 4): `/catalogue/add` extended with required Category/Unit dropdowns, sourced from the new mobile catalogue screens. A UI-level requirement only — the server endpoint itself stays optional (§1). Local `Products` table gains nullable `category_id`/`unit_id` columns; the `product.create` sync-push payload now carries real values, no backend change needed since Sprint 19 already accepts them. |

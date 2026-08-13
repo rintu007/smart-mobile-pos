@@ -25,6 +25,8 @@ class CreateProductController extends AsyncNotifier<Product?> {
   Future<void> createProduct({
     required String name,
     required int priceMinorUnits,
+    required String categoryId,
+    required String unitId,
   }) async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(
@@ -34,6 +36,8 @@ class CreateProductController extends AsyncNotifier<Product?> {
             id: const Uuid().v4(),
             name: name,
             priceMinorUnits: priceMinorUnits,
+            categoryId: categoryId,
+            unitId: unitId,
           ),
     );
   }

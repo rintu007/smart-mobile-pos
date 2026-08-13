@@ -12,9 +12,10 @@ import 'providers.dart';
 /// root, same category as router.dart). Exists only to prove the local
 /// database opens and is queryable, to offer sign-out (Sprint 06), a way to
 /// reach `/catalogue/add` (Sprint 07), to trigger the store-context
-/// bootstrap the till screen depends on (Sprint 08), and now a way to reach
-/// `/pos` (Sprint 09) — until a real bottom-nav shell
-/// (navigation-model.md) replaces this as the actual home destination.
+/// bootstrap the till screen depends on (Sprint 08), a way to reach `/pos`
+/// (Sprint 09), and now `/catalogue/categories`/`/catalogue/units` (Sprint
+/// 20) — until a real bottom-nav shell (navigation-model.md) replaces this
+/// as the actual home destination.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
@@ -78,6 +79,18 @@ class HomeScreen extends ConsumerWidget {
               key: const Key('sync_now_button'),
               onPressed: () => ref.read(syncControllerProvider.notifier).syncNow(),
               child: const Text('Sync now'),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              key: const Key('go_to_categories_button'),
+              onPressed: () => context.push('/catalogue/categories'),
+              child: const Text('Categories'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton(
+              key: const Key('go_to_units_button'),
+              onPressed: () => context.push('/catalogue/units'),
+              child: const Text('Units'),
             ),
           ],
         ),

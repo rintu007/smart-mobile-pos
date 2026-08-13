@@ -25,6 +25,8 @@ class DriftProductRepository implements ProductRepository {
     required String id,
     required String name,
     required int priceMinorUnits,
+    required String categoryId,
+    required String unitId,
   }) {
     return _db.transaction(() async {
       final existing = await (_db.select(
@@ -35,6 +37,8 @@ class DriftProductRepository implements ProductRepository {
           id: existing.id,
           name: existing.name,
           priceMinorUnits: existing.priceMinorUnits,
+          categoryId: existing.categoryId,
+          unitId: existing.unitId,
         );
       }
 
@@ -45,17 +49,23 @@ class DriftProductRepository implements ProductRepository {
               id: id,
               name: name,
               priceMinorUnits: priceMinorUnits,
+              categoryId: Value(categoryId),
+              unitId: Value(unitId),
             ),
           );
 
       // Payload matches POST /api/v1/products' own request shape exactly —
       // sync-api.md §1: "push does not define a second, parallel request
       // schema" — so the future sync engine can hand this straight to the
-      // same service logic the direct endpoint uses.
+      // same service logic the direct endpoint uses. category_id/unit_id
+      // added Sprint 20 — the server has accepted them as optional fields
+      // since Sprint 19, so no backend change is needed to carry real values.
       final payload = jsonEncode({
         'id': id,
         'name': name,
         'price_minor_units': priceMinorUnits,
+        'category_id': categoryId,
+        'unit_id': unitId,
       });
       await _db
           .into(_db.outboundQueue)
@@ -67,7 +77,13 @@ class DriftProductRepository implements ProductRepository {
             ),
           );
 
-      return Product(id: id, name: name, priceMinorUnits: priceMinorUnits);
+      return Product(
+        id: id,
+        name: name,
+        priceMinorUnits: priceMinorUnits,
+        categoryId: categoryId,
+        unitId: unitId,
+      );
     });
   }
 
@@ -83,6 +99,8 @@ class DriftProductRepository implements ProductRepository {
             id: row.id,
             name: row.name,
             priceMinorUnits: row.priceMinorUnits,
+            categoryId: row.categoryId,
+            unitId: row.unitId,
           ),
         )
         .toList();
