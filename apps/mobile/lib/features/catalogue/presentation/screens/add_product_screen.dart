@@ -2,13 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/money/money.dart';
+import '../providers/category_providers.dart';
 import '../providers/product_providers.dart';
+import '../providers/unit_providers.dart';
 
 /// `/catalogue/add`, per route-map.md (added this sprint — see its own
 /// changelog). No dedicated design-system spec for this screen exists yet
 /// (only the till screen is composed in patterns.md), so this follows
 /// components.md §1/§2's generic button/text-field states, same reasoning
 /// `LoginScreen` already used.
+///
+/// Sprint 20 (backlog item 4) adds required category/unit selection — a
+/// UI-level requirement (`ProductRepository.createProduct`'s own docstring),
+/// not a server one.
 class AddProductScreen extends ConsumerStatefulWidget {
   const AddProductScreen({super.key});
 
@@ -20,6 +26,8 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
+  String? _categoryId;
+  String? _unitId;
 
   @override
   void dispose() {
@@ -37,6 +45,8 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         .createProduct(
           name: _nameController.text.trim(),
           priceMinorUnits: priceMinorUnits,
+          categoryId: _categoryId!,
+          unitId: _unitId!,
         );
     if (!mounted) return;
     final state = ref.read(createProductControllerProvider);
@@ -50,6 +60,8 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
     final createState = ref.watch(createProductControllerProvider);
     final isLoading = createState.isLoading;
     final colorScheme = Theme.of(context).colorScheme;
+    final categories = ref.watch(categoriesListProvider);
+    final units = ref.watch(unitsListProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Add product')),
@@ -100,6 +112,59 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
                         return null;
                       },
                       onFieldSubmitted: (_) => _submit(),
+                    ),
+                    const SizedBox(height: 16),
+                    categories.when(
+                      data: (items) => DropdownButtonFormField<String>(
+                        key: const Key('add_product_category_field'),
+                        initialValue: _categoryId,
+                        decoration: const InputDecoration(
+                          labelText: 'Category',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: items
+                            .map(
+                              (category) => DropdownMenuItem(
+                                value: category.id,
+                                child: Text(category.name),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: isLoading
+                            ? null
+                            : (value) => setState(() => _categoryId = value),
+                        validator: (value) =>
+                            value == null ? 'Select a category.' : null,
+                      ),
+                      loading: () => const LinearProgressIndicator(),
+                      error: (error, stack) =>
+                          const Text('Could not load categories.'),
+                    ),
+                    const SizedBox(height: 16),
+                    units.when(
+                      data: (items) => DropdownButtonFormField<String>(
+                        key: const Key('add_product_unit_field'),
+                        initialValue: _unitId,
+                        decoration: const InputDecoration(
+                          labelText: 'Unit',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: items
+                            .map(
+                              (unit) => DropdownMenuItem(
+                                value: unit.id,
+                                child: Text('${unit.name} (${unit.symbol})'),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: isLoading
+                            ? null
+                            : (value) => setState(() => _unitId = value),
+                        validator: (value) =>
+                            value == null ? 'Select a unit.' : null,
+                      ),
+                      loading: () => const LinearProgressIndicator(),
+                      error: (error, stack) => const Text('Could not load units.'),
                     ),
                     if (createState.hasError) ...[
                       const SizedBox(height: 16),

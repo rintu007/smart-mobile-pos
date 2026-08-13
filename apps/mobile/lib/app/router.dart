@@ -8,6 +8,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/auth/session.dart';
 import '../features/authentication/presentation/screens/login_screen.dart';
 import '../features/catalogue/presentation/screens/add_product_screen.dart';
+import '../features/catalogue/presentation/screens/categories_screen.dart';
+import '../features/catalogue/presentation/screens/units_screen.dart';
 import '../features/pos/presentation/screens/till_screen.dart';
 import '../features/sales_history/presentation/screens/sale_detail_screen.dart';
 import '../features/sales_history/presentation/screens/sales_history_screen.dart';
@@ -59,6 +61,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/catalogue/add',
         builder: (context, state) => const AddProductScreen(),
+      ),
+      GoRoute(
+        path: '/catalogue/categories',
+        builder: (context, state) => const CategoriesScreen(),
+      ),
+      GoRoute(
+        path: '/catalogue/units',
+        builder: (context, state) => const UnitsScreen(),
       ),
       GoRoute(path: '/pos', builder: (context, state) => const TillScreen()),
       GoRoute(

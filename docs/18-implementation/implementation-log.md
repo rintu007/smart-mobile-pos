@@ -2,7 +2,7 @@
 
 > **Status:** 🟡 In progress
 > **Phase:** 18 — Implementation
-> **Version:** 0.25.0
+> **Version:** 0.26.0
 > **Last updated:** 2026-08-14
 > **Owner:** CTO / All engineering roles
 
@@ -895,6 +895,37 @@ creation, idempotent replay, `NOT_FOUND` for a missing/cross-tenant `category_id
 barcode is accepted for a different tenant (uniqueness is per-tenant, not global). 9/9 checks
 passed, no new bug.
 
+## 2026-08-14 — Sprint 20: mobile catalogue UI (Categories/Units screens, Products updated)
+
+**What landed:** `/catalogue/categories` and `/catalogue/units` — list-plus-create-dialog screens,
+reachable from the home screen; `/catalogue/add` extended with required Category/Unit dropdowns.
+Local `Categories`/`Units` Drift tables (read caches) and nullable `category_id`/`unit_id` columns
+added to the local `Products` table — this project's **first-ever local schema migration**
+(every prior sprint shipped `schemaVersion: 1`; the founder's real device already has real local
+data from Sprint 16, so this had to be a genuine non-destructive `MigrationStrategy.onUpgrade`,
+not a reinstall-and-recreate).
+
+**Real design gap found before writing code, resolved by reusing an existing precedent, not
+inventing a new one:** the sync engine (`sync-api.md`) has exactly two push operation types —
+`product.create`/`sale.create`. Building `category.create`/`unit.create` would have been real,
+unbudgeted backend scope. Instead, category/unit creation calls the server directly
+(`POST /api/v1/categories`/`/units`, both already live since Sprint 17/18) and caches the result
+locally only on success — exactly the shape `schema-local.md`'s own `shop_settings` row already
+documents ("write path exists but is not offline-capable"). Reads are offline-capable (the local
+cache); writes require connectivity. Corrected in `categories/units/specification.md §7`,
+`schema-local.md`, and `route-map.md`, rather than silently overclaiming full offline CRUD.
+
+`/catalogue/add`'s new category/unit requirement is UI-level only — `ProductRepository
+.createProduct`'s domain interface now requires both, but the server's own `POST /api/v1/products`
+still accepts them as optional (Sprint 19). The `product.create` sync-push payload now carries real
+values; no backend change was needed since Sprint 19 already accepts them.
+
+`flutter analyze` clean; `flutter test` 89/89 (4 new repository tests × 2 entities, plus 2 new
+screen test files, plus the existing `drift_product_repository_test.dart`/
+`add_product_screen_test.dart` updated for the new required fields) — no new bug found, and the
+Drift multi-instance warning across test files remains the same benign, debug-only false positive
+noted in prior sprints.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -925,3 +956,4 @@ passed, no new bug.
 | 0.23.0 | 2026-08-14 | Sprint 17: first M1 module — Categories (`categories` table, `POST`/`GET /categories`) built and live-verified, 9/9 checks. M1 fully decomposed (8 items) in the same pass, founder-directed after M0's last item was confirmed blocked purely on external hardware. Rule 2 governs literally again. |
 | 0.24.0 | 2026-08-14 | Sprint 18: second M1 module — Units (`units` table, `POST`/`GET /units`) built and live-verified, 9/9 checks, direct sibling of Categories. `PATCH`/`DELETE`/`UNIT_FRACTIONAL_FLAG_LOCKED` deferred for the same reason Categories' were. |
 | 0.25.0 | 2026-08-14 | Sprint 19: `products` extended with `category_id`/`unit_id`/`sku`/`barcode`/`hsn_sac_code`, all optional — a dated correction against backlog.md item 3's "required" wording, found by querying live production data (4 real products, no category/unit) before writing code. Live-verified 9/9, including a regression proof that mobile's unchanged request shape still works. Added `SKU_ALREADY_ASSIGNED`. |
+| 0.26.0 | 2026-08-14 | Sprint 20: mobile `/catalogue/categories`/`/catalogue/units` built, `/catalogue/add` now requires a category/unit selection. First-ever local schema migration (non-destructive `onUpgrade`). Found and corrected a real gap: category/unit creation is online-only (no sync-push type exists for either), resolved via `shop_settings`' own existing precedent rather than a new pattern. `flutter analyze`/`flutter test` (89/89) clean, no new bug. |

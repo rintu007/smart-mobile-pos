@@ -21,16 +21,22 @@ void main() {
       id: 'product-1',
       name: 'Filter coffee',
       priceMinorUnits: 1500,
+      categoryId: 'cat-1',
+      unitId: 'unit-1',
     );
 
     expect(product.name, 'Filter coffee');
     expect(product.priceMinorUnits, 1500);
+    expect(product.categoryId, 'cat-1');
+    expect(product.unitId, 'unit-1');
 
     final productRow = await (db.select(
       db.products,
     )..where((t) => t.id.equals('product-1'))).getSingle();
     expect(productRow.name, 'Filter coffee');
     expect(productRow.priceMinorUnits, 1500);
+    expect(productRow.categoryId, 'cat-1');
+    expect(productRow.unitId, 'unit-1');
 
     final queueRow = await (db.select(
       db.outboundQueue,
@@ -41,6 +47,8 @@ void main() {
       'id': 'product-1',
       'name': 'Filter coffee',
       'price_minor_units': 1500,
+      'category_id': 'cat-1',
+      'unit_id': 'unit-1',
     });
   });
 
@@ -49,6 +57,8 @@ void main() {
       id: 'product-1',
       name: 'Filter coffee',
       priceMinorUnits: 1500,
+      categoryId: 'cat-1',
+      unitId: 'unit-1',
     );
     // A retry with the same id and even a different (stale) price should
     // return the original, not overwrite it or create a duplicate — same
@@ -57,6 +67,8 @@ void main() {
       id: 'product-1',
       name: 'Filter coffee',
       priceMinorUnits: 9999,
+      categoryId: 'cat-1',
+      unitId: 'unit-1',
     );
 
     expect(replay.priceMinorUnits, 1500);
@@ -86,6 +98,8 @@ void main() {
         id: 'product-1',
         name: 'Filter coffee',
         priceMinorUnits: 1500,
+        categoryId: 'cat-1',
+        unitId: 'unit-1',
       ),
       throwsA(anything),
     );

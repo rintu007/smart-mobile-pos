@@ -3,7 +3,7 @@
 > **Status:** 🟢 Approved
 > **Module:** Units
 > **Slice:** V1 — this document scopes only Sprint 18's minimal first cut, not the full V1 shape (§1)
-> **Version:** 0.1.0
+> **Version:** 0.2.0
 > **Last updated:** 2026-08-14
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
@@ -102,11 +102,12 @@ specified here, same reasoning as every other backend-only M0/M1 sprint.
 
 ## 7. Offline behaviour
 
-The server endpoint itself requires connectivity, same as any `POST`/`GET` — but per
-[catalogue.md](../../11-api/endpoints/catalogue.md), `POST /units` is documented as
-**offline-capable** in the full V1 design (queued via `outbound_queue`). Mobile is out of scope
-this sprint (§1, [backlog.md item 4](../../17-sprints/backlog.md#2-m1--fully-decomposed-2026-08-14-now-that-m0-has-reached-this-point)) —
-named, not silently deferred.
+Same correction as [categories/specification.md §7](../categories/specification.md#7-offline-behaviour),
+for the identical reason: the sync engine has no `unit.create` push operation type, so Sprint 20's
+`/catalogue/units` creates a unit via a **direct, online-only** `POST /api/v1/units` call, caching
+the result into a local Drift `Units` table on success. Reads are offline-capable (local cache);
+writes are not. Named here and in [schema-local.md](../../07-database/schema-local.md)/
+[route-map.md](../../09-navigation/route-map.md), not silently narrowed.
 
 ## 8. Realtime behaviour
 
@@ -114,9 +115,13 @@ None specified for V1 — no requirement found for live unit-list push to other 
 
 ## 9. UI specification
 
-None this sprint — `/catalogue/units` (route-map.md, Manager+) is mobile scope,
-[backlog.md item 4](../../17-sprints/backlog.md#2-m1--fully-decomposed-2026-08-14-now-that-m0-has-reached-this-point),
-not built yet.
+**Built Sprint 20.** `/catalogue/units` (route-map.md, Manager+) —
+`apps/mobile/lib/features/catalogue/presentation/screens/units_screen.dart`: a name-ordered list
+(empty state if none exist yet) with a FAB opening a dialog (name, symbol, an
+"allows fractional quantities" checkbox) to create a new one. Same design-system reasoning as
+`CategoriesScreen`. Also referenced from
+[products/specification.md §9](../products/specification.md#9-ui-specification): `/catalogue/add`
+now requires picking a unit created here.
 
 ## 10. Test plan
 
@@ -145,3 +150,4 @@ not built yet.
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-08-14 | First version — written to drive Sprint 18's minimal `POST`/`GET /units`. Scope deliberately narrow: create+list only, no `PATCH`/`DELETE`, no permission enforcement, no mobile UI — mirrors Categories (Sprint 17) exactly. |
+| 0.2.0 | 2026-08-14 | Sprint 20 (backlog item 4): mobile UI built — `/catalogue/units` list+create screen, local `Units` Drift table (read cache only). §7 corrected: creation calls the server directly (online-only), same reasoning as Categories' identical correction. |

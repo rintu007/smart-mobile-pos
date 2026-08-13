@@ -3,7 +3,7 @@
 > **Status:** 🟢 Approved
 > **Module:** Categories
 > **Slice:** V1 — this document scopes only Sprint 17's minimal first cut, not the full V1 shape (§1)
-> **Version:** 0.1.0
+> **Version:** 0.2.0
 > **Last updated:** 2026-08-14
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
@@ -93,11 +93,20 @@ same reasoning as every other backend-only M0 sprint.
 
 ## 7. Offline behaviour
 
-The server endpoint itself requires connectivity, same as any `POST`/`GET` — but per
+The server endpoint itself requires connectivity, same as any `POST`/`GET`. Per
 [catalogue.md](../../11-api/endpoints/catalogue.md), `POST /categories` is documented as
-**offline-capable** in the full V1 design (queued via `outbound_queue`). Mobile is out of scope
-this sprint (§1, [backlog.md item 4](../../17-sprints/backlog.md#2-m1--fully-decomposed-2026-08-14-now-that-m0-has-reached-this-point)) —
-named, not silently deferred.
+**offline-capable** in the full V1 design (queued via `outbound_queue`) — this remains **not met**
+even after Sprint 20's mobile build, and is now a considered, dated deviation rather than an
+unbuilt gap: the sync engine (`sync-api.md`) has exactly two push operation types,
+`product.create`/`sale.create` — no `category.create` exists, and adding one is real backend
+scope this sprint didn't do. Sprint 20 instead built `/catalogue/categories` (Manager+) creating
+a category via a **direct, online-only** `POST /api/v1/categories` call, caching the result into
+a local Drift `Categories` table on success. **Reads are offline-capable** (the local cache serves
+`listAll()` regardless of connectivity, refreshed best-effort on screen load); **writes are not** —
+creating a category requires connectivity. This is the one place this sprint's implementation
+diverges from [schema-local.md](../../07-database/schema-local.md)'s "full local read/write copy"
+classification, named there and in [route-map.md](../../09-navigation/route-map.md) as well, not
+silently narrowed.
 
 ## 8. Realtime behaviour
 
@@ -105,9 +114,13 @@ None specified for V1 — no requirement found for live category-list push to ot
 
 ## 9. UI specification
 
-None this sprint — `/catalogue/categories` (route-map.md, Manager+) is mobile scope,
-[backlog.md item 4](../../17-sprints/backlog.md#2-m1--fully-decomposed-2026-08-14-now-that-m0-has-reached-this-point),
-not built yet.
+**Built Sprint 20.** `/catalogue/categories` (route-map.md, Manager+) —
+`apps/mobile/lib/features/catalogue/presentation/screens/categories_screen.dart`: a name-ordered
+list (empty state if none exist yet) with a FAB opening a dialog (name field only) to create a new
+one. No dedicated design-system composition spec exists for this screen, same reasoning
+`AddProductScreen` already used — follows components.md's generic list/button/text-field states.
+Also referenced from [products/specification.md §9](../products/specification.md#9-ui-specification):
+`/catalogue/add` now requires picking a category created here.
 
 ## 10. Test plan
 
@@ -137,3 +150,4 @@ idempotency, `products.category_id`, mobile UI.
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-08-14 | First version — written to drive Sprint 17's minimal `POST`/`GET /categories`. Scope deliberately narrow: create+list only, no `PATCH`/`DELETE`, no permission enforcement, no mobile UI — all named, matching M0's own products-module precedent exactly. |
+| 0.2.0 | 2026-08-14 | Sprint 20 (backlog item 4): mobile UI built — `/catalogue/categories` list+create screen, local `Categories` Drift table (read cache only). §7 corrected: creation calls the server directly (online-only) rather than through `outbound_queue`, since no `category.create` sync-push operation type exists — a named, dated deviation from schema-local.md's full design, not a silent gap. |
