@@ -42,6 +42,7 @@ model Tenant {
   stockMovements  StockMovement[]
   auditLogEntries AuditLog[]
   categories      Category[]
+  units           Unit[]
 
   @@map("tenants")
 }
@@ -95,6 +96,7 @@ model User {
   stockMovementsCreated StockMovement[]
   auditLogEntriesActed  AuditLog[]
   categoriesCreated     Category[]
+  unitsCreated          Unit[]
 
   @@index([tenantId])
   @@map("users")
@@ -268,4 +270,26 @@ model Category {
 
   @@index([tenantId])
   @@map("categories")
+}
+
+/// M1 Sprint 18's minimal slice of docs/07-database/schema-server.md's `units` table —
+/// create+list only (backlog.md item 2), same cut as Category (Sprint 17). `deactivated_at`/
+/// `updated_at` are real columns in the full V1 design but are added once `PATCH`/`DELETE /units`
+/// land, per docs/modules/units/specification.md §3. `allowsFractional` is written now (schema-
+/// server.md's own `NOT NULL DEFAULT false`) even though nothing enforces its immutability yet —
+/// that enforcement (`UNIT_FRACTIONAL_FLAG_LOCKED`) is a `PATCH`-only concern, deferred with it.
+model Unit {
+  id                String   @id @db.Uuid
+  tenantId          String   @map("tenant_id") @db.Uuid
+  name              String
+  symbol            String
+  allowsFractional  Boolean  @default(false) @map("allows_fractional")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdBy         String   @map("created_by") @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user   User   @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@map("units")
 }

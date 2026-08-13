@@ -1,7 +1,7 @@
 # Module Registry
 
 > **Status:** 🔵 In review
-> **Version:** 0.17.0
+> **Version:** 0.18.0
 > **Last updated:** 2026-08-14
 > **Owner:** CTO
 
@@ -25,7 +25,7 @@ sections defined in [Documentation Standards](../00-governance/documentation-sta
 | Roles & Permissions | V1 | ⚪ | ⚪ | Authentication |
 | Audit Log | V1 | 🟢 [spec](audit-log/specification.md) | 🔨 (one `sale.completed` entry written server-side, atomic with the sale itself — Sprint 12; every other audit-model.md §1 trigger, including Sprint 11's own stock movements, has no audit coverage yet — named gap) | Authentication |
 | Categories | V1 | 🟢 [spec](categories/specification.md) | 🔨 (`POST`/`GET /api/v1/categories` live — Sprint 17, create+list only, live-verified with idempotent creation, cursor pagination, and a cross-tenant RLS proof; `PATCH`/`DELETE`, `products.category_id`, mobile UI, and permission enforcement all deferred — first M1 module, Rule 2 governs literally, no exception) | Store Setup |
-| Units | V1 | ⚪ | ⚪ | Store Setup |
+| Units | V1 | 🟢 [spec](units/specification.md) | 🔨 (`POST`/`GET /api/v1/units` live — Sprint 18, create+list only, live-verified with idempotent creation, cursor pagination, and a cross-tenant RLS proof; `PATCH`/`DELETE`, `UNIT_FRACTIONAL_FLAG_LOCKED`, `products.unit_id`, mobile UI, and permission enforcement all deferred — second M1 module, direct sibling of Categories) | Store Setup |
 | Products | V1 | 🟢 [spec](products/specification.md) | 🔨 (`POST /api/v1/products` live, name/price only; mobile local write path (`/catalogue/add`) live, verified against a real on-disk file (Sprint 07); a locally-created product now actually syncs to the server (Sprint 14's mobile trigger draining `outbound_queue`); `GET`/`PATCH`/`DELETE`, category/unit deferred) | Categories, Units *(named exception — see spec §1: M0's minimal slice doesn't wait on either, per the M0 exception below)* |
 | Inventory — Stock Ledger | V1 | 🟢 [spec](inventory/specification.md) | 🔨 (`opening` movement on product creation, `sale` movement on sale completion, each server-side and atomic with its triggering row — Sprint 11; no adjustment workflow, no public stock-movement/balance endpoints, no mobile UI) | Products |
 | Customers (basic) | V1 | ⚪ | ⚪ | Store Setup |
@@ -118,3 +118,4 @@ Restaurant module · Salon module · Analytics · Accountant role & accounting e
 | 0.15.0 | 2026-08-13 | Receipt & Printing specification authored and approved; moved to 🔨: Bluetooth ESC/POS receipt printing built (Sprint 15) — backlog.md item 10's software half. Physical-printer verification (MTS-01) named as a founder action, not run, matching device-matrix.md §3's own precedent for hardware this project can't test without the founder's own equipment. |
 | 0.16.0 | 2026-08-14 | Rule 2's third exception added: M0's own end-to-end proof (item 11) has one step still open (physical receipt printing, blocked on hardware the founder doesn't own), but the founder directed M1 to begin now regardless — asked and answered plainly, not assumed. M1 planning begins this version. |
 | 0.17.0 | 2026-08-14 | Categories specification authored and approved; moved to 🔨: `POST`/`GET /categories` built (Sprint 17), live-verified — the first M1 module, Rule 2 governing literally again with no exception needed. |
+| 0.18.0 | 2026-08-14 | Units specification authored and approved; moved to 🔨: `POST`/`GET /units` built (Sprint 18), live-verified — the second M1 module, direct sibling of Categories, no dependency between the two. |
