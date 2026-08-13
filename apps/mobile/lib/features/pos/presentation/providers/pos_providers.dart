@@ -17,6 +17,48 @@ final productListProvider = FutureProvider<List<Product>>((ref) {
   return ref.watch(productRepositoryProvider).listAll();
 });
 
+/// FR-034 (search fallback for a product with no barcode) / FR-036 (category
+/// filter) — both "Fully offline," so these filter the already-loaded local
+/// list in memory rather than issuing a new query; a shop's product count is
+/// small enough (catalogue.md's own "dozens, not thousands" reasoning) that
+/// this needs no dedicated Drift search query. Plain `Notifier`, not
+/// `StateProvider` — this codebase's Riverpod 3.x convention, same as
+/// `CartController` below.
+class PosSearchQueryController extends Notifier<String> {
+  @override
+  String build() => '';
+
+  void setQuery(String value) => state = value;
+}
+
+final posSearchQueryProvider = NotifierProvider<PosSearchQueryController, String>(
+  PosSearchQueryController.new,
+);
+
+class PosCategoryFilterController extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void select(String? categoryId) => state = categoryId;
+}
+
+final posCategoryFilterProvider =
+    NotifierProvider<PosCategoryFilterController, String?>(PosCategoryFilterController.new);
+
+final filteredProductListProvider = Provider<AsyncValue<List<Product>>>((ref) {
+  final productsAsync = ref.watch(productListProvider);
+  final query = ref.watch(posSearchQueryProvider).trim().toLowerCase();
+  final categoryId = ref.watch(posCategoryFilterProvider);
+
+  return productsAsync.whenData(
+    (products) => products.where((product) {
+      final matchesQuery = query.isEmpty || product.name.toLowerCase().contains(query);
+      final matchesCategory = categoryId == null || product.categoryId == categoryId;
+      return matchesQuery && matchesCategory;
+    }).toList(),
+  );
+});
+
 final invoiceNumberGeneratorProvider = Provider<InvoiceNumberGenerator>((ref) {
   return InvoiceNumberGenerator(ref.watch(appDatabaseProvider));
 });

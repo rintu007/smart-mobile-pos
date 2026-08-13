@@ -58,3 +58,59 @@ export function createProduct(
     return product;
   });
 }
+
+export interface ProductCursor {
+  updatedAt: Date;
+  id: string;
+}
+
+export interface ListProductsFilters {
+  search?: string;
+  categoryId?: string;
+  barcode?: string;
+}
+
+// (updated_at, id) cursor, per api-principles.md §4's Tier 1 convention (matches sync/repository.ts's
+// own listProductsForSync exactly — this is the second, direct-endpoint reader of the same table).
+// Fetches limit + 1 as a peek, same off-by-one fix applied from the start.
+export function listProducts(
+  tenantId: string,
+  filters: ListProductsFilters,
+  cursor: ProductCursor | null,
+  limit: number,
+) {
+  // `search` and the cursor tuple-comparison each need their own OR clause — combined via AND,
+  // never as sibling `OR` object keys, which would silently collide (the second overwriting the
+  // first) since a JS object can only hold one `OR` key.
+  return prisma.product.findMany({
+    where: {
+      tenantId,
+      ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
+      ...(filters.barcode ? { barcode: filters.barcode } : {}),
+      AND: [
+        ...(filters.search
+          ? [
+              {
+                OR: [
+                  { name: { contains: filters.search, mode: "insensitive" as const } },
+                  { sku: { contains: filters.search, mode: "insensitive" as const } },
+                ],
+              },
+            ]
+          : []),
+        ...(cursor
+          ? [
+              {
+                OR: [
+                  { updatedAt: { gt: cursor.updatedAt } },
+                  { updatedAt: cursor.updatedAt, id: { gt: cursor.id } },
+                ],
+              },
+            ]
+          : []),
+      ],
+    },
+    orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
+    take: limit + 1,
+  });
+}

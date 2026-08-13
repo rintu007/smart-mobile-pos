@@ -106,10 +106,21 @@ export async function pullProducts(tenantId: string, cursor: string | undefined,
   const nextCursor = hasMore && lastRow ? encodeCursor(lastRow) : null;
 
   return {
+    // category_id/unit_id/sku/barcode added Sprint 21 (backlog.md item 5) — a real gap found
+    // while extending this exact mapping for the mobile barcode-scan feature: Sprint 20 added
+    // these columns to the server table and the local Products table, but this pull response
+    // never carried them down, so only a device's own locally-created products ever had them —
+    // a product created on another device, or directly against the server, pulled down with both
+    // fields null regardless of what the server actually held. Fixed in the same pass, not left
+    // for a later sprint to rediscover.
     data: rows.map((product) => ({
       id: product.id,
       name: product.name,
       price_minor_units: Number(product.priceMinorUnits),
+      category_id: product.categoryId,
+      unit_id: product.unitId,
+      sku: product.sku,
+      barcode: product.barcode,
       created_at: product.createdAt.toISOString(),
       updated_at: product.updatedAt.toISOString(),
     })),

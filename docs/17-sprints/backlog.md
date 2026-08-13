@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.15.0
+> **Version:** 0.16.0
 > **Last updated:** 2026-08-14
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
@@ -59,7 +59,7 @@ reached it — M2–M4 stay at module grain below.
 | 2 | `units` table + `POST`/`GET /units` (server) — done, [Sprint 18](sprint-18.md); `PATCH`/`DELETE`, `allows_fractional` immutability (`UNIT_FRACTIONAL_FLAG_LOCKED`) deferred, same reason item 1's `PATCH`/`DELETE` are | — | 1 |
 | 3 | Extend `products`: `category_id`/`unit_id` (FK, existence-validated), `sku`/`barcode`/`hsn_sac_code` (optional) — done, [Sprint 19](sprint-19.md); **all optional, not required** — see that sprint's own dated correction (products/specification.md §1) for why "required" broke on contact with real production data | 1, 2 | 1.5 |
 | 4 | Mobile: categories/units local tables + CRUD screens (`/catalogue/categories`, `/catalogue/units`), `/catalogue/add` updated to require a category/unit selection — done, [Sprint 20](sprint-20.md); creation is online-only (no `category.create`/`unit.create` sync-push type exists — a named, dated deviation, not full offline CRUD) | 1, 2, 3 | 2 |
-| 5 | Full barcode/SKU search: `GET /products?search=&category_id=` (server) + mobile barcode scan (`mobile_scanner`, already a pubspec dependency, unused until now) wired into the till's product picker — FR-034/FR-036 | 3, 4 | 2 |
+| 5 | Full barcode/SKU search: `GET /products?search=&category_id=` (server) + mobile barcode scan wired into the till's product picker — FR-034/FR-036 — done, [Sprint 21](sprint-21.md); the till's own scan/search/filter is local-only (both FRs are "Fully offline"), the server endpoint stands as its own capability, not yet consumed by any built mobile screen | 3, 4 | 2 |
 | 6 | Full stock-movement types: `adjustment` movement + `reason_code`, public `POST`/`GET /stock-movements`, `GET /products/{id}/stock-balance` — the endpoints [inventory/specification.md §1](../modules/inventory/specification.md#1-purpose-and-business-context) named as deferred past Sprint 11 | 3 | 2 |
 | 7 | Roles & Permissions: `user_store_roles` table, role assignment, enforcement retrofitted across every endpoint built so far (products, sales, categories, units, stock-movements, sync, audit-log reads) — the one deliberately-last item so it retrofits a stable surface rather than a moving one, per [dependency-graph.md §3](../16-milestones/dependency-graph.md#3-the-three-cross-cutting-concerns--deliberately-not-on-the-critical-path)'s own "woven through every node, not sequential" framing | 1–6 | 3 |
 | 8 | Sales & Invoices, full V1 shape: GST invoice fields, canonical invoice numbers assigned at sync, `GET /sales*` server endpoints, permission enforcement | 7 | 3 |
@@ -112,3 +112,4 @@ specifically.
 | 0.13.0 | 2026-08-14 | Item 2 (units) done — [Sprint 18](sprint-18.md): `POST`/`GET /units` built and live-verified, direct sibling of item 1 (Categories). `PATCH`/`DELETE`/`UNIT_FRACTIONAL_FLAG_LOCKED` deferred for the same reason Categories' were. M1 now has items 3–8 remaining. |
 | 0.14.0 | 2026-08-14 | Item 3 (extend products) done — [Sprint 19](sprint-19.md): `category_id`/`unit_id`/`sku`/`barcode`/`hsn_sac_code` added to `POST /api/v1/products`, live-verified, 9/9 checks. Corrected this row's own "required" wording to "optional" — 4 real production products and mobile's still-unchanged `/catalogue/add` shape made "required" break on contact with reality; found by querying the live database before writing code. M1 now has items 4–8 remaining. |
 | 0.15.0 | 2026-08-14 | Item 4 (mobile catalogue UI) done — [Sprint 20](sprint-20.md): `/catalogue/categories`/`/catalogue/units` built, `/catalogue/add` now requires a category/unit selection. Found and corrected a real gap: the sync engine has no `category.create`/`unit.create` push type, so creation is online-only (`shop_settings`' own existing local-schema precedent applied, not a new pattern). `flutter test` 89/89. M1 now has items 5–8 remaining. |
+| 0.16.0 | 2026-08-14 | Item 5 (barcode/SKU search) done — [Sprint 21](sprint-21.md): `GET /api/v1/products` built and live-verified (7/7); till screen gains search/category-filter/barcode-scan, resolved locally per FR-034/FR-036's "Fully offline" classification. Found and fixed a real Sprint 20 gap: sync pull never carried category_id/unit_id/sku/barcode to devices. `flutter test` 94/94. M1 now has items 6–8 remaining. |

@@ -3,17 +3,44 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/money/money.dart';
+import '../../../catalogue/presentation/providers/category_providers.dart';
+import '../../../catalogue/presentation/providers/product_providers.dart';
 import '../providers/pos_providers.dart';
 
 /// `/pos`, per route-map.md — backlog.md item 6's till screen. No design-
 /// system composition spec exists yet beyond patterns.md's generic list/
 /// button states, same reasoning `AddProductScreen` already used.
+///
+/// Sprint 21 (backlog item 5) adds a search field, category filter chips
+/// (FR-036), and a barcode-scan button (FR-034) — all resolved against the
+/// local product cache, never the network, per those FRs' own "Fully
+/// offline" classification.
 class TillScreen extends ConsumerWidget {
   const TillScreen({super.key});
 
+  Future<void> _scanBarcode(BuildContext context, WidgetRef ref) async {
+    final barcode = await context.push<String>('/pos/scan');
+    if (barcode == null) return;
+
+    final product = await ref.read(productRepositoryProvider).findByBarcode(barcode);
+    if (!context.mounted) return;
+
+    if (product == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No product found for that barcode.', key: Key('pos_barcode_not_found')),
+        ),
+      );
+      return;
+    }
+    ref.read(cartControllerProvider.notifier).addProduct(product);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final products = ref.watch(productListProvider);
+    final products = ref.watch(filteredProductListProvider);
+    final categories = ref.watch(categoriesListProvider);
+    final selectedCategoryId = ref.watch(posCategoryFilterProvider);
     final cartLines = ref.watch(cartControllerProvider);
     final grandTotal = ref.watch(cartGrandTotalProvider);
     final completeSaleState = ref.watch(completeSaleControllerProvider);
@@ -37,6 +64,12 @@ class TillScreen extends ConsumerWidget {
         title: const Text('Till'),
         actions: [
           IconButton(
+            key: const Key('pos_scan_barcode_button'),
+            icon: const Icon(Icons.qr_code_scanner),
+            tooltip: 'Scan barcode',
+            onPressed: () => _scanBarcode(context, ref),
+          ),
+          IconButton(
             key: const Key('pos_sales_history_button'),
             icon: const Icon(Icons.receipt_long),
             tooltip: 'Sales history',
@@ -46,6 +79,57 @@ class TillScreen extends ConsumerWidget {
       ),
       body: Column(
         children: [
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: TextField(
+              key: const Key('pos_search_field'),
+              decoration: const InputDecoration(
+                labelText: 'Search products',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.search),
+              ),
+              onChanged: (value) => ref.read(posSearchQueryProvider.notifier).setQuery(value),
+            ),
+          ),
+          categories.when(
+            data: (items) => items.isEmpty
+                ? const SizedBox.shrink()
+                : SizedBox(
+                    height: 40,
+                    child: ListView(
+                      key: const Key('pos_category_filter_chips'),
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: ChoiceChip(
+                            key: const Key('pos_category_filter_all'),
+                            label: const Text('All'),
+                            selected: selectedCategoryId == null,
+                            onSelected: (_) =>
+                                ref.read(posCategoryFilterProvider.notifier).select(null),
+                          ),
+                        ),
+                        ...items.map(
+                          (category) => Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: ChoiceChip(
+                              key: Key('pos_category_filter_${category.id}'),
+                              label: Text(category.name),
+                              selected: selectedCategoryId == category.id,
+                              onSelected: (_) => ref
+                                  .read(posCategoryFilterProvider.notifier)
+                                  .select(category.id),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+            loading: () => const SizedBox.shrink(),
+            error: (error, stack) => const SizedBox.shrink(),
+          ),
           Expanded(
             child: products.when(
               data: (items) => items.isEmpty

@@ -1,14 +1,19 @@
 import 'package:drift/drift.dart';
 
-/// Sprint 20 (backlog.md item 4) adds `category_id`/`unit_id`, both nullable
+/// Sprint 20 (backlog.md item 4) added `category_id`/`unit_id`, both nullable
 /// — mirroring the server's own Sprint 19 decision (`products/specification.md
 /// §1`) to keep them optional rather than required: existing local rows from
-/// before this migration have neither, and the server itself still accepts
+/// before that migration had neither, and the server itself still accepts
 /// either omitted. `/catalogue/add`'s own form requires a selection for any
 /// *new* product going forward (backlog item 4's own wording), but that's a
-/// UI-level rule, not a schema one. `sku`/`barcode`/`hsn_sac_code`/
-/// `deactivated_at` remain out of scope — barcode scan is backlog item 5, not
-/// this sprint.
+/// UI-level rule, not a schema one.
+///
+/// Sprint 21 (backlog.md item 5) adds `sku`/`barcode`, both nullable — the
+/// till's barcode-scan lookup (FR-034/FR-036, "Fully offline") reads this
+/// column directly from the local cache, never the network, so it must be
+/// populated by the pull-sync this sprint also fixed to actually carry it
+/// down. `hsn_sac_code`/`deactivated_at` remain out of scope — no mobile
+/// feature needs either yet.
 ///
 /// No `tenant_id` — a device holds exactly one tenant's data in V1
 /// (schema-local.md's opening assumption).
@@ -21,6 +26,10 @@ class Products extends Table {
   TextColumn get categoryId => text().nullable()();
 
   TextColumn get unitId => text().nullable()();
+
+  TextColumn get sku => text().nullable()();
+
+  TextColumn get barcode => text().nullable()();
 
   /// Minor units, per ADR-0006 (money as integer, never floating point).
   /// `integer()` (not `int64()`/`BigInt`) — this app is Android-only for V1

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/database/database.dart' hide Product;
@@ -106,5 +107,30 @@ void main() {
 
     final productRows = await db.select(db.products).get();
     expect(productRows, isEmpty);
+  });
+
+  test('findByBarcode returns the matching product from the local cache', () async {
+    await db
+        .into(db.products)
+        .insert(
+          ProductsCompanion.insert(
+            id: 'product-1',
+            name: 'Amul Milk 500ml',
+            priceMinorUnits: 2800,
+            barcode: const Value('8901234567890'),
+          ),
+        );
+
+    final product = await repository.findByBarcode('8901234567890');
+
+    expect(product, isNotNull);
+    expect(product!.id, 'product-1');
+    expect(product.name, 'Amul Milk 500ml');
+  });
+
+  test('findByBarcode returns null when no local product has this barcode', () async {
+    final product = await repository.findByBarcode('0000000000000');
+
+    expect(product, isNull);
   });
 }

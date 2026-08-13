@@ -8,6 +8,9 @@
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <!-- Barcode scan, till product lookup (Sprint 21, backlog.md item 5, FR-034) —
+         mobile_scanner's own required permission. -->
+    <uses-permission android:name="android.permission.CAMERA" />
     <application
         android:label="mobile"
         android:name="${applicationName}"

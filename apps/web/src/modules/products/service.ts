@@ -3,11 +3,38 @@ import * as identityService from "@/modules/identity/service";
 import * as storesService from "@/modules/stores/service";
 import { ApiError } from "@/core/errors/api-error";
 import * as repository from "./repository";
+import type { ProductCursor } from "./repository";
 import type { CreateProductRequest } from "./schema";
 
 // Business rules live here, not in the Route Handler — docs/08-folder-structure/backend-structure.md §2.
 
 const UNIQUE_CONSTRAINT_VIOLATION = "P2002";
+
+function formatProduct(product: {
+  id: string;
+  name: string;
+  priceMinorUnits: bigint;
+  categoryId: string | null;
+  unitId: string | null;
+  sku: string | null;
+  barcode: string | null;
+  hsnSacCode: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    id: product.id,
+    name: product.name,
+    price_minor_units: Number(product.priceMinorUnits),
+    category_id: product.categoryId,
+    unit_id: product.unitId,
+    sku: product.sku,
+    barcode: product.barcode,
+    hsn_sac_code: product.hsnSacCode,
+    created_at: product.createdAt.toISOString(),
+    updated_at: product.updatedAt.toISOString(),
+  };
+}
 
 /**
  * docs/modules/products/specification.md#4-api-contract.
@@ -74,18 +101,55 @@ export async function createProduct(
     throw error;
   }
 
+  // BigInt has no native JSON representation — safe to convert to Number in formatProduct since
+  // realistic minor-unit prices are nowhere near Number.MAX_SAFE_INTEGER (2^53 - 1).
+  return formatProduct(product);
+}
+
+/**
+ * docs/modules/products/specification.md#4-api-contract — GET /api/v1/products (Sprint 21,
+ * backlog.md item 5). `search` matches name/sku; `category_id`/`barcode` are exact filters.
+ */
+export async function listProducts(
+  tenantId: string,
+  query: { cursor?: string; limit: number; search?: string; category_id?: string; barcode?: string },
+) {
+  const decodedCursor = query.cursor ? decodeCursor(query.cursor) : null;
+  const fetched = await repository.listProducts(
+    tenantId,
+    { search: query.search, categoryId: query.category_id, barcode: query.barcode },
+    decodedCursor,
+    query.limit,
+  );
+  // Peek-and-trim, same reasoning categories/units' own list already established.
+  const hasMore = fetched.length > query.limit;
+  const rows = hasMore ? fetched.slice(0, query.limit) : fetched;
+  const lastRow = rows[rows.length - 1];
+  const nextCursor = hasMore && lastRow ? encodeCursor(lastRow) : null;
+
   return {
-    id: product.id,
-    name: product.name,
-    // BigInt has no native JSON representation — safe to convert to Number here since realistic
-    // minor-unit prices are nowhere near Number.MAX_SAFE_INTEGER (2^53 - 1).
-    price_minor_units: Number(product.priceMinorUnits),
-    category_id: product.categoryId,
-    unit_id: product.unitId,
-    sku: product.sku,
-    barcode: product.barcode,
-    hsn_sac_code: product.hsnSacCode,
-    created_at: product.createdAt.toISOString(),
-    updated_at: product.updatedAt.toISOString(),
+    data: rows.map((product) => formatProduct(product)),
+    next_cursor: nextCursor,
   };
+}
+
+function encodeCursor(row: ProductCursor): string {
+  return Buffer.from(`${row.updatedAt.toISOString()}|${row.id}`).toString("base64url");
+}
+
+function decodeCursor(cursor: string): ProductCursor {
+  let updatedAtIso: string | undefined;
+  let id: string | undefined;
+  try {
+    [updatedAtIso, id] = Buffer.from(cursor, "base64url").toString("utf8").split("|");
+  } catch {
+    throw new ApiError(422, "VALIDATION_FAILED", "Malformed cursor.");
+  }
+
+  const updatedAt = updatedAtIso ? new Date(updatedAtIso) : undefined;
+  if (!updatedAt || Number.isNaN(updatedAt.getTime()) || !id) {
+    throw new ApiError(422, "VALIDATION_FAILED", "Malformed cursor.");
+  }
+
+  return { updatedAt, id };
 }

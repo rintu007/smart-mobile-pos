@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 11 — API Design
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-30
+> **Version:** 0.1.3
+> **Last updated:** 2026-08-14
 > **Owner:** Principal Next.js Engineer
 > **Approved by:** _pending_
 
@@ -48,6 +48,17 @@ not what Sprint 04 actually builds. M0's real request/response is documented in
 `name`/`price_minor_units`, no `category_id`/`unit_id`/`sku`/`barcode`/`hsn_sac_code`. Those fields
 become required/accepted once M1 lands; this endpoint's shape grows in place then, the same pattern
 already used for `stores`' `PATCH` deferral in Sprint 02.
+
+### `GET /products` implemented Sprint 21 (backlog.md item 5)
+
+`GET /api/v1/products` now exists exactly as documented above:
+[products/specification.md §4](../../modules/products/specification.md#4-api-contract). One
+clarification found while building it: the till screen's own barcode-scan/search/category-filter
+UX (FR-034/FR-036, both "Fully offline") does **not** call this endpoint — it resolves entirely
+against the mobile local cache, since NFR-002's p95 ≤ 800 ms budget and the "Fully offline"
+classification both rule out a network round trip on that path. This endpoint exists for any
+future non-offline-critical consumer (e.g. a `/catalogue` list/admin screen, not yet built), per
+this document's own original design intent — the two were never meant to be the same call.
 
 ### Request/response shape — `POST /products` (representative; others follow the same field set)
 
@@ -103,3 +114,4 @@ every subsequent endpoint document, only its one deviation (if any) is called ou
 | 0.1.0 | 2026-07-30 | Initial catalogue endpoint set: categories, units, products. product_variants deliberately has no endpoint yet. |
 | 0.1.1 | 2026-08-01 | Correction found planning Sprint 04: this document's `POST /products` shape is the full V1 contract, but backlog.md scopes M0 to name/price only and defers Categories/Units to M1 — noted inline rather than narrowing this section, since it's still the correct eventual shape. |
 | 0.1.2 | 2026-08-14 | Sprint 19: `category_id`/`unit_id`/`sku`/`barcode`/`hsn_sac_code` added to `POST /api/v1/products`, all optional rather than this document's own `NOT NULL` shape — see [products/specification.md §1](../../modules/products/specification.md#1-purpose-and-business-context)'s dated correction. Added `SKU_ALREADY_ASSIGNED`, the sibling of `BARCODE_ALREADY_ASSIGNED` this sprint's own `(tenant_id, sku)` unique constraint needed. |
+| 0.1.3 | 2026-08-14 | Sprint 21: `GET /products` implemented exactly as this document already specified — no shape change. Added a note clarifying the till's own barcode/search/category-filter UX resolves locally, not via this endpoint (FR-034/FR-036 are "Fully offline"). |

@@ -3,7 +3,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import * as identityService from "@/modules/identity/service";
 import * as storesService from "@/modules/stores/service";
 import * as repository from "./repository";
-import { createProduct } from "./service";
+import { createProduct, listProducts } from "./service";
 import type { CreateProductRequest } from "./schema";
 
 vi.mock("./repository");
@@ -163,5 +163,73 @@ describe("createProduct", () => {
     await expect(
       createProduct(authUserId, tenantId, { ...input, sku: "SKU-1" }),
     ).rejects.toMatchObject({ status: 409, code: "SKU_ALREADY_ASSIGNED" });
+  });
+});
+
+describe("listProducts", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  const product = (id: string, updatedAt: Date) => ({
+    id,
+    name: "Product",
+    priceMinorUnits: BigInt(1000),
+    categoryId: null,
+    unitId: null,
+    sku: null,
+    barcode: null,
+    hsnSacCode: null,
+    createdAt: updatedAt,
+    updatedAt,
+  });
+
+  it("returns a non-null next_cursor when more rows exist beyond the requested limit", async () => {
+    const rows = [
+      product("p1", new Date("2026-08-01T00:00:00Z")),
+      product("p2", new Date("2026-08-02T00:00:00Z")),
+      product("p3", new Date("2026-08-03T00:00:00Z")),
+    ];
+    vi.mocked(repository.listProducts).mockResolvedValue(rows as never);
+
+    const result = await listProducts(tenantId, { limit: 2 });
+
+    expect(result.data).toHaveLength(2);
+    expect(result.data.map((p) => p.id)).toEqual(["p1", "p2"]);
+    expect(result.next_cursor).not.toBeNull();
+  });
+
+  it("returns a null next_cursor when the page is partial (end of data)", async () => {
+    const rows = [product("p1", new Date("2026-08-01T00:00:00Z"))];
+    vi.mocked(repository.listProducts).mockResolvedValue(rows as never);
+
+    const result = await listProducts(tenantId, { limit: 50 });
+
+    expect(result.next_cursor).toBeNull();
+  });
+
+  it("passes search/category_id/barcode filters through to the repository", async () => {
+    vi.mocked(repository.listProducts).mockResolvedValue([] as never);
+
+    await listProducts(tenantId, {
+      limit: 50,
+      search: "milk",
+      category_id: "cat-1",
+      barcode: "8901234567890",
+    });
+
+    expect(repository.listProducts).toHaveBeenCalledWith(
+      tenantId,
+      { search: "milk", categoryId: "cat-1", barcode: "8901234567890" },
+      null,
+      50,
+    );
+  });
+
+  it("rejects a malformed cursor with VALIDATION_FAILED rather than crashing", async () => {
+    await expect(listProducts(tenantId, { cursor: "not-a-real-cursor!!", limit: 50 })).rejects.toMatchObject({
+      status: 422,
+      code: "VALIDATION_FAILED",
+    });
   });
 });

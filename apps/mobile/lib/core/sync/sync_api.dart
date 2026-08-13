@@ -57,6 +57,10 @@ Future<SyncPullPage> pullProductsPage(Dio dio, {String? cursor}) async {
           id: json['id'] as String,
           name: json['name'] as String,
           priceMinorUnits: json['price_minor_units'] as int,
+          categoryId: json['category_id'] as String?,
+          unitId: json['unit_id'] as String?,
+          sku: json['sku'] as String?,
+          barcode: json['barcode'] as String?,
         ),
       )
       .toList();
