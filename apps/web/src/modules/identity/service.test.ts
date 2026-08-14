@@ -25,13 +25,23 @@ describe("onboard", () => {
 
   it("creates a tenant, store, and user when this identity has never onboarded", async () => {
     vi.mocked(repository.findUserByAuthId).mockResolvedValue(null);
-    const created = { tenant: {}, store: {}, user: {} };
-    vi.mocked(repository.createOnboarding).mockResolvedValue(created as never);
+    const tenant = {};
+    const store = {};
+    const user = {};
+    const ownerRole = {};
+    // shopSettings (Sprint 25) is deliberately excluded from the assertion below: onboard()
+    // destructures repository.createOnboarding's result rather than returning it whole, since its
+    // BIGINT columns can't survive NextResponse.json's JSON.stringify (found live, identity.md's
+    // Sprint 25 changelog entry) — this endpoint's response shape stays exactly what it already was.
+    const shopSettings = { discountAutoApprovalThresholdMinorUnits: BigInt(50000) };
+    vi.mocked(repository.createOnboarding).mockResolvedValue(
+      { tenant, store, user, ownerRole, shopSettings } as never,
+    );
 
     const result = await onboard(authUserId, input);
 
     expect(repository.createOnboarding).toHaveBeenCalledWith({ ...input, authUserId });
-    expect(result).toBe(created);
+    expect(result).toEqual({ tenant, store, user, ownerRole });
   });
 
   it("is idempotent: a retry with the same generated ids does not throw", async () => {
@@ -39,12 +49,18 @@ describe("onboard", () => {
     vi.mocked(repository.findUserByAuthId).mockResolvedValue({
       id: input.user_id,
     } as never);
-    const created = { tenant: {}, store: {}, user: {} };
-    vi.mocked(repository.createOnboarding).mockResolvedValue(created as never);
+    const tenant = {};
+    const store = {};
+    const user = {};
+    const ownerRole = {};
+    const shopSettings = { discountAutoApprovalThresholdMinorUnits: BigInt(50000) };
+    vi.mocked(repository.createOnboarding).mockResolvedValue(
+      { tenant, store, user, ownerRole, shopSettings } as never,
+    );
 
     const result = await onboard(authUserId, input);
 
-    expect(result).toBe(created);
+    expect(result).toEqual({ tenant, store, user, ownerRole });
   });
 
   it("rejects a second distinct attempt from an already-onboarded identity", async () => {

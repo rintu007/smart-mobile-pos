@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 11 — API Design
-> **Version:** 0.3.0
+> **Version:** 0.3.1
 > **Last updated:** 2026-08-14
 > **Owner:** Principal Next.js Engineer
 > **Approved by:** _pending_
@@ -56,6 +56,14 @@ connectivity requirement; this is that step's concrete API contract.
    Permissions didn't exist yet; that gap is now closed — the onboarding user is formally the
    Owner the moment onboarding completes, and every permission check added since Sprint 23
    recognises them as such immediately.
+6. **Sprint 25 update: a `shop_settings` row is now created here too**, in the same transaction —
+   [settings/specification.md §2](../../modules/settings/specification.md#2-business-rules)'s
+   universal defaults, `tenant_id` reused as this row's own id (that table's own primary key).
+   **The response body itself is unchanged** — still the tenant/store/user/role rows named in step
+   4 above, not five. `shop_settings` carries two `BIGINT` columns, which broke
+   `NextResponse.json`'s serialization the first time this was tried (found live, not by
+   inspection): the fix was to keep this endpoint's response shape exactly as it already was, not
+   to add `BigInt`-to-`Number` formatting for a field nothing in this contract has ever returned.
 
 **Retry behaviour:** a retry with the *same* `tenant_id`/`store_id`/`user_id` (e.g. a client that
 never received the first response) is a normal idempotent replay — `INSERT ... ON CONFLICT (id) DO
@@ -134,3 +142,4 @@ implemented and live-verified as Manager+Owner.
 | 0.1.0 | 2026-07-30 | Initial identity/device/audit endpoint set. |
 | 0.2.0 | 2026-08-01 | Added the Onboarding section (`POST /api/v1/onboarding`) — a genuine gap found at Phase 18 implementation time: nothing in this phase previously specified how the very first tenant/store/user rows are created, only the sign-in flow for an identity that already has them. |
 | 0.3.0 | 2026-08-14 | Sprint 23: `GET/POST/PATCH/DELETE /users*` and `GET /audit-log` all built and live-verified. Onboarding now also creates the initial `owner` role row. `POST /users/invite`'s mechanism corrected — no separate "pending record" state, Supabase Admin's `inviteUserByEmail` creates the real identity synchronously. Audit log's Permission cell corrected from "Owner" to "Manager, Owner" (a stale Phase-11 cell, inconsistent with permission-matrix.md/audit-model.md's own already-established rule). Added `EMAIL_ALREADY_REGISTERED`. |
+| 0.3.1 | 2026-08-14 | Sprint 25: onboarding now also creates a default `shop_settings` row (backlog.md M2 item 1). Response shape confirmed unchanged — a real BigInt-serialization bug found live during this sprint's own implementation was fixed by keeping the existing response shape, not by adding the new row to it. |

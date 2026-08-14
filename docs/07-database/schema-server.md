@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 07 — Database Design
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-30
+> **Version:** 0.1.1
+> **Last updated:** 2026-08-14
 > **Owner:** PostgreSQL Architect
 > **Approved by:** _pending_
 
@@ -414,6 +414,7 @@ WF-013.
 | --- | --- | --- |
 | `tenant_id` | `UUID` | `PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE` |
 | `tax_mode` | `TEXT` | `NOT NULL CHECK (tax_mode IN ('standard','composition','unregistered'))` — [RR-001](../02-business-requirements/regulatory-requirements.md) |
+| `tax_rate_basis_points` | `INTEGER` | `NOT NULL DEFAULT 0` — a single shop-wide flat rate, applied when `tax_mode = 'standard'` and forced to `0` for `composition`/`unregistered`; see the M2 correction below for why this isn't a per-product/per-HSN rate table |
 | `pricing_mode` | `TEXT` | `NOT NULL CHECK (pricing_mode IN ('inclusive','exclusive'))` |
 | `rounding_rule` | `TEXT` | `NOT NULL` |
 | `currency_code` | `TEXT` | `NOT NULL DEFAULT 'INR'` |
@@ -423,6 +424,16 @@ WF-013.
 | `receipt_template_config` | `JSONB` | nullable — cannot disable mandatory fields, enforced at the service layer, not here ([BR-049](../02-business-requirements/business-requirements.md)) |
 
 **Indexes:** none beyond the primary key. **RLS:** tenant-scoped.
+
+**Correction, found decomposing M2 to item grain (2026-08-14, [backlog.md §3](../17-sprints/backlog.md#3-m2--fully-decomposed-2026-08-14-now-that-m1-has-reached-this-point)):**
+this table never actually named where [DR-008](../03-functional-requirements/business-rules.md)'s
+`tax_rate` comes from — `tax_mode` only distinguishes registration status, not a rate. The fully
+correct V1 shape would be a per-product or per-HSN-code slab-rate table (0/5/12/18/28% under GST),
+but no such table exists and building one is real, undiscussed scope. Resolved here as a single
+shop-wide `tax_rate_basis_points`, applied uniformly to every line — an honest simplification for
+the overwhelmingly single-rate small shops this product targets in V1, matching `products.hsn_sac_code`'s
+own precedent of staying informational rather than load-bearing. Per-product/per-HSN rates are a
+named, deferred gap (V2+), not silently assumed already solved.
 
 ### `idempotency_keys`
 **Purpose:** backs [DR-022](../03-functional-requirements/business-rules.md) for operations that
@@ -473,3 +484,4 @@ records an *anomaly to be worked*, not a financial fact; the underlying rejected
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial 22-table schema across 7 bounded contexts. Trading Day scoped per-device, resolving the Phase 06 Finding 2 open question. |
+| 0.1.1 | 2026-08-14 | Correction found decomposing M2 (backlog.md): `shop_settings` never named where DR-008's `tax_rate` comes from. Added `tax_rate_basis_points` — a single shop-wide flat rate, not a per-product/per-HSN table (named, deferred to V2+). |

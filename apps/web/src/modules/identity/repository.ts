@@ -25,7 +25,15 @@ export async function createOnboarding(input: OnboardingRequest & { authUserId: 
   // exactly one user and exactly one initial role for them), so no new generated-id field is
   // needed on the request. `assigned_by` is the user themself, the same self-referential bootstrap
   // pattern `tenants.createdBy`/`users.createdBy` already use for this exact call.
-  const [tenant, user, store, ownerRole] = await prisma.$transaction([
+  //
+  // The fifth write — one `shop_settings` row — closes a second real gap, found decomposing M2
+  // (docs/modules/settings/specification.md §1): no `shop_settings` row was ever created anywhere
+  // in code, despite Discount/Tax (M2 items 3/4) needing a real row to read. `tenant_id` is this
+  // table's own primary key, so no separate generated id is needed either. Defaults are
+  // seed-data.md's own "safest universal default" (`tax_mode: unregistered`), not yet the
+  // business-type-based per-vertical seeding that document actually specifies — a named, deferred
+  // gap since onboarding collects no business-type field.
+  const [tenant, user, store, ownerRole, shopSettings] = await prisma.$transaction([
     prisma.tenant.upsert({
       where: { id: input.tenant_id },
       create: { id: input.tenant_id, name: input.tenant_name, createdBy: input.user_id },
@@ -65,7 +73,22 @@ export async function createOnboarding(input: OnboardingRequest & { authUserId: 
       },
       update: {},
     }),
+    prisma.shopSettings.upsert({
+      where: { tenantId: input.tenant_id },
+      create: {
+        tenantId: input.tenant_id,
+        taxMode: "unregistered",
+        taxRateBasisPoints: 0,
+        pricingMode: "inclusive",
+        roundingRule: "round_half_up",
+        currencyCode: "INR",
+        discountAutoApprovalThresholdMinorUnits: BigInt(50000),
+        returnAutoApprovalThresholdMinorUnits: BigInt(100000),
+        createdBy: input.user_id,
+      },
+      update: {},
+    }),
   ]);
 
-  return { tenant, store, user, ownerRole };
+  return { tenant, store, user, ownerRole, shopSettings };
 }

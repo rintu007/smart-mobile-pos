@@ -1,0 +1,116 @@
+import * as repository from "./repository";
+import { ApiError } from "@/core/errors/api-error";
+import type { UpdateSettingsRequest } from "./schema";
+import type { Role } from "@/modules/roles/schema";
+
+// Business rules live here, not in the Route Handler — docs/08-folder-structure/backend-structure.md §2.
+
+/**
+ * docs/modules/settings/specification.md §4 — GET /api/v1/settings.
+ *
+ * Role-shaped, per settings.md's "Field-level read scope": both auto-approval thresholds are
+ * present for Manager/Owner, omitted entirely (not merely zeroed) for a Cashier — a Cashier should
+ * not be able to infer the exact figure that would trigger a Manager-approval requirement.
+ */
+export async function getSettings(tenantId: string, role: Role) {
+  const settings = await repository.findSettings(tenantId);
+
+  if (!settings) {
+    // Should not occur for any tenant onboarded after Sprint 25 (identity/repository.ts's
+    // onboarding transaction now always writes this row) — named for tenants onboarded before it,
+    // docs/modules/settings/specification.md §6.
+    throw new ApiError(404, "NOT_FOUND", "No settings exist for this tenant.");
+  }
+
+  const base = {
+    tax_mode: settings.taxMode,
+    tax_rate_basis_points: settings.taxRateBasisPoints,
+    pricing_mode: settings.pricingMode,
+    rounding_rule: settings.roundingRule,
+    currency_code: settings.currencyCode,
+    printer_config: settings.printerConfig,
+    receipt_template_config: settings.receiptTemplateConfig,
+    updated_at: settings.updatedAt.toISOString(),
+  };
+
+  if (role === "cashier") {
+    return base;
+  }
+
+  return {
+    ...base,
+    discount_auto_approval_threshold_minor_units: Number(
+      settings.discountAutoApprovalThresholdMinorUnits,
+    ),
+    return_auto_approval_threshold_minor_units: Number(
+      settings.returnAutoApprovalThresholdMinorUnits,
+    ),
+  };
+}
+
+/**
+ * docs/modules/settings/specification.md §4 — PATCH /api/v1/settings. Owner-only (enforced by the
+ * Route Handler's own `requirePermission` call, not here).
+ */
+export async function updateSettings(tenantId: string, input: UpdateSettingsRequest) {
+  const current = await repository.findSettings(tenantId);
+  if (!current) {
+    throw new ApiError(404, "NOT_FOUND", "No settings exist for this tenant.");
+  }
+
+  if (current.updatedAt.toISOString() !== input.base_updated_at) {
+    throw new ApiError(
+      409,
+      "SETTINGS_CONFLICT",
+      "Settings have changed since base_updated_at was read.",
+    );
+  }
+
+  // DR-009: composition/unregistered shops carry no tax rate. Checked against the *resulting*
+  // state (this request's fields, falling back to the current row), not just the fields present in
+  // this particular request — docs/modules/settings/specification.md §5.
+  const resultingTaxMode = input.tax_mode ?? current.taxMode;
+  const resultingTaxRate = input.tax_rate_basis_points ?? current.taxRateBasisPoints;
+  if (resultingTaxMode !== "standard" && resultingTaxRate !== 0) {
+    throw new ApiError(
+      422,
+      "TAX_RATE_REQUIRES_STANDARD_MODE",
+      "tax_rate_basis_points must be 0 unless tax_mode is 'standard'.",
+    );
+  }
+
+  const data = {
+    ...(input.tax_mode !== undefined && { taxMode: input.tax_mode }),
+    ...(input.tax_rate_basis_points !== undefined && {
+      taxRateBasisPoints: input.tax_rate_basis_points,
+    }),
+    ...(input.pricing_mode !== undefined && { pricingMode: input.pricing_mode }),
+    ...(input.rounding_rule !== undefined && { roundingRule: input.rounding_rule }),
+    ...(input.currency_code !== undefined && { currencyCode: input.currency_code }),
+    ...(input.discount_auto_approval_threshold_minor_units !== undefined && {
+      discountAutoApprovalThresholdMinorUnits: BigInt(
+        input.discount_auto_approval_threshold_minor_units,
+      ),
+    }),
+    ...(input.return_auto_approval_threshold_minor_units !== undefined && {
+      returnAutoApprovalThresholdMinorUnits: BigInt(
+        input.return_auto_approval_threshold_minor_units,
+      ),
+    }),
+  };
+
+  const applied = await repository.updateSettingsIfUnchanged(tenantId, current.updatedAt, data);
+  if (!applied) {
+    // A concurrent PATCH landed between the read above and this write — the same outcome as the
+    // base_updated_at check above, just caught at the database level instead of in JS.
+    throw new ApiError(
+      409,
+      "SETTINGS_CONFLICT",
+      "Settings have changed since base_updated_at was read.",
+    );
+  }
+
+  // Owner always sees both threshold fields — getSettings' Cashier-only omission doesn't apply to
+  // the caller of a call only an Owner can make.
+  return getSettings(tenantId, "owner");
+}
