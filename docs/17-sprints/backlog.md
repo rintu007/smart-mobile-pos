@@ -2,17 +2,17 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.16.0
+> **Version:** 0.21.0
 > **Last updated:** 2026-08-14
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
 
-Ordered, estimated, with dependencies. **M0 (Walking Skeleton) is decomposed in full, item by
-item, because it is the next thing to actually execute.** M1–M4 are listed at module grain only —
-per this documentation set's standing practice of not over-planning work several milestones away
-(the same reasoning [roadmap.md §5](../16-milestones/roadmap.md#5-v2v4--ordering-confirmed-not-yet-effort-estimated)
-already applied to V2–V4), each is decomposed to this level of detail only once M0's actual
-sprint-01.md-style planning reaches it.
+Ordered, estimated, with dependencies. **M0, M1, and M2 are decomposed in full, item by item, in
+the order planning actually reached them; M3–M4 are still listed at module grain only** — per this
+documentation set's standing practice of not over-planning work several milestones away (the same
+reasoning [roadmap.md §5](../16-milestones/roadmap.md#5-v2v4--ordering-confirmed-not-yet-effort-estimated)
+already applied to V2–V4), each decomposed to this level of detail only once actual sprint planning
+reaches it.
 
 ---
 
@@ -79,15 +79,54 @@ M1's actual prerequisites. See
 [sales-invoices/specification.md](../modules/sales-invoices/specification.md) §1 for exactly what
 that minimal slice is and isn't; item 8 above is what remains.
 
-## 2a. M2–M4 — module grain only, decomposed when reached
+## 3. M2 — fully decomposed 2026-08-14, now that M1 has reached this point
+
+Per this document's own stated practice (§ intro), M2 is decomposed to item grain only now that
+planning has actually reached it — M3–M4 stay at module grain below.
+
+**Real gap found while decomposing (not by writing code first):** [dependency-graph.md §4](../16-milestones/dependency-graph.md#4-settings--a-configuration-input-not-a-graph-dependency)
+assumed Settings' fields "simply need sensible defaults present from Setup onward," but no
+`shop_settings` row — default or otherwise — is created anywhere in code today; `identity/repository.ts`'s
+`createOnboarding` transaction only ever wrote `tenants`/`stores`/the bootstrap `user_store_roles`
+row. Discount's auto-approval threshold (DR-012) and Tax's `tax_mode`/`rounding_rule`/`pricing_mode`
+both need a real row to read, not a hard-coded constant buried in `pos/service.ts`. Item 1 below
+closes that gap before Discount/Tax are attempted, the same "found while planning, not silently
+absorbed" practice item 12/13 established for M0 and item 7 for M1.
+
+**A second real gap, in the Phase 07 design itself, not just its implementation:** neither
+`shop_settings` nor `products` carries an actual tax **rate** — `shop_settings.tax_mode` only
+distinguishes `standard`/`composition`/`unregistered` ([DR-009](../03-functional-requirements/business-rules.md)),
+and [DR-008](../03-functional-requirements/business-rules.md)'s `line_tax = round(line_taxable_value
+× tax_rate, ...)` formula never named where `tax_rate` itself comes from. Per-HSN-code GST slab
+rates (0/5/12/18/28%) would be the fully correct V1 shape, but no rate table exists and building one
+is real, undiscussed scope. Resolved here as a dated correction: **`shop_settings` gains a single
+shop-wide `tax_rate_basis_points`**, applied to every line when `tax_mode = 'standard'` (forced to
+`0` for `composition`/`unregistered`, consistent with DR-009's Bill-of-Supply framing) — a single
+flat rate is a real, honest V1 simplification for the overwhelmingly single-rate small shops this
+product targets, matching `hsn_sac_code`'s own precedent of staying optional/informational rather
+than load-bearing. Per-product/per-HSN rates are deferred, named, not silently implied as already
+solved. See [money-and-tax.md](../07-database/money-and-tax.md) and
+[schema-server.md](../07-database/schema-server.md) for the corrected `shop_settings` shape.
+
+| # | Item | Depends on | Estimate (person-days) |
+| --- | --- | --- | --- |
+| 1 | Settings, minimal slice: `shop_settings` table (incl. the `tax_rate_basis_points` correction above), a default row written in the same onboarding transaction as `tenants`/`stores`, `GET`/`PATCH /settings` with the role-shaped read scope [settings.md](../11-api/endpoints/settings.md) already specifies — done, [Sprint 25](sprint-25.md) | — | 1.5 |
+| 2 | Cash Drawer / Trading Day: `trading_days` table, `POST /trading-days/open`, `POST /trading-days/{id}/close` (server-computed `expected_cash`/`variance`), `GET /trading-days/current`; `POST /sales` gains the `TRADING_DAY_NOT_OPEN` gate. **Known open point, not resolved by this decomposition**: `trading_days.device_id` is `NOT NULL` in [schema-server.md](../07-database/schema-server.md), but no `devices` table exists yet (Authentication's still-unbuilt device-registration slice, [module registry](../modules/README.md)) — the exact adaptation (most likely scoping by `(tenant, store, user)` instead, the same shape of call Sprint 24 made for `GET /sales`'s "own device" wording) is decided when this item's own sprint is actually planned, not guessed at here | — | 2.5 |
+| 3 | Discount: per-line `discount_percent`/`discount_amount` in `POST /sales` (mutually exclusive, [DR-011](../03-functional-requirements/business-rules.md)), server-computed `line_discount_minor_units`, threshold check against `shop_settings.discount_auto_approval_threshold_minor_units` ([DR-012](../03-functional-requirements/business-rules.md)) gating on role per [DR-019](../03-functional-requirements/business-rules.md)/[DR-020](../03-functional-requirements/business-rules.md) | 1 | 2 |
+| 4 | Tax computation: `tax_mode`/`tax_rate_basis_points`/`rounding_rule`/`pricing_mode` wired into `POST /sales` per [money-and-tax.md](../07-database/money-and-tax.md)'s discount-before-tax formulas (both exclusive and inclusive worked examples), `tax_registration_type_at_sale` snapshot, the GST invoice fields [sales-invoices/specification.md](../modules/sales-invoices/specification.md) named deferred at Sprint 24 | 1, 3 | 2.5 |
+| 5 | Split Payment: `POST /sales` accepts multiple `payments` entries (`cash`/`card`/`other`), validated against the server-recomputed `grand_total_minor_units` (`PAYMENT_AMOUNT_MISMATCH` restated for the multi-entry case); cash-only sum feeds Trading Day's `expected_cash_minor_units` — schema already supports multiple `sale_payments` rows per sale (M0's `SalePayment` is a relation, not a single field), so this is validation/wiring, not a new table | 2, 4 | 1.5 |
+| 6 | Hold/Resume: `sales.status` transitions `draft`→`held`→`completed` on the client; per [sales.md](../11-api/endpoints/sales.md)'s own note a held/draft cart is never synced to the server as a partial row, so this is primarily mobile local-DB/UI work (till-screen hold list, resume-into-cart) — the server accepts a completed sale exactly as it does today regardless of what local lifecycle produced it | — | 2 |
+
+**Total: 12 person-days.** Item 1 done — see the Change Log. M2 now has items 2–6 remaining.
+
+## 3a. M3–M4 — module grain only, decomposed when reached
 
 | Milestone | Modules (decomposition pending) |
 | --- | --- |
-| M2 | Discount, tax computation, split payment, hold/resume, Trading Day |
 | M3 | Customers, Returns & Refund, conflict-resolution field-merge |
-| M4 | Reports (4), Settings, release-readiness closeout (printer/device testing, load test, adversarial suite in CI) |
+| M4 | Reports (4), release-readiness closeout (printer/device testing, load test, adversarial suite in CI) |
 
-## 3. Ordering rule, restated
+## 4. Ordering rule, restated
 
 Every dependency column above traces directly to
 [dependency-graph.md](../16-milestones/dependency-graph.md)'s critical path — item order in this
@@ -117,3 +156,5 @@ specifically.
 | 0.17.0 | 2026-08-14 | Item 6 (full stock-movement types) done — [Sprint 22](sprint-22.md): `adjustment`/`reason_code`, `POST`/`GET /api/v1/stock-movements`, `GET /api/v1/products/{id}/stock-balance` built and live-verified (9/9). Found while writing the spec: the endpoint does not accept `movement_type: 'opening'` after all — every product already gets one automatically at creation, so there's no live caller for a second, direct one — a named, dated deviation from inventory.md's original documented contract. M1 now has items 7–8 remaining. |
 | 0.18.0 | 2026-08-14 | Item 7 (Roles & Permissions) done — [Sprint 23](sprint-23.md): `user_store_roles` table, `GET/POST/PATCH/DELETE /users*` built and live-verified (12/12 for the role-management chain; `POST /users/invite` itself confirmed separately before hitting Supabase's own email rate limit). Permission enforcement retrofitted across every existing endpoint. Three real gaps found and closed in the same pass: onboarding never assigned a role, `GET /audit-log` was named as a retrofit target but never built, `POST /users/invite`'s "pending record" mechanism resolved via Supabase Admin's synchronous `inviteUserByEmail`. M1 now has only item 8 remaining. |
 | 0.19.0 | 2026-08-14 | Item 8 (Sales & Invoices, full V1 shape) done — [Sprint 24](sprint-24.md): canonical invoice numbers (ADR-0008's atomic counter) and `GET /sales/{id}`/`GET /sales`/`GET /sales/lookup` built and live-verified (7/7). GST invoice fields remain explicitly deferred (M2, tax computation doesn't exist) — exactly as this item's own estimate anticipated. **M1 is now fully closed — all 8 items done.** |
+| 0.20.0 | 2026-08-14 | M2 fully decomposed (6 items, 12 person-days) — Settings, Trading Day, Discount, Tax computation, Split Payment, Hold/Resume, in dependency order. Two real gaps found while decomposing (not by writing code first): (1) no `shop_settings` row is created anywhere in code, despite dependency-graph.md assuming "sensible defaults... from Setup onward" — added as item 1, a hard prerequisite for Discount/Tax; (2) neither `shop_settings` nor `products` ever named where DR-008's `tax_rate` actually comes from — resolved as a dated correction, a single shop-wide `tax_rate_basis_points` on `shop_settings` (per-HSN slab rates explicitly deferred, not silently assumed solved). Trading Day's `device_id NOT NULL` FK to a still-nonexistent `devices` table is named as a known open point, deliberately not resolved until that item's own sprint, matching Sprint 24's own precedent for exactly this shape of gap. |
+| 0.21.0 | 2026-08-14 | Item 1 (Settings, minimal slice) done — [Sprint 25](sprint-25.md): `shop_settings` table, a default row now written at onboarding, `GET`/`PATCH /api/v1/settings` built and live-verified (26/26). M2 now has items 2–6 remaining. |

@@ -45,6 +45,7 @@ model Tenant {
   units            Unit[]
   userStoreRoles   UserStoreRole[]
   invoiceSequences InvoiceSequence[]
+  shopSettings     ShopSettings?
 
   @@map("tenants")
 }
@@ -231,6 +232,33 @@ model InvoiceSequence {
 
   @@unique([tenantId, financialYear])
   @@map("invoice_sequences")
+}
+
+/// docs/07-database/schema-server.md's `shop_settings` (Context 7) — one row per tenant, `tenant_id`
+/// is its own primary key. `taxRateBasisPoints` is a Sprint 25 correction, not in the original
+/// Phase 07 design: schema-server.md never named where DR-008's tax_rate actually comes from. V1
+/// applies one shop-wide flat rate to every line, not a per-product/per-HSN table — see
+/// docs/07-database/money-and-tax.md §2a. `printerConfig`/`receiptTemplateConfig` exist as columns
+/// (matching schema-server.md exactly) but `PATCH /settings` rejects setting either this sprint —
+/// no printer-pairing/receipt-template flow exists yet, docs/modules/settings/specification.md §1.
+model ShopSettings {
+  tenantId                                String   @id @map("tenant_id") @db.Uuid
+  taxMode                                 String   @map("tax_mode")
+  taxRateBasisPoints                      Int      @default(0) @map("tax_rate_basis_points")
+  pricingMode                             String   @map("pricing_mode")
+  roundingRule                            String   @map("rounding_rule")
+  currencyCode                            String   @default("INR") @map("currency_code")
+  discountAutoApprovalThresholdMinorUnits BigInt   @map("discount_auto_approval_threshold_minor_units")
+  returnAutoApprovalThresholdMinorUnits   BigInt   @map("return_auto_approval_threshold_minor_units")
+  printerConfig                           Json?    @map("printer_config")
+  receiptTemplateConfig                   Json?    @map("receipt_template_config")
+  createdAt                               DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                               DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy                               String   @map("created_by") @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("shop_settings")
 }
 
 /// M0-minimal slice of docs/07-database/schema-server.md's `sale_line_items` — omits `variant_id`

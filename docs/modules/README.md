@@ -1,7 +1,7 @@
 # Module Registry
 
 > **Status:** 🔵 In review
-> **Version:** 0.24.0
+> **Version:** 0.25.0
 > **Last updated:** 2026-08-14
 > **Owner:** CTO
 
@@ -35,7 +35,7 @@ sections defined in [Documentation Standards](../00-governance/documentation-sta
 | Returns & Refund (basic) | V1 | ⚪ | ⚪ | Sales, Stock Ledger |
 | Cash Drawer / Day Close | V1 | ⚪ | ⚪ | Sales |
 | Reports (core four) | V1 | ⚪ | ⚪ | Sales, Stock Ledger |
-| Settings — tax, currency, printer, receipt | V1 | ⚪ | ⚪ | Store Setup |
+| Settings — tax, currency, printer, receipt | V1 | 🟢 [spec](settings/specification.md) | 🔨 (`shop_settings` table live, a default row now written at onboarding — Sprint 25; `GET`/`PATCH /api/v1/settings` live and live-verified (26/26), role-shaped reads, whole-row optimistic concurrency; `printer_config`/`receipt_template_config` explicitly deferred, rejected rather than accepted; business-type-based per-vertical default seeding remains a named gap) | Store Setup |
 | **Offline Sync Engine** | V1 | 🟢 [spec](sync-engine/specification.md) | 🔨 (`POST /api/v1/sync/push` for `product.create`/`sale.create`, `GET /api/v1/sync/pull` for `products` — Sprint 13 backend, live-verified including a dependency-ordering proof and a cursor-pagination bug found and fixed live; mobile trigger built Sprint 14 — `outbound_queue` now actually drains, automatically once per session plus a manual "Sync now" button; no persisted pull cursor and no full connectivity/foreground/timer trigger set — both named trade-offs, not M0's own scope; Sprint 21 fixed a real gap found by inspection — the pull response never carried `category_id`/`unit_id`/`sku`/`barcode`, only a product's own creating device ever had them; permission enforcement applied Sprint 23 (any active, non-deactivated role); still only two push operation types exist, `category.create`/`unit.create` remain unbuilt, a named gap since Sprint 20) | *Cross-cutting — designed in Phase 13, built alongside the first modules* |
 
 ## V2 — Buy and Grow
@@ -125,3 +125,4 @@ Restaurant module · Salon module · Analytics · Accountant role & accounting e
 | 0.22.0 | 2026-08-14 | Inventory — Stock Ledger row updated (Sprint 22, backlog item 6): `adjustment`/`reason_code`, `POST`/`GET /api/v1/stock-movements`, `GET /api/v1/products/{id}/stock-balance` all built and live-verified (9/9). Design decision found while writing the module spec: `POST /stock-movements` excludes `movement_type: 'opening'` entirely, a deviation from inventory.md's original documented contract — see that document's own implementation note. |
 | 0.23.0 | 2026-08-14 | Roles & Permissions specification authored and approved; moved to 🔨 (Sprint 23, backlog item 7): `user_store_roles` table, `GET/POST/PATCH/DELETE /users*` all built and live-verified (12/12); onboarding now assigns the initial Owner role; permission enforcement retrofitted across every existing endpoint. Audit Log row updated: `GET /audit-log` built, closing that module's own named gap. Categories/Units/Products/Inventory/POS/Sync Engine rows updated to reflect the same retrofit. Three real gaps found and closed in the same pass (onboarding's missing role, `GET /audit-log` never built, `POST /users/invite`'s underspecified mechanism) — see [roles-permissions/specification.md](roles-permissions/specification.md) §1. |
 | 0.24.0 | 2026-08-14 | Sales & Invoices row updated (Sprint 24, backlog item 8, M1's last item): canonical invoice numbers (ADR-0008's atomic per-tenant-per-financial-year counter) and `GET /sales/{id}`/`GET /sales`/`GET /sales/lookup` all built and live-verified (7/7). GST invoice fields remain explicitly deferred — tax computation is M2 scope, named again rather than half-built. M1 backlog now fully closed (items 1–8 all done). |
+| 0.25.0 | 2026-08-14 | Settings specification authored and approved; moved to 🔨 (Sprint 25, M2 item 1, M2's first item now that M1 is fully closed): `shop_settings` table, a default row written at onboarding, `GET`/`PATCH /api/v1/settings` built and live-verified (26/26). Two real gaps found and closed in the same pass: no `shop_settings` row was ever created anywhere in code despite dependency-graph.md assuming otherwise, and neither schema-server.md nor money-and-tax.md ever named where DR-008's tax rate actually comes from (resolved as a dated correction — a single shop-wide flat rate). `printer_config`/`receipt_template_config` explicitly deferred. |

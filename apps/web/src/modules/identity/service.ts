@@ -45,7 +45,18 @@ export async function onboard(authUserId: string, input: OnboardingRequest) {
   }
 
   try {
-    return await repository.createOnboarding({ ...input, authUserId });
+    // Destructured, not returned whole: repository.createOnboarding's fifth write (shopSettings,
+    // Sprint 25) carries two BigInt columns, which NextResponse.json's JSON.stringify cannot
+    // serialize — found live, not by inspection (the route crashed with a real 500 the first time
+    // this sprint's onboarding change was actually exercised end to end). Onboarding's response
+    // contract never documented shop_settings fields in the first place (identity.md), so the fix
+    // is to keep this endpoint's existing response shape exactly, not to add BigInt formatting for
+    // a field nothing reads yet.
+    const { tenant, store, user, ownerRole } = await repository.createOnboarding({
+      ...input,
+      authUserId,
+    });
+    return { tenant, store, user, ownerRole };
   } catch (error) {
     // Concurrent double-submission: two requests with different generated IDs racing past the
     // findUserByAuthId check above before either commits. users.auth_user_id's own UNIQUE

@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 07 — Database Design
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-30
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-14
 > **Owner:** PostgreSQL Architect / CTO
 > **Approved by:** _pending_
 
@@ -49,6 +49,20 @@ methods between the two steps.
 
 Both are exact, deterministic operations over integers — neither involves floating-point
 arithmetic at any step, per [ADR-0006](../adr/ADR-0006-money-as-integer-minor-units.md).
+
+## 2a. Where `tax_rate_basis_points` comes from (correction, found 2026-08-14 decomposing M2)
+
+This document specifies the arithmetic once `tax_rate_basis_points` is known for a line, but never
+actually named its source — the fully correct V1 shape would be a per-product/per-HSN-code slab
+rate, but no such table exists anywhere in this documentation set. Resolved in
+[schema-server.md](schema-server.md#context-7--settings--sync)'s `shop_settings.tax_rate_basis_points`:
+**V1 applies one shop-wide flat rate to every line** (forced to `0` under `composition`/`unregistered`
+tax_mode, per [DR-009](../03-functional-requirements/business-rules.md)). The arithmetic below is
+unaffected by this — it operates per line regardless of whether each line's rate happens to be
+identical (V1) or genuinely varies (a deferred, V2+ per-product rate). §3's worked example below
+predates this correction and still shows mixed per-line rates deliberately, as the general-purpose
+target this arithmetic must hold for once per-product rates exist — **not what a V1 invoice actually
+produces today**, where every line's rate is the same shop-wide value.
 
 ## 3. Worked example — exclusive pricing, three lines, mixed tax rates, a discount, and a fractional quantity
 
@@ -108,3 +122,4 @@ GST-practitioner review before being treated as compliant, per
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial money/tax arithmetic specification with worked exclusive and inclusive examples. Discount-before-tax rule stated explicitly for the first time. |
+| 0.2.0 | 2026-08-14 | Correction found decomposing M2 (backlog.md): added §2a naming `tax_rate_basis_points`'s source — a single shop-wide flat rate in V1 (schema-server.md's `shop_settings.tax_rate_basis_points`), not the per-product/per-HSN rate this document's own worked example implies. §3's mixed-rate example is now flagged as the deferred V2+ target, not what V1 actually produces. |
