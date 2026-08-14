@@ -46,6 +46,8 @@ describe("createSale", () => {
       id: saleId,
       status: "completed",
       provisionalInvoiceNumber: input.provisional_invoice_number,
+      canonicalInvoiceNumber: BigInt(1),
+      financialYear: "2026",
       subtotalMinorUnits: BigInt(5600),
       grandTotalMinorUnits: BigInt(5600),
       completedAt: new Date("2026-08-01T00:00:00Z"),
@@ -74,6 +76,8 @@ describe("createSale", () => {
     );
     expect(result.grand_total_minor_units).toBe(5600);
     expect(result.line_items).toHaveLength(1);
+    expect(result.canonical_invoice_number).toBe(1);
+    expect(result.financial_year).toBe("2026");
   });
 
   it("rejects a stale client price with PRICE_MISMATCH and writes nothing", async () => {
@@ -114,6 +118,8 @@ describe("createSale", () => {
       id: saleId,
       status: "completed",
       provisionalInvoiceNumber: input.provisional_invoice_number,
+      canonicalInvoiceNumber: BigInt(1),
+      financialYear: "2026",
       subtotalMinorUnits: BigInt(5600),
       grandTotalMinorUnits: BigInt(5600),
       completedAt: new Date("2026-08-01T00:00:00Z"),

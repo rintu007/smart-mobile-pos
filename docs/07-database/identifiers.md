@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 07 — Database Design
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-30
+> **Version:** 0.1.1
+> **Last updated:** 2026-08-14
 > **Owner:** PostgreSQL Architect
 > **Approved by:** _pending_
 
@@ -80,3 +80,4 @@ retry), stated here because it is an identifier-strategy consequence, not a UI d
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial consolidation. Two edge cases resolved: device-reinstall numbering collision, retry-must-reuse-ID discipline. |
+| 0.1.1 | 2026-08-14 | Sprint 24 (backlog item 8): §3's canonical-numbering scheme built and live-verified — a per-`(tenant_id, financial_year)` `invoice_sequences` counter, incremented atomically in the same transaction as the sale itself. §2's `provisional_invoice_number`/`canonical_invoice_number` uniqueness scopes are now both enforced by real database constraints, closing a real, pre-existing gap for the former. |

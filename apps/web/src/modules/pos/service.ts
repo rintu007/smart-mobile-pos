@@ -6,10 +6,16 @@ import type { CreateSaleRequest } from "./schema";
 
 // Business rules live here, not in the Route Handler — docs/08-folder-structure/backend-structure.md §2.
 
-function formatSale(sale: {
+// Exported for reuse by sales-invoices/service.ts (GET /sales/{id}, GET /sales/lookup) — the
+// sanctioned cross-module service-to-service path (docs/08-folder-structure/layering-rules.md §2),
+// so both modules render an identical sale shape rather than maintaining two copies of this
+// BigInt/date formatting.
+export function formatSale(sale: {
   id: string;
   status: string;
   provisionalInvoiceNumber: string;
+  canonicalInvoiceNumber: bigint | null;
+  financialYear: string | null;
   subtotalMinorUnits: bigint;
   grandTotalMinorUnits: bigint;
   completedAt: Date | null;
@@ -25,6 +31,12 @@ function formatSale(sale: {
     id: sale.id,
     status: sale.status,
     provisional_invoice_number: sale.provisionalInvoiceNumber,
+    // docs/modules/sales-invoices/specification.md §1 — never actually null for a stored sale in
+    // this implementation, but the conversion still guards `null` since the column itself is
+    // nullable (matching schema-server.md exactly).
+    canonical_invoice_number:
+      sale.canonicalInvoiceNumber === null ? null : Number(sale.canonicalInvoiceNumber),
+    financial_year: sale.financialYear,
     subtotal_minor_units: Number(sale.subtotalMinorUnits),
     grand_total_minor_units: Number(sale.grandTotalMinorUnits),
     line_items: sale.lineItems.map((item) => ({

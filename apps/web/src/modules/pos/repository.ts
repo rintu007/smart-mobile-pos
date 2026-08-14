@@ -1,6 +1,18 @@
+import { randomUUID } from "node:crypto";
 import { prisma } from "@/core/db/client";
 
 // Prisma queries only, no business logic — docs/08-folder-structure/backend-structure.md §2.
+
+// docs/modules/sales-invoices/specification.md §2 — India's financial year rolls over April 1,
+// represented by its starting calendar year (e.g. FY2026-27 -> "2026"), matching mobile's own
+// InvoiceNumberGenerator._financialYearFor exactly (identifiers.md §3). Uses UTC, not IST, for the
+// month boundary — consistent with every other timestamp in this system being stored/reasoned
+// about in UTC (Timestamptz); a named simplification, not a claim of precise IST rollover, same
+// provisional status as everything else tied to OD-01's still-unconfirmed launch market.
+function financialYearFor(date: Date): string {
+  const startYear = date.getUTCMonth() >= 3 ? date.getUTCFullYear() : date.getUTCFullYear() - 1;
+  return startYear.toString();
+}
 
 export function findSaleById(id: string) {
   return prisma.sale.findUnique({
@@ -35,6 +47,7 @@ export interface CreateSaleInput {
 
 export function createSale(input: CreateSaleInput) {
   const completedAt = new Date();
+  const financialYear = financialYearFor(completedAt);
 
   // Wrapped in a transaction with one `sale` stock movement per line item (backlog.md item 7) —
   // no FK relation exists from `sales` to `stock_movements` (schema-server.md only links them
@@ -45,6 +58,20 @@ export function createSale(input: CreateSaleInput) {
   // this function itself is only ever called once per genuinely new sale (service.ts's own
   // `findSaleById` replay check happens before this is reached), so no upsert is needed here.
   return prisma.$transaction(async (tx) => {
+    // ADR-0008's canonical half (backlog.md item 8): an atomic per-(tenant, financial_year)
+    // counter, incremented in the same transaction as the sale itself — gapless by construction,
+    // since a rollback here (e.g. a later step in this same transaction failing) rolls the
+    // increment back too. `nextValue` after this upsert is always "the number to hand out next
+    // time"; the number assigned to *this* sale is one less than that, whether the row was just
+    // created (starts at 2, so this sale gets 1) or already existed (incremented, so this sale
+    // gets the pre-increment value).
+    const sequence = await tx.invoiceSequence.upsert({
+      where: { tenantId_financialYear: { tenantId: input.tenantId, financialYear } },
+      create: { id: randomUUID(), tenantId: input.tenantId, financialYear, nextValue: BigInt(2) },
+      update: { nextValue: { increment: 1 } },
+    });
+    const canonicalInvoiceNumber = sequence.nextValue - BigInt(1);
+
     const sale = await tx.sale.create({
       data: {
         id: input.id,
@@ -52,6 +79,8 @@ export function createSale(input: CreateSaleInput) {
         storeId: input.storeId,
         status: "completed",
         provisionalInvoiceNumber: input.provisionalInvoiceNumber,
+        canonicalInvoiceNumber,
+        financialYear,
         subtotalMinorUnits: input.subtotalMinorUnits,
         grandTotalMinorUnits: input.grandTotalMinorUnits,
         completedAt,
@@ -109,6 +138,7 @@ export function createSale(input: CreateSaleInput) {
           id: input.id,
           status: "completed",
           provisional_invoice_number: input.provisionalInvoiceNumber,
+          canonical_invoice_number: Number(canonicalInvoiceNumber),
           subtotal_minor_units: Number(input.subtotalMinorUnits),
           grand_total_minor_units: Number(input.grandTotalMinorUnits),
           completed_at: completedAt.toISOString(),

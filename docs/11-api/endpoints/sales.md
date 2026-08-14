@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 11 — API Design
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-30
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-14
 > **Owner:** Principal Next.js Engineer
 > **Approved by:** _pending_
 
@@ -27,10 +27,21 @@ applies most heavily here.
 
 | Method & path | Permission | Offline | Idempotent | Notes |
 | --- | --- | --- | --- | --- |
-| `POST /sales` | Cashier, Manager, Owner | **Yes — queued** | Creation | The core POS write. Full shape below. |
-| `GET /sales/{id}` | Cashier, Manager, Owner | Read cached | N/A | Returns the sale **with `line_items` and `payments` embedded** — per [api-principles.md §2](../api-principles.md#2-resource-naming), never as separate paginated sub-resources. |
-| `GET /sales` | Cashier (own device's trading day only — [permission-matrix.md](../../05-personas/permission-matrix.md)), Manager, Owner (store-wide) | Read cached | N/A | Filters: `trading_day_id`, `date_from`, `date_to`, `customer_id`. Cursor-paginated on `(completed_at, id)`. |
-| `GET /sales/lookup` | Cashier, Manager, Owner | Read cached | N/A | Filter: `provisional_invoice_number` (exact) or `canonical_invoice_number` (exact) — the returns-flow lookup, [FR-062](../../03-functional-requirements/functional-requirements.md); distinct route from `/sales` per [route-map.md](../../09-navigation/route-map.md)'s split by permission and purpose. |
+| `POST /sales` | Cashier, Manager, Owner | **Yes — queued** | Creation | The core POS write. Full shape below. **Sprint 24: now also assigns `canonical_invoice_number`/`financial_year` in the same transaction** (see the implementation note below). |
+| `GET /sales/{id}` | Cashier, Manager, Owner | Read cached | N/A | Returns the sale **with `line_items` and `payments` embedded** — per [api-principles.md §2](../api-principles.md#2-resource-naming), never as separate paginated sub-resources. **Built Sprint 24**, no ownership restriction — any role, any sale in the tenant, matching this row's own wording exactly (no "own device" qualifier, unlike the list row below). |
+| `GET /sales` | Cashier (own device's trading day only — [permission-matrix.md](../../05-personas/permission-matrix.md)), Manager, Owner (store-wide) | Read cached | N/A | Filters: `trading_day_id`, `date_from`, `date_to`, `customer_id`. Cursor-paginated on `(completed_at, id)`. **Built Sprint 24** — see the implementation note below for how the Cashier restriction is actually implemented, and which filters are live. |
+| `GET /sales/lookup` | Cashier, Manager, Owner | Read cached | N/A | Filter: `provisional_invoice_number` (exact) or `canonical_invoice_number` (exact) — the returns-flow lookup, [FR-062](../../03-functional-requirements/functional-requirements.md); distinct route from `/sales` per [route-map.md](../../09-navigation/route-map.md)'s split by permission and purpose. **Built Sprint 24**; Zod requires exactly one of the two identifiers. |
+
+## Implementation note (Sprint 24, [sales-invoices/specification.md](../../modules/sales-invoices/specification.md))
+
+`GET /sales`'s "Cashier: own device's trading day only" is unimplementable as literally worded —
+neither `devices` nor `trading_days` exists in code (both continuing, separately-named gaps). The
+closest faithful adaptation actually built: **a Cashier sees only sales they themselves created**
+(`created_by` = their own user id); Manager/Owner see every sale, store-wide. `trading_day_id` and
+`customer_id` filters are not implemented — neither Trading Day nor Customers exists yet; only
+`date_from`/`date_to` are live. `GET /sales` returns **summary fields only** (no embedded
+`line_items`/`payments`) — a deliberate choice to keep a list response bounded regardless of how
+many line items each sale has; `GET /sales/{id}` is where the full embedded shape lives.
 
 **There is no `PATCH` or `DELETE` on `/sales/{id}` once `status = 'completed'`** — matching the
 schema trigger in [schema-server.md](../../07-database/schema-server.md). A `draft`/`held` sale
@@ -95,7 +106,8 @@ is never the value persisted to `sales.grand_total_minor_units`.
   "id": "<uuid>",
   "status": "completed",
   "provisional_invoice_number": "DEV042-2026-000118",
-  "canonical_invoice_number": null,
+  "canonical_invoice_number": 118,
+  "financial_year": "2026",
   "subtotal_minor_units": 2800,
   "tax_total_minor_units": 324,
   "discount_total_minor_units": 140,
@@ -106,10 +118,19 @@ is never the value persisted to `sales.grand_total_minor_units`.
 }
 ```
 
-`canonical_invoice_number` is `null` until the sale is assigned one at sync-order time
-([ADR-0008](../../adr/ADR-0008-offline-invoice-numbering.md)) — when this sale was created directly
-online (device already connected), assignment happens in the same request; when queued offline, it
-is assigned during [sync-api.md](../sync-api.md)'s push and the client picks it up on the next pull.
+**Corrected Sprint 24, found while implementing this:** `canonical_invoice_number` is assigned at
+sync-order time ([ADR-0008](../../adr/ADR-0008-offline-invoice-numbering.md)) — when this sale was
+created directly online (device already connected), assignment happens in the same request; when
+queued offline, it is assigned during [sync-api.md](../sync-api.md)'s push and the client picks it
+up on the next pull. **In this implementation, that means it is never actually `null` for a stored
+sale**: `POST /sales` and `POST /sync/push`'s `sale.create` operation call the exact same
+`pos/service.ts#createSale`, and this server never persists a `sales` row until the moment it
+"arrives" — the provisional-only, not-yet-synced state exists only on the mobile device's own
+local database, never as a partial server row. The column remains nullable to match
+schema-server.md's approved design, but every code path that creates a `sales` row assigns a
+canonical number in the same transaction — see
+[sales-invoices/specification.md §1](../../modules/sales-invoices/specification.md#1-purpose-and-business-context)
+for the full reasoning.
 
 ## A stale-price mismatch is not the same failure as a fraud attempt
 
@@ -140,3 +161,4 @@ per [sync-api.md](../sync-api.md), rather than blocking the sale.
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial sales/trading-day endpoint set; server-recompute behaviour and the connected-vs-offline price-mismatch distinction specified in full. |
 | 0.1.1 | 2026-08-01 | Correction found planning Sprint 05: this document's `POST /sales` shape is the full V1 contract, but backlog.md scopes M0 to cash-only/no-discount/no-tax and defers Trading Day (M2) and device registration (Authentication, not yet built) — noted inline rather than narrowing this section. |
+| 0.2.0 | 2026-08-14 | Sprint 24 (backlog item 8): `GET /sales/{id}`, `GET /sales`, `GET /sales/lookup` built and live-verified (7/7); `POST /sales` now assigns `canonical_invoice_number`/`financial_year` atomically. Corrected: `canonical_invoice_number` is never actually `null` for a stored sale in this implementation (see the new implementation note). `GET /sales`'s "own device's trading day only" Cashier restriction adapted to "own sales they personally created," since neither `devices` nor `trading_days` exists in code. |
