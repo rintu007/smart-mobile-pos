@@ -105,6 +105,21 @@ until it does.
 - **This scheme is reviewed by a qualified GST practitioner before any compliance claim is made**,
   per the standing item in [regulatory-requirements.md](../02-business-requirements/regulatory-requirements.md).
 
+## Implementation note (Sprint 24, non-normative — does not amend the decision above)
+
+Built via `invoice_sequences`, a per-`(tenant_id, financial_year)` counter row incremented
+atomically in the same transaction as the sale itself (an ordinary Prisma `upsert` with
+`nextValue: { increment: 1 }`, relying on Postgres's own row-level locking — no `SELECT ... FOR
+UPDATE` needed). Because `POST /sales` and `POST /sync/push`'s `sale.create` operation both call
+the same `pos/service.ts#createSale`, and because this server never persists a `sales` row until
+it has already "arrived," canonical-number assignment always happens at the moment of the row's own
+creation — the "assigned later, at sync" framing above is still correct, it just collapses to "at
+creation" for every code path that currently exists, since none of them create a row before it
+syncs. Live-verified: sequential assignment across two sales, per-tenant isolation (a second
+tenant's first sale also gets `1`), and the idempotent-replay compliance test this ADR's own
+Compliance section names. See
+[sales-invoices/specification.md](../modules/sales-invoices/specification.md) for the full record.
+
 ## Revisit when
 
 The GST-practitioner review returns a finding that sync-arrival-order canonical numbering is not

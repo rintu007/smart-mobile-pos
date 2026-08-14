@@ -35,15 +35,16 @@ model Tenant {
   // and a follow-up migration corrected).
   createdBy     String    @map("created_by") @db.Uuid
 
-  users           User[]
-  stores          Store[]
-  products        Product[]
-  sales           Sale[]
-  stockMovements  StockMovement[]
-  auditLogEntries AuditLog[]
-  categories      Category[]
-  units           Unit[]
-  userStoreRoles  UserStoreRole[]
+  users            User[]
+  stores           Store[]
+  products         Product[]
+  sales            Sale[]
+  stockMovements   StockMovement[]
+  auditLogEntries  AuditLog[]
+  categories       Category[]
+  units            Unit[]
+  userStoreRoles   UserStoreRole[]
+  invoiceSequences InvoiceSequence[]
 
   @@map("tenants")
 }
@@ -182,6 +183,16 @@ model Sale {
   /// milestone's UI produces (hold/resume is M2 scope).
   status                   String
   provisionalInvoiceNumber String   @map("provisional_invoice_number")
+  /// Added Sprint 24 (backlog item 8) — ADR-0008's canonical half. Assigned atomically, in the
+  /// same transaction as the sale itself, via InvoiceSequence. Nullable only to match
+  /// schema-server.md's own documented column exactly — in practice never null for a stored sale,
+  /// since this server never persists a sale row until it has already "arrived" (see
+  /// docs/modules/sales-invoices/specification.md §1's dated clarification).
+  canonicalInvoiceNumber   BigInt?  @map("canonical_invoice_number")
+  /// The financial year canonicalInvoiceNumber is scoped within (identifiers.md §3) — derived
+  /// from completedAt at assignment time, "2026" for FY2026-27, matching mobile's own
+  /// InvoiceNumberGenerator._financialYearFor string format exactly.
+  financialYear            String?  @map("financial_year")
   /// BigInt, matching schema-server.md's BIGINT exactly — same reasoning as Product.priceMinorUnits.
   subtotalMinorUnits       BigInt   @map("subtotal_minor_units")
   grandTotalMinorUnits     BigInt   @map("grand_total_minor_units")
@@ -195,8 +206,31 @@ model Sale {
   lineItems SaleLineItem[]
   payments  SalePayment[]
 
-  @@index([tenantId])
+  // Sprint 24: provisional-number uniqueness closes a real, pre-existing gap (identifiers.md §2
+  // already documented it as a business-meaningful identifier, but M0 never enforced it).
+  // Canonical-number uniqueness matches schema-server.md's own documented scope exactly.
+  @@unique([tenantId, provisionalInvoiceNumber])
+  @@unique([tenantId, financialYear, canonicalInvoiceNumber])
+  @@index([tenantId, storeId, completedAt])
   @@map("sales")
+}
+
+/// New this sprint (backlog item 8) — the atomic counter backing ADR-0008's canonical
+/// invoice-number assignment. Not itself in schema-server.md's table list: that document only
+/// says canonical_invoice_number is "unique per (tenant_id, financial_year)," leaving the
+/// mechanism open ("via a database sequence or an equivalent atomic counter"). A per-tenant
+/// Postgres SEQUENCE object isn't practical for an unbounded number of tenants; this table-based
+/// counter is the ADR-sanctioned equivalent.
+model InvoiceSequence {
+  id            String @id @db.Uuid
+  tenantId      String @map("tenant_id") @db.Uuid
+  financialYear String @map("financial_year")
+  nextValue     BigInt @map("next_value")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, financialYear])
+  @@map("invoice_sequences")
 }
 
 /// M0-minimal slice of docs/07-database/schema-server.md's `sale_line_items` — omits `variant_id`
