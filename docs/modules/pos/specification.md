@@ -3,8 +3,8 @@
 > **Status:** 🟢 Approved
 > **Module:** POS
 > **Slice:** V1 — this document scopes only M0's minimal first cut, not the full V1 shape (§1)
-> **Version:** 0.5.0
-> **Last updated:** 2026-08-13
+> **Version:** 0.6.0
+> **Last updated:** 2026-08-14
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
 
@@ -38,6 +38,21 @@ writes one `sale` stock movement per line item inside the same transaction as th
 later, dependent item. `POST /api/v1/sales` now also writes one `sale.completed` audit-log entry in
 the same transaction — see [audit-log/specification.md](../audit-log/specification.md).
 
+**Closed, Sprint 27 (backlog.md M2 item 3):** per-line Discount, per
+[WF-003](../../06-workflows/sales-workflows.md#wf-003--complete-a-sale-with-a-discount) — a
+workflow already fully designed in Phase 06, not invented this sprint. A discount below
+`shop_settings.discount_auto_approval_threshold_minor_units` ([DR-012](../../03-functional-requirements/business-rules.md))
+applies immediately; above it, requires the calling session itself to be Manager/Owner, or a named
+Manager/Owner `discount_approved_by` — resolved fresh at request-processing time
+([DR-017](../../03-functional-requirements/business-rules.md)), the same integrity guarantee
+[Finding 1](../../06-workflows/offline-workflows.md#finding-1--offline-approvals-are-provisional-until-sync-and-that-needs-a-defined-ux)
+already established for return approvals, not a stronger live-proof claim. **A real semantic
+correction found writing this section:** [money-and-tax.md](../../07-database/money-and-tax.md)'s
+already-fixed formula defines `invoice.subtotal_minor_units` as **post-discount, pre-tax** — this
+implementation's `subtotal_minor_units` silently meant "pre-discount raw sum" until now, invisible
+only because no discount existed yet to make the two values diverge. Corrected in the same PR, not
+carried forward as a latent bug for Tax computation (M2 item 4) to trip over.
+
 ## 2. Business rules
 
 - A sale belongs to exactly one tenant and store; the server, never the client, computes
@@ -60,6 +75,29 @@ the same transaction — see [audit-log/specification.md](../audit-log/specifica
 - **Permission-checked as of Sprint 23**: `POST /sales` requires any role (Cashier, Manager, and
   Owner may all "complete a sale" per [permission-matrix.md](../../05-personas/permission-matrix.md)),
   per [roles-permissions/specification.md](../roles-permissions/specification.md).
+- [DR-011](../../03-functional-requirements/business-rules.md): a line's discount is expressed as
+  **either** `discount_percent_basis_points` **or** `discount_amount_minor_units`, never both —
+  rejected with `VALIDATION_FAILED` if both are present on the same line.
+- Server-computed, never client-trusted: `line_discount_minor_units` — `ROUND(line_subtotal ×
+  percent / 10000, rounding_rule)` for a percent discount, the flat amount directly for a fixed
+  one (capped at the line's own pre-discount subtotal; a discount exceeding 100% of a line is
+  rejected with `VALIDATION_FAILED`, not silently clamped).
+  `sales.discount_total_minor_units = Σ line_discount_minor_units`.
+- [DR-012](../../03-functional-requirements/business-rules.md): `discount_total_minor_units >
+  shop_settings.discount_auto_approval_threshold_minor_units` requires authority beyond an ordinary
+  Cashier — satisfied either by the calling session itself already being Manager/Owner ([DR-020](../../03-functional-requirements/business-rules.md)),
+  or by an optional `discount_approved_by` field naming a **different** user who resolves, at
+  request-processing time, to an active Manager/Owner role at this store. Neither condition met →
+  `DISCOUNT_REQUIRES_APPROVAL` (409), the sale is not created at all — matching
+  [WF-003](../../06-workflows/sales-workflows.md#wf-003--complete-a-sale-with-a-discount)'s own
+  "rejected, sale continues undiscounted" framing (in this synchronous, single-request design, that
+  means the whole `POST /sales` call fails, not a partial/undiscounted fallback — the client is
+  expected to remove the discount and retry if it can't clear approval).
+- **Correction, this sprint**: `sales.subtotal_minor_units` now means what
+  [money-and-tax.md](../../07-database/money-and-tax.md) always specified —
+  **post-discount, pre-tax** (`Σ (line_subtotal − line_discount)`) — not the pre-discount raw sum
+  this implementation silently computed before any discount existed to expose the difference.
+  `grand_total_minor_units = subtotal_minor_units` this sprint (tax is still M2 item 4, not built).
 
 ## 3. Database tables and relationships
 
@@ -67,16 +105,17 @@ the same transaction — see [audit-log/specification.md](../audit-log/specifica
 [schema-server.md](../../07-database/schema-server.md) Context 5 — but, like Products (Sprint 04),
 this sprint implements only a subset of each table's full column list.
 
-`sales`: `id`, `tenant_id`, `store_id`, `status` (always `'completed'` this sprint),
-`provisional_invoice_number`, `subtotal_minor_units`, `grand_total_minor_units`, `completed_at`,
-`created_at`, `created_by`. **Not yet built:** `trading_day_id`, `device_id`, `customer_id`,
-`canonical_invoice_number`, `tax_registration_type_at_sale`, `tax_total_minor_units`,
-`discount_total_minor_units` — added once Trading Day/device-registration/Customers/tax-and-discount
-(M1/M2) exist.
+`sales`: `id`, `tenant_id`, `store_id`, `trading_day_id` (optional, Sprint 26),
+`canonical_invoice_number`/`financial_year` (Sprint 24), `status` (always `'completed'` this
+sprint), `provisional_invoice_number`, `subtotal_minor_units`, `discount_total_minor_units` (new,
+Sprint 27), `grand_total_minor_units`, `completed_at`, `created_at`, `created_by`. **Not yet
+built:** `device_id`, `customer_id`, `tax_registration_type_at_sale`, `tax_total_minor_units` —
+added once device-registration/Customers/tax (M2 item 4) exist.
 
 `sale_line_items`: `id`, `sale_id`, `product_id`, `quantity`, `unit_price_minor_units`,
-`line_total_minor_units`. **Not yet built:** `variant_id`, `hsn_sac_code_at_sale`,
-`tax_rate_basis_points`, `line_discount_minor_units`, `line_tax_minor_units`.
+`line_discount_minor_units` (new, Sprint 27, `DEFAULT 0`), `line_total_minor_units`. **Not yet
+built:** `variant_id`, `hsn_sac_code_at_sale`, `tax_rate_basis_points`, `line_tax_minor_units` —
+M2 item 4.
 
 `sale_payments`: `id`, `sale_id`, `method` (constrained to `'cash'` this sprint —
 [schema-server.md](../../07-database/schema-server.md)'s full `CHECK` also allows `card`/`other`,
@@ -104,7 +143,7 @@ RLS: tenant-scoped, same template as `stores`/`products`
 
 | Method & path | Status |
 | --- | --- |
-| `POST /api/v1/sales` | **Implemented this sprint.** Request: `{ id, store_id, provisional_invoice_number, line_items: [{ product_id, quantity, client_unit_price_minor_units }], payments: [{ method: "cash", amount_minor_units }] }` only — not the full shape [sales.md](../../11-api/endpoints/sales.md) documents (see that document's own dated correction note). Requires any role (`requirePermission`, Sprint 23), no Trading Day precondition. |
+| `POST /api/v1/sales` | **Implemented Sprint 05, extended since.** Request now also accepts an optional `trading_day_id` (Sprint 26), and per-line `discount_percent_basis_points`/`discount_amount_minor_units` plus a top-level `discount_approved_by` (Sprint 27). Still not the full shape [sales.md](../../11-api/endpoints/sales.md) documents — tax/device/customer fields remain unbuilt. Requires any role (`requirePermission`, Sprint 23). |
 | `GET /sales/{id}`, `GET /sales`, `GET /sales/lookup` | **Already documented**, not yet implemented — deferred past this sprint. |
 
 **Mobile till screen (`apps/mobile/lib/features/pos/`) — built Sprint 09.** Sprint 05 deferred it
@@ -133,20 +172,31 @@ Request body for `POST /api/v1/sales` (Zod schema, server-side):
 | `payments` | Array, exactly length 1, required |
 | `payments[].method` | Literal `"cash"`, required |
 | `payments[].amount_minor_units` | Non-negative integer, required |
+| `trading_day_id` (Sprint 26) | UUIDv4, optional |
+| `line_items[].discount_percent_basis_points` (Sprint 27) | `.int().min(0).max(10000)`, optional, mutually exclusive with the field below |
+| `line_items[].discount_amount_minor_units` (Sprint 27) | `.int().nonnegative()`, optional, mutually exclusive with the field above — Zod `.refine` rejects a line carrying both |
+| `discount_approved_by` (Sprint 27) | UUIDv4, optional |
 
 Server-side, beyond schema validation: every `product_id` must resolve to a real, non-deactivated
 product in the caller's tenant (`NOT_FOUND` otherwise); each line's
 `client_unit_price_minor_units` must equal the product's current `price_minor_units`
-(`PRICE_MISMATCH` otherwise); `payments[0].amount_minor_units` must equal the computed
-`grand_total_minor_units` exactly (`PAYMENT_AMOUNT_MISMATCH` otherwise).
+(`PRICE_MISMATCH` otherwise); a flat `discount_amount_minor_units` may not exceed its own line's
+pre-discount subtotal (`VALIDATION_FAILED` otherwise); if the resulting
+`discount_total_minor_units` exceeds `shop_settings.discount_auto_approval_threshold_minor_units`,
+either the caller's own resolved role or `discount_approved_by`'s resolved role must be
+Manager/Owner (`DISCOUNT_REQUIRES_APPROVAL` otherwise); `payments[0].amount_minor_units` must equal
+the computed `grand_total_minor_units` exactly (`PAYMENT_AMOUNT_MISMATCH` otherwise).
 
 ## 6. Error handling and user-facing messages
 
 `VALIDATION_FAILED` (422) for schema failures, `NOT_FOUND` (404) for an unknown `product_id` — both
 already cross-cutting codes in [error-catalogue.md](../../11-api/error-catalogue.md), reused as-is
 rather than inventing module-specific equivalents. `PRICE_MISMATCH` (409, already catalogued) for a
-stale cached price. `PAYMENT_AMOUNT_MISMATCH` (409) is new this sprint — added to
-[error-catalogue.md](../../11-api/error-catalogue.md). None of these codes are reachable from the
+stale cached price. `PAYMENT_AMOUNT_MISMATCH` (409) was added Sprint 05.
+**`DISCOUNT_REQUIRES_APPROVAL` (409) is new this sprint (Sprint 27)** — the resulting discount
+exceeds the shop's threshold and neither the caller nor a named `discount_approved_by` resolves to
+an active Manager/Owner at this store — added to [error-catalogue.md](../../11-api/error-catalogue.md).
+None of these codes are reachable from the
 till screen yet (Sprint 09): the mobile write path never calls the server directly (§4), so a stale
 local price or a payment-amount mismatch can't surface here until the sync engine (item 9) exists to
 run the request and relay a rejection back. The till screen's own error text (§10's widget tests)
@@ -219,10 +269,22 @@ scanning yet — backlog.md item 6), hold/resume, and a bottom-nav shell are all
   completing a sale shows the resulting provisional invoice number and clears the cart; a failed
   local write renders inline error text and preserves the cart.
 
-**Explicitly deferred:** `GET /sales*`, the stock-ledger effect (backlog.md item 7), the sync engine
-that would actually drain `outbound_queue` and exercise this endpoint's error codes from a real
-device (item 9), receipt printing (item 10), everything the full V1 contract requires beyond M0's
-minimal shape (§1).
+**Sprint 27 scope (Discount):**
+- Unit tests (`pos/service.test.ts`): a percent discount and a flat discount both compute
+  `line_discount_minor_units` correctly and roll up into `discount_total_minor_units`; a line
+  carrying both discount fields is rejected with `VALIDATION_FAILED`; a flat discount exceeding its
+  own line's subtotal is rejected with `VALIDATION_FAILED`; a discount at/under threshold applies
+  with no approver needed; a discount over threshold from a Cashier with no `discount_approved_by`
+  is rejected with `DISCOUNT_REQUIRES_APPROVAL`; the same over-threshold discount succeeds when the
+  caller's own session is Manager/Owner, and separately when a valid `discount_approved_by` is
+  supplied; an invalid/wrong-tenant/insufficient-role `discount_approved_by` is rejected the same
+  way as a missing one; `subtotal_minor_units` reflects the corrected post-discount formula (§1's
+  named correction).
+- **Live verification, real database, throwaway tenant (deleted after)** — see
+  [sprint-27.md](../../17-sprints/sprint-27.md) for the exact checks and results.
+
+**Explicitly deferred:** tax (M2 item 4), split payment (M2 item 5), hold/resume (M2 item 6), any
+mobile UI for applying a discount or entering a Manager-approval override.
 
 ## 11. Traceability
 
@@ -233,6 +295,9 @@ minimal shape (§1).
 | [WF-002](../../06-workflows/sales-workflows.md#wf-002--complete-a-single-item-cash-sale) (single-item cash sale workflow) | §2, §5, §9 | **Partially met** — the server recompute/payment-validation half (Sprint 05) and the mobile local-write half (Sprint 09) are both built; the two are not yet connected (no sync engine), and the atomic sale+stock-movement transaction (§1) is not built |
 | [api-principles.md §7](../../11-api/api-principles.md#7-the-server-recomputes-it-never-trusts-a-client-figure) (server recomputes, never trusts a client figure) | §2, §5 | Met |
 | [ADR-0007](../../adr/ADR-0007-client-generated-uuid-primary-keys.md) (client-generated UUID PKs, idempotent creation) | §2 | Met |
+| [DR-011](../../03-functional-requirements/business-rules.md) (discount: percent or fixed, never both) | §2, §5 | Met |
+| [DR-012](../../03-functional-requirements/business-rules.md) (over-threshold discount needs Manager+ approval) | §2, §6, §10 | Met |
+| [WF-003](../../06-workflows/sales-workflows.md#wf-003--complete-a-sale-with-a-discount) (discount workflow) | §1, §2 | Met for the backend contract; no mobile UI yet (§9 unchanged this sprint) |
 
 ## Change Log
 
@@ -243,3 +308,4 @@ minimal shape (§1).
 | 0.3.0 | 2026-08-13 | Sprint 11: closed this document's own named stock-ledger gap — `POST /api/v1/sales` now writes one `sale` stock movement per line item inside the same transaction as the sale, per [inventory/specification.md](../inventory/specification.md). |
 | 0.4.0 | 2026-08-13 | Sprint 12: closed the audit-log gap (DR-025, backlog.md item 8) — `POST /api/v1/sales` now also writes one `sale.completed` audit-log entry in the same transaction, per [audit-log/specification.md](../audit-log/specification.md). |
 | 0.5.0 | 2026-08-14 | Sprint 23: permission enforcement applied — `POST /sales` now requires any active role (Cashier, Manager, or Owner). |
+| 0.6.0 | 2026-08-14 | Sprint 27 (backlog.md M2 item 3): per-line Discount built, per WF-003 (already fully designed in Phase 06). `discount_percent_basis_points`/`discount_amount_minor_units` (mutually exclusive, DR-011), server-computed `line_discount_minor_units`/`discount_total_minor_units`, `DISCOUNT_REQUIRES_APPROVAL` (DR-012) satisfied by the caller's own Manager/Owner role or an optional `discount_approved_by`. Corrected `subtotal_minor_units` to the post-discount, pre-tax meaning money-and-tax.md always specified — invisible until discount existed to make it diverge from the pre-discount sum. |

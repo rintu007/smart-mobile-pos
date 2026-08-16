@@ -1,11 +1,15 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import * as identityService from "@/modules/identity/service";
+import * as rolesService from "@/modules/roles/service";
+import * as settingsService from "@/modules/settings/service";
 import * as repository from "./repository";
 import { createSale } from "./service";
 import type { CreateSaleRequest } from "./schema";
 
 vi.mock("./repository");
 vi.mock("@/modules/identity/service");
+vi.mock("@/modules/roles/service");
+vi.mock("@/modules/settings/service");
 
 const authUserId = "11111111-1111-4111-8111-111111111111";
 const tenantId = "22222222-2222-4222-8222-222222222222";
@@ -13,6 +17,7 @@ const userId = "33333333-3333-4333-8333-333333333333";
 const storeId = "44444444-4444-4444-8444-444444444444";
 const productId = "55555555-5555-4555-8555-555555555555";
 const saleId = "66666666-6666-4666-8666-666666666666";
+const approverId = "99999999-9999-4999-8999-999999999999";
 
 const product = {
   id: productId,
@@ -33,36 +38,50 @@ const input: CreateSaleRequest = {
   payments: [{ method: "cash", amount_minor_units: 5600 }],
 };
 
+const createdSale = (overrides: Partial<Record<string, unknown>> = {}) => ({
+  id: saleId,
+  status: "completed",
+  tradingDayId: null,
+  provisionalInvoiceNumber: input.provisional_invoice_number,
+  canonicalInvoiceNumber: BigInt(1),
+  financialYear: "2026",
+  subtotalMinorUnits: BigInt(5600),
+  discountTotalMinorUnits: BigInt(0),
+  grandTotalMinorUnits: BigInt(5600),
+  completedAt: new Date("2026-08-01T00:00:00Z"),
+  lineItems: [],
+  payments: [],
+  ...overrides,
+});
+
 describe("createSale", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(identityService.resolveUserId).mockResolvedValue(userId);
     vi.mocked(repository.findSaleById).mockResolvedValue(null);
     vi.mocked(repository.findProductsByIds).mockResolvedValue([product] as never);
+    vi.mocked(settingsService.getMoneySettings).mockResolvedValue({
+      roundingRule: "round_half_up",
+      discountAutoApprovalThresholdMinorUnits: BigInt(50000),
+    });
+    vi.mocked(rolesService.resolveActiveRole).mockResolvedValue("cashier");
   });
 
   it("recomputes totals from the current product price and creates the sale", async () => {
-    const created = {
-      id: saleId,
-      status: "completed",
-      tradingDayId: null,
-      provisionalInvoiceNumber: input.provisional_invoice_number,
-      canonicalInvoiceNumber: BigInt(1),
-      financialYear: "2026",
-      subtotalMinorUnits: BigInt(5600),
-      grandTotalMinorUnits: BigInt(5600),
-      completedAt: new Date("2026-08-01T00:00:00Z"),
-      lineItems: [
-        {
-          productId,
-          quantity: 2,
-          unitPriceMinorUnits: BigInt(2800),
-          lineTotalMinorUnits: BigInt(5600),
-        },
-      ],
-      payments: [{ method: "cash", amountMinorUnits: BigInt(5600) }],
-    };
-    vi.mocked(repository.createSale).mockResolvedValue(created as never);
+    vi.mocked(repository.createSale).mockResolvedValue(
+      createdSale({
+        lineItems: [
+          {
+            productId,
+            quantity: 2,
+            unitPriceMinorUnits: BigInt(2800),
+            lineDiscountMinorUnits: BigInt(0),
+            lineTotalMinorUnits: BigInt(5600),
+          },
+        ],
+        payments: [{ method: "cash", amountMinorUnits: BigInt(5600) }],
+      }) as never,
+    );
 
     const result = await createSale(authUserId, tenantId, input);
 
@@ -72,10 +91,13 @@ describe("createSale", () => {
         tenantId,
         storeId,
         createdBy: userId,
+        subtotalMinorUnits: BigInt(5600),
+        discountTotalMinorUnits: BigInt(0),
         grandTotalMinorUnits: BigInt(5600),
       }),
     );
     expect(result.grand_total_minor_units).toBe(5600);
+    expect(result.discount_total_minor_units).toBe(0);
     expect(result.line_items).toHaveLength(1);
     expect(result.canonical_invoice_number).toBe(1);
     expect(result.financial_year).toBe("2026");
@@ -115,20 +137,7 @@ describe("createSale", () => {
   });
 
   it("is idempotent: a retry with the same id returns the original sale without recomputing", async () => {
-    const existing = {
-      id: saleId,
-      status: "completed",
-      tradingDayId: null,
-      provisionalInvoiceNumber: input.provisional_invoice_number,
-      canonicalInvoiceNumber: BigInt(1),
-      financialYear: "2026",
-      subtotalMinorUnits: BigInt(5600),
-      grandTotalMinorUnits: BigInt(5600),
-      completedAt: new Date("2026-08-01T00:00:00Z"),
-      lineItems: [],
-      payments: [],
-    };
-    vi.mocked(repository.findSaleById).mockResolvedValue(existing as never);
+    vi.mocked(repository.findSaleById).mockResolvedValue(createdSale() as never);
 
     // Even a now-stale client price must not throw on replay.
     const staleReplay = {
@@ -144,19 +153,7 @@ describe("createSale", () => {
   });
 
   it("succeeds with no trading_day_id supplied at all -- the gate is deliberately not enforced yet", async () => {
-    vi.mocked(repository.createSale).mockResolvedValue({
-      id: saleId,
-      status: "completed",
-      tradingDayId: null,
-      provisionalInvoiceNumber: input.provisional_invoice_number,
-      canonicalInvoiceNumber: BigInt(1),
-      financialYear: "2026",
-      subtotalMinorUnits: BigInt(5600),
-      grandTotalMinorUnits: BigInt(5600),
-      completedAt: new Date("2026-08-01T00:00:00Z"),
-      lineItems: [],
-      payments: [],
-    } as never);
+    vi.mocked(repository.createSale).mockResolvedValue(createdSale() as never);
 
     await createSale(authUserId, tenantId, input);
 
@@ -166,19 +163,7 @@ describe("createSale", () => {
   it("links a supplied trading_day_id that resolves to an open day at this store", async () => {
     const tradingDayId = "77777777-7777-4777-8777-777777777777";
     vi.mocked(repository.findOpenTradingDayById).mockResolvedValue({ id: tradingDayId } as never);
-    vi.mocked(repository.createSale).mockResolvedValue({
-      id: saleId,
-      status: "completed",
-      tradingDayId,
-      provisionalInvoiceNumber: input.provisional_invoice_number,
-      canonicalInvoiceNumber: BigInt(1),
-      financialYear: "2026",
-      subtotalMinorUnits: BigInt(5600),
-      grandTotalMinorUnits: BigInt(5600),
-      completedAt: new Date("2026-08-01T00:00:00Z"),
-      lineItems: [],
-      payments: [],
-    } as never);
+    vi.mocked(repository.createSale).mockResolvedValue(createdSale({ tradingDayId }) as never);
 
     const result = await createSale(authUserId, tenantId, { ...input, trading_day_id: tradingDayId });
 
@@ -196,5 +181,210 @@ describe("createSale", () => {
       createSale(authUserId, tenantId, { ...input, trading_day_id: "88888888-8888-4888-8888-888888888888" }),
     ).rejects.toMatchObject({ status: 409, code: "TRADING_DAY_NOT_OPEN" });
     expect(repository.createSale).not.toHaveBeenCalled();
+  });
+
+  describe("discount", () => {
+    it("computes a percent discount and rolls it into discount_total_minor_units", async () => {
+      const discounted = {
+        ...input,
+        line_items: [
+          {
+            product_id: productId,
+            quantity: 2,
+            client_unit_price_minor_units: 2800,
+            discount_percent_basis_points: 1000, // 10% of 5600 = 560
+          },
+        ],
+        payments: [{ method: "cash" as const, amount_minor_units: 5040 }],
+      };
+      vi.mocked(repository.createSale).mockResolvedValue(createdSale() as never);
+
+      await createSale(authUserId, tenantId, discounted);
+
+      expect(repository.createSale).toHaveBeenCalledWith(
+        expect.objectContaining({
+          discountTotalMinorUnits: BigInt(560),
+          subtotalMinorUnits: BigInt(5040),
+          grandTotalMinorUnits: BigInt(5040),
+          lineItems: [
+            expect.objectContaining({
+              lineDiscountMinorUnits: BigInt(560),
+              lineTotalMinorUnits: BigInt(5040),
+            }),
+          ],
+        }),
+      );
+    });
+
+    it("computes a flat discount directly", async () => {
+      const discounted = {
+        ...input,
+        line_items: [
+          {
+            product_id: productId,
+            quantity: 2,
+            client_unit_price_minor_units: 2800,
+            discount_amount_minor_units: 600,
+          },
+        ],
+        payments: [{ method: "cash" as const, amount_minor_units: 5000 }],
+      };
+      vi.mocked(repository.createSale).mockResolvedValue(createdSale() as never);
+
+      await createSale(authUserId, tenantId, discounted);
+
+      expect(repository.createSale).toHaveBeenCalledWith(
+        expect.objectContaining({ discountTotalMinorUnits: BigInt(600) }),
+      );
+    });
+
+    it("rejects a flat discount exceeding the line's own subtotal with VALIDATION_FAILED", async () => {
+      const overDiscounted = {
+        ...input,
+        line_items: [
+          {
+            product_id: productId,
+            quantity: 2,
+            client_unit_price_minor_units: 2800,
+            discount_amount_minor_units: 999999,
+          },
+        ],
+      };
+
+      await expect(createSale(authUserId, tenantId, overDiscounted)).rejects.toMatchObject({
+        status: 422,
+        code: "VALIDATION_FAILED",
+      });
+      expect(repository.createSale).not.toHaveBeenCalled();
+    });
+
+    it("applies an at-threshold discount with no approver needed", async () => {
+      vi.mocked(settingsService.getMoneySettings).mockResolvedValue({
+        roundingRule: "round_half_up",
+        discountAutoApprovalThresholdMinorUnits: BigInt(560),
+      });
+      const atThreshold = {
+        ...input,
+        line_items: [
+          {
+            product_id: productId,
+            quantity: 2,
+            client_unit_price_minor_units: 2800,
+            discount_amount_minor_units: 560,
+          },
+        ],
+        payments: [{ method: "cash" as const, amount_minor_units: 5040 }],
+      };
+      vi.mocked(repository.createSale).mockResolvedValue(createdSale() as never);
+
+      await createSale(authUserId, tenantId, atThreshold);
+
+      expect(repository.createSale).toHaveBeenCalled();
+      expect(rolesService.resolveActiveRole).not.toHaveBeenCalled();
+    });
+
+    it("rejects an over-threshold discount from a Cashier with no discount_approved_by", async () => {
+      vi.mocked(settingsService.getMoneySettings).mockResolvedValue({
+        roundingRule: "round_half_up",
+        discountAutoApprovalThresholdMinorUnits: BigInt(100),
+      });
+      vi.mocked(rolesService.resolveActiveRole).mockResolvedValue("cashier");
+      const overThreshold = {
+        ...input,
+        line_items: [
+          {
+            product_id: productId,
+            quantity: 2,
+            client_unit_price_minor_units: 2800,
+            discount_amount_minor_units: 560,
+          },
+        ],
+      };
+
+      await expect(createSale(authUserId, tenantId, overThreshold)).rejects.toMatchObject({
+        status: 409,
+        code: "DISCOUNT_REQUIRES_APPROVAL",
+      });
+      expect(repository.createSale).not.toHaveBeenCalled();
+    });
+
+    it("allows an over-threshold discount when the caller's own session is Manager/Owner", async () => {
+      vi.mocked(settingsService.getMoneySettings).mockResolvedValue({
+        roundingRule: "round_half_up",
+        discountAutoApprovalThresholdMinorUnits: BigInt(100),
+      });
+      vi.mocked(rolesService.resolveActiveRole).mockResolvedValue("manager");
+      const overThreshold = {
+        ...input,
+        line_items: [
+          {
+            product_id: productId,
+            quantity: 2,
+            client_unit_price_minor_units: 2800,
+            discount_amount_minor_units: 560,
+          },
+        ],
+        payments: [{ method: "cash" as const, amount_minor_units: 5040 }],
+      };
+      vi.mocked(repository.createSale).mockResolvedValue(createdSale() as never);
+
+      await createSale(authUserId, tenantId, overThreshold);
+
+      expect(repository.createSale).toHaveBeenCalled();
+    });
+
+    it("allows an over-threshold discount when discount_approved_by resolves to an active Manager/Owner", async () => {
+      vi.mocked(settingsService.getMoneySettings).mockResolvedValue({
+        roundingRule: "round_half_up",
+        discountAutoApprovalThresholdMinorUnits: BigInt(100),
+      });
+      vi.mocked(rolesService.resolveActiveRole).mockImplementation(async (_t, uid) =>
+        uid === approverId ? "owner" : "cashier",
+      );
+      const overThreshold = {
+        ...input,
+        line_items: [
+          {
+            product_id: productId,
+            quantity: 2,
+            client_unit_price_minor_units: 2800,
+            discount_amount_minor_units: 560,
+          },
+        ],
+        payments: [{ method: "cash" as const, amount_minor_units: 5040 }],
+        discount_approved_by: approverId,
+      };
+      vi.mocked(repository.createSale).mockResolvedValue(createdSale() as never);
+
+      await createSale(authUserId, tenantId, overThreshold);
+
+      expect(repository.createSale).toHaveBeenCalled();
+    });
+
+    it("rejects an over-threshold discount when discount_approved_by resolves to an insufficient role", async () => {
+      vi.mocked(settingsService.getMoneySettings).mockResolvedValue({
+        roundingRule: "round_half_up",
+        discountAutoApprovalThresholdMinorUnits: BigInt(100),
+      });
+      vi.mocked(rolesService.resolveActiveRole).mockResolvedValue("cashier");
+      const overThreshold = {
+        ...input,
+        line_items: [
+          {
+            product_id: productId,
+            quantity: 2,
+            client_unit_price_minor_units: 2800,
+            discount_amount_minor_units: 560,
+          },
+        ],
+        discount_approved_by: approverId,
+      };
+
+      await expect(createSale(authUserId, tenantId, overThreshold)).rejects.toMatchObject({
+        status: 409,
+        code: "DISCOUNT_REQUIRES_APPROVAL",
+      });
+      expect(repository.createSale).not.toHaveBeenCalled();
+    });
   });
 });

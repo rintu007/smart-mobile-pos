@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 11 — API Design
-> **Version:** 0.3.0
+> **Version:** 0.4.0
 > **Last updated:** 2026-08-14
 > **Owner:** Principal Next.js Engineer
 > **Approved by:** _pending_
@@ -50,6 +50,22 @@ schema trigger in [schema-server.md](../../07-database/schema-server.md). A `dra
 is mutated only on the client until the moment it completes; a held/draft cart is not itself synced
 to the server as a partial row — see [sync-api.md](../sync-api.md) for exactly what crosses the
 wire and when.
+
+## Implementation note (Sprint 27, [pos/specification.md](../../modules/pos/specification.md))
+
+**Discount is built as a per-line request field pair, not shown in this section's own worked
+example above** (which predates it): `line_items[].discount_percent_basis_points` or
+`line_items[].discount_amount_minor_units` (mutually exclusive, DR-011), plus an optional
+top-level `discount_approved_by`. The server computes `line_discount_minor_units` per line,
+`discount_total_minor_units` for the sale, and rejects with `DISCOUNT_REQUIRES_APPROVAL` (409) if
+the total exceeds `shop_settings.discount_auto_approval_threshold_minor_units` and neither the
+caller nor the named approver resolves to an active Manager/Owner at this store (DR-012).
+
+**A real semantic correction, found implementing this**: `subtotal_minor_units` now means what
+[money-and-tax.md](../../07-database/money-and-tax.md) always specified — post-discount, pre-tax —
+not the pre-discount raw sum this implementation silently computed before Discount existed to
+make the two values diverge. `grand_total_minor_units` equals `subtotal_minor_units` exactly until
+Tax computation (M2 item 4) adds a `tax_total_minor_units` on top.
 
 ## Implementation note (Sprint 26, [trading-day/specification.md](../../modules/trading-day/specification.md))
 
@@ -176,6 +192,7 @@ per [sync-api.md](../sync-api.md), rather than blocking the sale.
 | `PRICE_MISMATCH` | 409 | See above — connected-device case only; the offline case does not produce this error at all. |
 | `PAYMENT_AMOUNT_MISMATCH` | 409 | A submitted payment's total does not equal the server-recomputed `grand_total_minor_units` — added in M0's minimal implementation (Sprint 05), which has no discount/tax yet so this simplifies to "payment must equal the sum of line totals." |
 | `SALE_IMMUTABLE` | 409 | Any write attempt against a `completed` sale. |
+| `DISCOUNT_REQUIRES_APPROVAL` | 409 | **New, Sprint 27.** `discount_total_minor_units` exceeds `shop_settings.discount_auto_approval_threshold_minor_units` and neither the caller nor `discount_approved_by` resolves to an active Manager/Owner at this store. |
 
 ## Change Log
 
@@ -185,3 +202,4 @@ per [sync-api.md](../sync-api.md), rather than blocking the sale.
 | 0.1.1 | 2026-08-01 | Correction found planning Sprint 05: this document's `POST /sales` shape is the full V1 contract, but backlog.md scopes M0 to cash-only/no-discount/no-tax and defers Trading Day (M2) and device registration (Authentication, not yet built) — noted inline rather than narrowing this section. |
 | 0.2.0 | 2026-08-14 | Sprint 24 (backlog item 8): `GET /sales/{id}`, `GET /sales`, `GET /sales/lookup` built and live-verified (7/7); `POST /sales` now assigns `canonical_invoice_number`/`financial_year` atomically. Corrected: `canonical_invoice_number` is never actually `null` for a stored sale in this implementation (see the new implementation note). `GET /sales`'s "own device's trading day only" Cashier restriction adapted to "own sales they personally created," since neither `devices` nor `trading_days` exists in code. |
 | 0.3.0 | 2026-08-14 | Sprint 26 (backlog.md M2 item 2): `POST /trading-days/open`, `POST /trading-days/{id}/close`, `POST /trading-days/{id}/reopen` (new), `GET /trading-days/current` all built and live-verified (26/26). Trading Day re-scoped per-store, not per-device (a named, dated deviation — see the new implementation note). `POST /sales` gains an optional `trading_day_id`; the `TRADING_DAY_NOT_OPEN` hard gate is deliberately deferred to the sprint pairing this with the mobile till's own open-day flow. Added `TRADING_DAY_NOT_CLOSED`. |
+| 0.4.0 | 2026-08-14 | Sprint 27 (backlog.md M2 item 3): per-line Discount built and live-verified — `discount_percent_basis_points`/`discount_amount_minor_units` (DR-011), `discount_approved_by` (DR-012), `DISCOUNT_REQUIRES_APPROVAL`. Corrected `subtotal_minor_units` to money-and-tax.md's always-specified post-discount, pre-tax meaning. |
