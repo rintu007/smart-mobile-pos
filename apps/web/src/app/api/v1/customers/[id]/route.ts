@@ -13,7 +13,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { tenantId } = await requirePermission(request, ["cashier", "manager", "owner"]);
+    const { authUserId, tenantId } = await requirePermission(request, ["cashier", "manager", "owner"]);
     const { id } = await params;
 
     const body = await request.json();
@@ -24,7 +24,7 @@ export async function PATCH(
       });
     }
 
-    const result = await updateCustomer(tenantId, id, parsed.data);
+    const result = await updateCustomer(authUserId, tenantId, id, parsed.data);
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof ApiError) {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/features/customers/domain/entities/customer.dart';
+import 'package:mobile/features/customers/domain/entities/customer_field_conflict.dart';
 import 'package:mobile/features/customers/domain/repositories/customer_repository.dart';
 import 'package:mobile/features/customers/presentation/providers/customer_providers.dart';
 import 'package:mobile/features/customers/presentation/screens/customer_detail_screen.dart';
@@ -28,6 +29,17 @@ class _FakeCustomerRepository implements CustomerRepository {
 
   @override
   Future<void> refreshFromServer() => throw UnimplementedError();
+
+  @override
+  Future<Customer> updateCustomer({required String id, String? name, String? phone}) =>
+      throw UnimplementedError();
+
+  @override
+  Future<List<CustomerFieldConflict>> listConflicts() => throw UnimplementedError();
+
+  @override
+  Future<void> resolveConflict({required String conflictId, required String? resolvedValue}) =>
+      throw UnimplementedError();
 }
 
 Widget _wrap(_FakeCustomerRepository repository, {String customerId = 'customer-1'}) {

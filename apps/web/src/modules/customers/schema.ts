@@ -17,15 +17,49 @@ export const createCustomerRequestSchema = z.object({
 
 export type CreateCustomerRequest = z.infer<typeof createCustomerRequestSchema>;
 
-// docs/modules/customers/specification.md §5 — PATCH /api/v1/customers/{id}. Both fields
-// independently optional; the "would leave both null" case is checked in service.ts against the
-// existing row, not here, since this schema alone can't see what's already stored.
+// docs/modules/customers/specification.md §1c/§5 — PATCH /api/v1/customers/{id}, upgraded Sprint 35
+// (backlog.md M3 item 5) to the merge-aware shape: a genuine, dated contract break from Sprint 31's
+// original partial-update shape, judged safe since no mobile caller of PATCH ever existed before
+// this sprint. All four fields are required, not just the changed one(s) — the field-level 3-way
+// merge (service.ts's mergeCustomerFields) needs each field's own base value to detect overlap
+// regardless of which field(s) this particular edit actually intends to change. `base_updated_at`
+// is carried for fidelity to conflict-resolution.md §3's own vocabulary but is not separately
+// branched on — see service.ts's own comment for why it's mathematically redundant with the
+// per-field comparison.
 export const updateCustomerRequestSchema = z.object({
-  name: z.string().trim().min(1).max(200).nullable().optional(),
-  phone: z.string().trim().min(1).max(20).nullable().optional(),
+  base_updated_at: z.string().datetime(),
+  base_name: z.string().trim().min(1).max(200).nullable(),
+  base_phone: z.string().trim().min(1).max(20).nullable(),
+  name: z.string().trim().min(1).max(200).nullable(),
+  phone: z.string().trim().min(1).max(20).nullable(),
 });
 
 export type UpdateCustomerRequest = z.infer<typeof updateCustomerRequestSchema>;
+
+// docs/modules/customers/specification.md §5 — the customer.update sync-push payload: the same
+// four fields as PATCH's body, plus `id` (the target customer, no URL to carry it in a push batch —
+// the same structural difference return.approve/return.reject's own sync payloads already
+// established, docs/modules/returns/specification.md §5).
+export const syncUpdateCustomerPayloadSchema = updateCustomerRequestSchema.extend({
+  id: z.string().uuid(),
+});
+
+export type SyncUpdateCustomerPayload = z.infer<typeof syncUpdateCustomerPayloadSchema>;
+
+// docs/modules/customers/specification.md §5 — POST /api/v1/customers/conflicts/{id}/resolve.
+export const resolveConflictRequestSchema = z.object({
+  resolved_value: z.string().trim().min(1).max(200).nullable(),
+});
+
+export type ResolveConflictRequest = z.infer<typeof resolveConflictRequestSchema>;
+
+// docs/modules/customers/specification.md §4 — GET /api/v1/customers/conflicts query params.
+export const listConflictsQuerySchema = z.object({
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().positive().max(200).default(50),
+});
+
+export type ListConflictsQuery = z.infer<typeof listConflictsQuerySchema>;
 
 // docs/modules/customers/specification.md §4 — GET /api/v1/customers query params.
 export const listCustomersQuerySchema = z.object({

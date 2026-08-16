@@ -4,17 +4,20 @@
 > **Module:** Customers (basic)
 > **Slice:** V1, minimal — `customers` table, `sales.customer_id`, `POST`/`GET`/`PATCH`/`DELETE
 > /customers`, `GET /customers/{id}/purchase-history` (Sprint 31); `customer.create` sync-push,
-> `POST /sales` accepting `customer_id`, and the mobile UI (Sprint 32). Conflict-resolution
-> field-merge remains a separate, later backlog item (§1).
-> **Version:** 0.3.0
+> `POST /sales` accepting `customer_id`, and the mobile UI (Sprint 32); the conflict-resolution
+> field-merge policy live end to end — `customer.update` sync-push, `PATCH /customers/{id}` upgraded
+> to the same merge-aware logic, `customer_field_conflicts`, `GET /customers/conflicts`,
+> `POST /customers/conflicts/{id}/resolve`, and the mobile edit/conflict-resolution screens
+> (Sprint 35, backlog.md M3 item 5 — **M3's last item**).
+> **Version:** 0.4.0
 > **Last updated:** 2026-08-16
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
 
 All eleven sections per [documentation-standards.md §7](../../00-governance/documentation-standards.md#7-module-specification-template).
 Written to drive [Sprint 31](../../17-sprints/sprint-31.md); extended (§1a and throughout) to drive
-[Sprint 32](../../17-sprints/sprint-32.md) — specification before code, per
-[docs/README.md](../../README.md)'s non-negotiable rule #1.
+[Sprint 32](../../17-sprints/sprint-32.md) and, again (§1c), [Sprint 35](../../17-sprints/sprint-35.md)
+— specification before code, per [docs/README.md](../../README.md)'s non-negotiable rule #1.
 
 ---
 
@@ -103,6 +106,107 @@ two distinct entry points for two distinct jobs, not one screen serving both awk
 items (Sprint 30) — `CartState` gains `customerId`/`customerName`/`customerPhone`, persisted on the
 local `sales` draft row alongside the cart's other fields, restored on resume.
 
+## 1c. Sprint 35 — Conflict-resolution field-merge, M3 item 5 (M3's last item)
+
+[backlog.md M3 item 5](../../17-sprints/backlog.md#4-m3--fully-decomposed-2026-08-16-now-that-m2-has-reached-this-point):
+the sync engine's first `.update` operation type of any kind, and
+[milestones.md — M3](../../16-milestones/milestones.md)'s own hard exit criterion: *"a field-edit
+conflict on a customer record (two devices, same field, different values) surfaces in the exact
+business-language form specified in
+[conflict-resolution.md](../../13-offline-sync/conflict-resolution.md), not a placeholder."*
+`customers.md`'s own Sprint 31 implementation note already named this as `PATCH /customers/{id}`'s
+own forward-declared future requirement ("the conflict-resolution field-merge policy `PATCH` needs
+to actually honour concurrent offline edits — is item 5's scope"), so **`PATCH` itself is upgraded
+in this sprint**, not superseded by a separate `customer.update`-only mechanism — both the direct
+endpoint and the sync-push operation type call the identical, newly-merge-aware
+`updateCustomer` service function, holding sync-api.md §1's "push calls the exact same service
+method as the direct endpoint" rule intact rather than treating this as an exception to it.
+
+**The field-level 3-way merge this needs cannot be computed from `base_updated_at` alone — a real
+design gap found while writing this spec, before code.** conflict-resolution.md §3 describes the
+policy as "the server compares the fields touched by each edit," but the server has no field-level
+edit history for `customers` (no audit-log entries are written on `PATCH` today, and building one
+purely to reconstruct historical field values would be new, disproportionate scope for a two-field
+table). Resolved instead with a per-field 3-way comparison requiring no server-side history at all:
+the client already knows, from its own last pull, the value each field it's about to change *had*
+at that time — its own **base value** — so `PATCH`'s request body is extended to carry it alongside
+the new value for every field position (both `name` and `phone`, always both, not only the changed
+one — see §5 for why). For each field:
+
+- `current == base` (nobody else touched this field since this device last knew it) → apply the new
+  value outright, whether or not the field actually changed.
+- `current != base` and `current == new value` (someone else already set it to exactly what this
+  edit also wants) → no-op, not a conflict — the desired end state already holds.
+- `current != base` and `current != new value` (someone else changed it to something else, and this
+  edit disagrees) → **the genuine field-edit conflict** conflict-resolution.md §3 describes. That
+  field is **not** applied — it stays at its current (already-committed) value — and a
+  `customer_field_conflicts` row is written recording both candidates, awaiting a Manager/Owner's
+  decision. Every other field in the same request that isn't in conflict still applies normally, in
+  the same call.
+
+This is a genuine per-field 3-way merge (base/current/new) computed entirely from data the request
+itself carries — no new server-side history mechanism, no speculative generalisation to
+`categories`/`units`/`products` (none of which has a mobile edit screen either, the same scoping
+reason [backlog.md §4](../../17-sprints/backlog.md#4-m3--fully-decomposed-2026-08-16-now-that-m2-has-reached-this-point)
+already gave for keeping this item `customers`-only). `base_updated_at` itself is carried in the
+request (matching conflict-resolution.md §3's own vocabulary) but is not separately branched on in
+the implementation — it is mathematically subsumed by the per-field comparison above (when it
+matches the row's actual `updated_at`, every field's `base` trivially equals `current` too, so the
+general algorithm already produces the identical "apply everything" result the whole-row fast path
+would) — kept for request-shape fidelity to the already-approved cross-cutting document, not as a
+second, materially different code path.
+
+**A second real gap found while writing this spec: the worked example attributes each candidate
+value to a named person ("Priya set it to..."), which needs to know who actually set the currently-
+applied value — information no existing column captures** (`customers` only has `created_by`, never
+an editor). Resolved with one new column, `customers.updated_by` (nullable — null for a customer
+never edited since creation, in which case its creator is attributed instead), set on every
+successful field application. `customer_field_conflicts` stores `current_set_by`/`attempted_set_by`
+(both `users.id`) alongside each candidate value; `GET /customers/conflicts` resolves both to
+`display_name` in its response so the mobile prompt can render the worked example's exact wording
+without a second round-trip.
+
+**Where an unresolved conflict is stored and resolved — new, minimal scope, not
+`sync_rejections`.** `sync_rejections` (named-but-deferred in Sprint 33, M3 item 3) is a different
+concept entirely — a post-hoc *permission* re-validation failure — and remains out of scope here.
+A field-edit conflict is a *data* disagreement, not a rejected operation, and needs its own small
+table: **`customer_field_conflicts`** (new, tenant-scoped) — `id`, `tenant_id`, `customer_id`,
+`field` (`'name'` | `'phone'`), `current_value`, `attempted_value`, `created_at`, and
+`resolved_at`/`resolved_value`/`resolved_by` (all nullable until decided). Two new endpoints,
+Manager/Owner only (matching `DELETE /customers/{id}`'s own role gate, and
+[sync-ui.md §2](../../13-offline-sync/sync-ui.md#2-what-tapping-the-indicator-does)'s framing of
+conflicts as something needing "the Owner/Manager's attention"): `GET /customers/conflicts` (list
+unresolved) and `POST /customers/conflicts/{id}/resolve` (`{ resolved_value }`, which must equal
+either `current_value` or `attempted_value` — the worked example's own "a single tap to pick one,"
+not open-ended free text, which would be new, undiscussed scope). Resolving simply writes the chosen
+value to the customer row (bumping `updated_at` normally) and marks the conflict row resolved. This
+review flow is **online-only** — a Manager/Owner reviewing conflicts that may have originated on a
+different device already needs connectivity to see them, the same reasoning
+[settings.md](../../11-api/endpoints/settings.md)'s own online-only stance already established for
+a comparably rare, low-frequency administrative action.
+
+**A deliberate, dated contract change to `PATCH /customers/{id}`, not a silent break.** Sprint 31's
+original request shape (`{ name?, phone? }`, true partial-update semantics) is replaced with the
+merge-aware shape (§5) — a real, documented break from the original contract, judged safe because no
+mobile caller of `PATCH` has ever existed (Sprint 32 built browse/purchase-history screens only, no
+edit screen) — the same "no real caller yet, so the timing is free" reasoning
+[customers/specification.md §1](#1-purpose-and-business-context)'s own `sales.customer_id` addition
+already used.
+
+**Mobile**: the local `Customers` table gains no new columns (`updatedAt` already exists, per §3's
+own note that it was added ahead of need specifically for this item). A new `CustomerEditScreen`
+(`/customers/:id/edit`) is the sprint's first mobile customer-edit UI at all — writes locally
+(optimistic, using the pre-edit local row as `base_name`/`base_phone`) and enqueues `customer.update`
+atomically, the same `DriftCustomerRepository.createCustomer`-established shape. A new
+`ConflictsScreen` (`/customers/conflicts`, Manager/Owner — shown to every role per the same
+no-client-side-role-awareness stance [returns/specification.md §1b](../returns/specification.md#1b-sprint-34--returns--refund-mobile-m3-item-4)
+already established, the server's own `403` surfaced honestly rather than gated) renders the
+worked example's exact prompt: *"[Name]'s [field] was changed by two people at the same time. \[value
+A\]. \[value B\]. Which is correct?"* — two tappable choices, never a raw form. A badge on the same
+Till-screen icon family (`pos_customer_conflicts_button`) mirrors the returns-approvals badge shape
+Sprint 34 already established, reusing the identical swallowed-403-means-no-badge mechanism for a
+Cashier.
+
 ## 2. Business rules
 
 - **A customer record needs at least one of `name`/`phone`** — `CUSTOMER_IDENTIFIER_REQUIRED`
@@ -127,6 +231,14 @@ local `sales` draft row alongside the cart's other fields, restored on resume.
 - **Purchase history only ever lists `sales` with `status = 'completed'`** — a draft/held sale is
   never attributable to a customer's history, matching FR-051's "prior *completed* sales" wording
   exactly.
+- **Field-edit conflicts (Sprint 35, §1c)** — a `PATCH`/`customer.update` field whose current server
+  value differs from both the request's own base value *and* its new value is not applied; it is
+  recorded in `customer_field_conflicts` for Manager/Owner resolution instead. `assertHasIdentifier`
+  is checked against the *resulting* merged state (fields that did apply plus fields left at their
+  current, un-conflicted value) — the same "checked against the merged result, not either value in
+  isolation" stance already established for ordinary `PATCH`.
+- **Resolving a conflict accepts only one of the two recorded candidate values** — no free-text
+  override, matching the worked example's own "a single tap to pick one."
 
 ## 3. Database tables and relationships
 
@@ -148,21 +260,40 @@ schema-server.md's own documented `ON DELETE SET NULL` exactly (the one FK in th
 RLS: tenant-scoped, same template as every other table
 ([supabase/sql/014_rls_customers.sql](../../../supabase/sql/014_rls_customers.sql)).
 
+`customers` gains `updated_by` (nullable `UUID REFERENCES users(id) ON DELETE SET NULL`, Sprint 35,
+§1c) — the actor of the most recent successful field application, for conflict attribution.
+
+**`customer_field_conflicts` (new, Sprint 35, §1c)** — `id` (server-generated), `tenant_id`,
+`customer_id` (`REFERENCES customers(id) ON DELETE CASCADE` — a conflict has no meaning once its own
+customer is gone), `field` (`TEXT`, `'name' | 'phone'`), `current_value`/`attempted_value`
+(`TEXT`, nullable, mirroring the customer fields' own nullability), `current_set_by`/
+`attempted_set_by` (`UUID REFERENCES users(id)`, both `NOT NULL` — the worked example's own
+attribution requirement), `created_at`, `resolved_at`/`resolved_value`/`resolved_by` (all nullable
+until decided). Index: `(tenant_id, resolved_at) WHERE resolved_at IS NULL` — the unresolved-
+conflicts queue. RLS: tenant-scoped, standard template.
+
 ## 4. API contract
 
 | Method & path | Status |
 | --- | --- |
 | `POST /api/v1/customers` | **Built this sprint.** Cashier, Manager, Owner. `id` (client-generated UUIDv4, creation-style idempotency — matches `products`/`categories`'s own upsert-on-id pattern), `name`/`phone` (at least one required). |
 | `GET /api/v1/customers` | **Built this sprint.** Any authenticated role. Filter: `phone` (exact match). Cursor-paginated on `(updated_at, id)`, matching `products`'s own convention. Excludes deactivated customers (§2). |
-| `PATCH /api/v1/customers/{id}` | **Built this sprint.** Cashier, Manager, Owner. Partial update (`name`/`phone`), plain last-write-wins (§1). |
+| `PATCH /api/v1/customers/{id}` | **Upgraded Sprint 35 (§1c) — breaking contract change, no prior mobile caller existed.** Cashier, Manager, Owner. Merge-aware: `base_updated_at`, `base_name`, `base_phone`, `name`, `phone` (all required — §5). Per-field 3-way merge against the concurrently-current row; a genuine same-field conflict is not applied, recorded in `customer_field_conflicts` instead, response still `200` (the fields that weren't in conflict still applied). |
 | `DELETE /api/v1/customers/{id}` | **Built this sprint.** Manager, Owner only. Soft delete (§2), idempotent. |
 | `GET /api/v1/customers/{id}/purchase-history` | **Built this sprint.** Any authenticated role. Cursor-paginated `sales` for this customer, `status = 'completed'` only (§2), ordered `(completed_at, id)` desc. |
 | `POST /api/v1/sales` | **Extended Sprint 32.** `customer_id` accepted as an optional field, per §1a. When supplied, must resolve to a real `customers` row under the caller's tenant (`NOT_FOUND` otherwise) — deactivated customers are still valid targets (§2's soft-delete stance: a deactivated customer can still complete a sale in progress, only future *lookup* excludes them). |
 | `POST /api/v1/sync/push` (`customer.create`) | **Built Sprint 32** — §1a. Dispatches to the same `customersService.createCustomer` `POST /customers` already calls, per sync-api.md §1. |
+| `POST /api/v1/sync/push` (`customer.update`) | **Built Sprint 35 (§1c) — the sync engine's first `.update` operation type of any kind.** Same payload shape as the upgraded `PATCH` body (with `id` added, since a push operation has no URL — the same structural difference `return.approve`/`return.reject`'s own sync payloads already established, [returns/specification.md §5](../returns/specification.md#5-validation-rules-client-and-server)). Dispatches to the same, now-merge-aware `customersService.updateCustomer`. |
+| `GET /api/v1/customers/conflicts` | **Built Sprint 35 (§1c).** Manager, Owner only. Unresolved `customer_field_conflicts`, most-recent-first. |
+| `POST /api/v1/customers/conflicts/{id}/resolve` | **Built Sprint 35 (§1c).** Manager, Owner only. `{ resolved_value }`, must equal `current_value` or `attempted_value`. Writes the chosen value to the customer row and marks the conflict resolved. Online-only (§1c). |
 
 Route files: `customers/route.ts` (POST, GET — a static top-level file, no dynamic sibling risk),
-`customers/[id]/route.ts` (PATCH, DELETE), `customers/[id]/purchase-history/route.ts` — applying
-Sprint 23/24's own static-vs-dynamic routing lesson proactively from the start, same as Trading Day.
+`customers/[id]/route.ts` (PATCH, DELETE), `customers/[id]/purchase-history/route.ts`,
+`customers/conflicts/route.ts` (GET), `customers/conflicts/[id]/resolve/route.ts` (POST) — the
+`conflicts/` pair are static siblings of `customers/[id]/route.ts`, not nested under it, applying
+Sprint 23/24's own static-vs-dynamic routing lesson proactively from the start (the same lesson
+`POST /users/invite` learned the hard way — a literal `conflicts` segment must never fall through to
+`[id]`'s own dynamic match).
 
 ## 5. Validation rules (client and server)
 
@@ -172,7 +303,9 @@ Sprint 23/24's own static-vs-dynamic routing lesson proactively from the start, 
 | `name` | `.string().trim().min(1).max(200).optional()`. |
 | `phone` | `.string().trim().min(1).max(20).optional()`. At least one of `name`/`phone` enforced via `.refine()`, not per-field — `CUSTOMER_IDENTIFIER_REQUIRED` on violation. |
 | `phone` (query filter) | `.string().trim().min(1).max(20).optional()`. |
-| PATCH body | Same `name`/`phone` shapes, both optional independently — a `PATCH` with neither field present is a no-op, not an error (matches `PATCH /settings`'s own partial-update stance). |
+| PATCH body (Sprint 35, §1c) | `base_updated_at` (`.string().datetime()`), `base_name`/`base_phone`/`name`/`phone` (all `.string().trim().min(1).max(...).nullable()`, all **required** — not the original partial-update shape). All four are required, not just the changed field(s), because the merge logic needs each field's base value to detect overlap regardless of which field(s) this particular edit actually intends to change (§1c) — a client always knows its own currently-cached `name`/`phone` before editing, so this is never a real burden on the caller. |
+| `customer.update` sync payload | Same four fields as `PATCH`'s body, plus `id` (the target customer, no URL to carry it in a push batch). |
+| `resolved_value` (conflict resolution) | `.string().nullable()` — must equal the conflict's own `current_value` or `attempted_value` (checked in the service layer, not by Zod, since Zod can't see the row being resolved). |
 
 **A real bug found live (Sprint 31's own verification script), not by inspection:** the "at least
 one of name/phone" rule was first written as a Zod `.refine()` on `createCustomerRequestSchema`,
@@ -194,21 +327,23 @@ a specific, documented error code.
 | --- | --- | --- |
 | `CUSTOMER_IDENTIFIER_REQUIRED` | 422 | Already reserved (error-catalogue.md). Both `name` and `phone` omitted on create, or a PATCH would leave both null. |
 | `PHONE_ALREADY_ASSIGNED` | 409 | Already reserved. The `(tenant_id, phone) WHERE deactivated_at IS NULL` unique index's `P2002`, translated — on create or on a PATCH that moves `phone` onto an already-assigned value. |
-| `NOT_FOUND` | 404 | `PATCH`/`DELETE`/purchase-history target an `id` that doesn't exist under the caller's tenant. |
-| `PERMISSION_DENIED` | 403 | `DELETE` called by a Cashier. |
+| `NOT_FOUND` | 404 | `PATCH`/`DELETE`/purchase-history target an `id` that doesn't exist under the caller's tenant; `resolve` targets a nonexistent or already-resolved conflict `id`. |
+| `PERMISSION_DENIED` | 403 | `DELETE`/`GET /customers/conflicts`/`resolve` called by a Cashier. |
 | `VALIDATION_FAILED` | 422 | Any Zod failure. |
+| `CONFLICT_RESOLUTION_VALUE_INVALID` | 422 | *New, Sprint 35.* `resolved_value` matches neither the conflict's `current_value` nor `attempted_value`. |
 
 ## 7. Offline behaviour
 
-**`POST /customers` is now genuinely offline-capable (Sprint 32)**, per §1a: local write +
+**`POST /customers` is genuinely offline-capable (Sprint 32)**, per §1a: local write +
 `outbound_queue` enqueue, atomic in one Drift transaction, drained by the existing sync trigger
-(Sprint 14) with no changes needed there. `customer.update` remains **not built** — item 5's scope
-specifically, since it's also this project's first `.update` operation type of any kind and needs
-the field-merge policy, not just a bare upsert; mobile has no customer-edit screen this sprint
-either, so there is still no real caller for it. `GET /customers`/`GET /customers/{id}/purchase-history`
-are not sync-pulled (§1a's direct-fetch-and-cache decision) — the local `customers` cache is
-refreshed via a direct online call, offline search works against whatever was last fetched, the
-same staleness shape Categories/Units already established.
+(Sprint 14) with no changes needed there. **`customer.update` is built this sprint (Sprint 35, §1c)**
+— the same local-write-plus-enqueue shape, atomic, genuinely offline-capable: an edit made offline
+queues normally and is merge-resolved once it syncs, whenever that is, exactly the scenario the
+worked example's two devices exercise. `GET /customers`/`GET /customers/{id}/purchase-history` are
+not sync-pulled (§1a's direct-fetch-and-cache decision) — the local `customers` cache is refreshed
+via a direct online call, offline search works against whatever was last fetched, the same staleness
+shape Categories/Units already established. `GET /customers/conflicts`/`resolve` are online-only
+(§1c) — no local conflict cache, no offline queuing for resolution itself.
 
 ## 8. Realtime behaviour
 
@@ -245,15 +380,41 @@ amount, per that row's own count). Creating a *new* customer inline (tap chip �
 create) is comparable in shape — a typed field plus a confirming tap, not a new tap-count category
 this document's existing rows don't already cover.
 
+**Built Sprint 35**, per §1c:
+
+- **`CustomerEditScreen`** (`/customers/:id/edit`) — reached from `CustomerDetailScreen`'s new
+  `customer_edit_button`. Two fields (`customer_edit_name_field`/`customer_edit_phone_field`,
+  pre-filled from the local cache), a `customer_edit_save_button`. Saving writes locally (using the
+  screen's own pre-edit values as `base_name`/`base_phone`) and enqueues `customer.update` — no
+  blocking network call, the save always succeeds locally regardless of connectivity, per §1c/§7.
+- **`ConflictsScreen`** (`/customers/conflicts`) — a plain list (`customer_conflicts_list`, rows
+  keyed `customer_conflict_row_<id>`, empty state `customer_conflicts_empty`); tapping a row expands
+  the worked example's exact prompt in place, attribution included: *"\[Customer name\]'s \[field\]
+  was changed by two people at the same time. \[current_set_by.display_name\] set it to
+  \[current_value\]. \[attempted_set_by.display_name\] set it to \[attempted_value\]. Which is
+  correct?"* with two tappable choice buttons
+  (`customer_conflict_choice_current_<id>`/`customer_conflict_choice_attempted_<id>`) — never row
+  IDs, timestamps, or "conflict"/"version"/"base" vocabulary anywhere in the rendered text,
+  per [sync-ui.md §4](../../13-offline-sync/sync-ui.md#4-what-is-deliberately-never-shown). A
+  Cashier who reaches this screen (nothing prevents navigation, per the no-role-awareness stance)
+  sees the server's own `403` as the same plain error state every other list screen already uses.
+- **Till screen** gains `pos_customer_conflicts_button` (→ `/customers/conflicts`, with a live
+  unresolved-count `Badge`, the identical swallowed-403-means-no-badge mechanism
+  [returns/specification.md §1b](../returns/specification.md#1b-sprint-34--returns--refund-mobile-m3-item-4)
+  already established for the returns-approvals badge).
+
 ## 10. Test plan
 
 - Unit tests (`customers/service.test.ts`): `createCustomer` — creates with only `name`, only
   `phone`, or both; rejects both-omitted with `CUSTOMER_IDENTIFIER_REQUIRED`; translates the phone
   unique-constraint violation to `PHONE_ALREADY_ASSIGNED`; a replayed `id` is an idempotent no-op
-  (same shape `createProduct`'s own upsert-on-id test already covers). `updateCustomer` — partial
-  update of `name` only, `phone` only, or both; a PATCH that would leave both fields null is rejected
-  the same way creation is; translates a phone collision the same way creation does; a PATCH on a
-  nonexistent `id` is `NOT_FOUND`. `deactivateCustomer` — sets `deactivated_at`; idempotent replay on
+  (same shape `createProduct`'s own upsert-on-id test already covers). `updateCustomer` — **superseded
+  by Sprint 35's merge-aware rewrite, below** (originally: partial update of `name` only, `phone`
+  only, or both; a PATCH that would leave both fields null is rejected the same way creation is;
+  translates a phone collision the same way creation does; a PATCH on a nonexistent `id` is
+  `NOT_FOUND` — all of which still hold under the new shape, just expressed via `base_name`/
+  `base_phone` equal to the unchanged field's own current value rather than an omitted key).
+  `deactivateCustomer` — sets `deactivated_at`; idempotent replay on
   an already-deactivated customer; `NOT_FOUND` on a nonexistent `id`. `listCustomers` — filters by
   exact `phone`; excludes deactivated customers; cursor pagination round-trips correctly (peek-and-
   trim, same pattern as `listProducts`). `getPurchaseHistory` — only `status = 'completed'` sales
@@ -294,6 +455,49 @@ this document's existing rows don't already cover.
   list; `CustomerDetailScreen` renders purchase history; hold-then-resume preserves the attached
   customer.
 
+**Sprint 35 additions (M3 item 5, the field-merge policy):**
+
+- Unit tests (`customers/service.test.ts`, rewritten `updateCustomer` group): no concurrent edit
+  (`base_updated_at` matches) applies both fields outright; a non-overlapping field pair (Device A's
+  base/current/new for `name`, Device B's for `phone`) both apply in independent calls with no
+  conflict; the exact worked example — two devices' conflicting `phone` values — the *first* call
+  applies cleanly, the *second* call's `phone` is **not** applied (row's `phone` stays at the first
+  call's value), a `customer_field_conflicts` row is written with both candidate values, and the
+  *other* field in the second call (if unrelated and non-conflicting) still applies; a request whose
+  new value happens to already equal the current (already-changed-by-someone-else) value is a
+  silent no-op, no conflict row written; `assertHasIdentifier` checked against the final merged
+  state. `listConflicts`/`resolveConflict` — lists only unresolved rows; resolving with a value
+  matching neither candidate is rejected (`CONFLICT_RESOLUTION_VALUE_INVALID`); resolving writes the
+  chosen value to the customer row and marks the conflict resolved; a second resolve attempt on an
+  already-resolved conflict is an idempotent no-op (returns the already-resolved state, the same
+  `approveReturn`/`deactivateCustomer` shape), not an error.
+- Unit tests (`sync/service.test.ts`): `customer.update` dispatches to the same, now-merge-aware
+  `customersService.updateCustomer`; a bad payload is rejected the same way every other operation
+  type's own bad-payload case already is.
+- **Live verification, real database, throwaway tenant (deleted after) — the exit criterion itself,
+  provoked for real:**
+  1. Create a customer with `name`/`phone` both set.
+  2. "Device A" (`PATCH`) changes `phone` to a new value, `base_name`/`base_phone` matching the
+     customer's actual current values → `200`, applied.
+  3. "Device B" (`PATCH`, using the *original* `base_updated_at`/`base_phone` from before step 2)
+     changes `phone` to a *different* new value → `200`, but `GET /customers/{id}` afterward shows
+     Device A's value, not Device B's.
+  4. `GET /customers/conflicts` (Manager) → one unresolved row, `field: "phone"`, both candidate
+     values present, exactly the worked example's own shape.
+  5. `POST /customers/conflicts/{id}/resolve` with Device B's value → `200`; `GET /customers/{id}`
+     now shows Device B's value; `GET /customers/conflicts` → empty.
+  6. `POST /customers/conflicts/{id}/resolve` again (same value) → `200`, idempotent no-op — the
+     same already-decided-state-transition shape `approveReturn`/`deactivateCustomer` already
+     established, not an error.
+  7. `POST /sync/push` with a `customer.update` operation → `accepted`, applied identically to the
+     direct endpoint.
+  8. Cross-tenant RLS: tenant B's `GET /customers/conflicts` never resolves tenant A's conflict.
+- **Mobile:** `flutter analyze`/`flutter test` — `CustomerEditScreen` saves locally and enqueues
+  `customer.update` with the pre-edit values as `base_name`/`base_phone`; `ConflictsScreen` renders
+  the empty state, a populated list, and the exact two-choice prompt; tapping a choice resolves it;
+  the Till badge reflects a fake conflicts-list length and shows nothing when the fake throws (the
+  Cashier case, mirroring Sprint 34's own returns-approvals badge test).
+
 ## 11. Traceability
 
 | Requirement | Covered by | Status |
@@ -304,8 +508,9 @@ this document's existing rows don't already cover.
 | FR-062 (return lookup by customer phone) | §3 (phone index), §4 | Server half met; consumed by [backlog.md M3 item 3/4](../../17-sprints/backlog.md#4-m3--fully-decomposed-2026-08-16-now-that-m2-has-reached-this-point) (Returns) |
 | FR-026 (durability guarantee, extended to the attached customer) | §1a | Met (Sprint 32) — survives hold/resume |
 | [permission-matrix.md — Customers](../../05-personas/permission-matrix.md#customers) | §4 | View/add/purchase-history met; edit/deactivate rows were missing from that matrix entirely — added Sprint 31 as a dated correction |
-| `customers.md`'s offline-queued write endpoints | §7 | `POST /customers` met (Sprint 32, `customer.create`); `PATCH` remains not met, named for M3 item 5 |
-| Conflict-resolution field-merge (conflict-resolution.md) | — | **Not in this sprint's scope, named explicitly** — [backlog.md M3 item 5](../../17-sprints/backlog.md#4-m3--fully-decomposed-2026-08-16-now-that-m2-has-reached-this-point) |
+| `customers.md`'s offline-queued write endpoints | §7 | `POST /customers` met (Sprint 32, `customer.create`); `PATCH`/`customer.update` met (Sprint 35) |
+| Conflict-resolution field-merge (conflict-resolution.md) | §1c, §2–§7, §9, §10 | **Met (Sprint 35)** — the field-level 3-way merge, the worked example's own prompt rendered verbatim, `shop_settings`' own separate whole-row-reject stance (§4 of that document) unaffected |
+| [milestones.md — M3 exit criterion](../../16-milestones/milestones.md) (field-edit conflict surfaces in business language) | §1c, §9, §10 | **Met (Sprint 35)** — live-verified end to end, the exact two-device scenario provoked for real |
 
 ## Change Log
 
@@ -314,3 +519,4 @@ this document's existing rows don't already cover.
 | 0.1.0 | 2026-08-16 | First version — written to drive Sprint 31's implementation of Customers (backlog.md M3 item 1): `customers` table, `sales.customer_id` (nullable), `POST`/`GET`/`PATCH`/`DELETE /customers`, `GET /customers/{id}/purchase-history`. No design gap found — customers.md/schema-server.md/FR-050-052 were already fully fixed. Mobile UI, offline queuing, and the conflict-resolution merge policy are explicitly out of scope, named for M3 items 2 and 5. |
 | 0.2.0 | 2026-08-16 | Built and live-verified (12/12). Found and fixed a real bug live: a Zod `.refine()` for "at least one of name/phone" always returned the generic `VALIDATION_FAILED` instead of the documented `CUSTOMER_IDENTIFIER_REQUIRED` — removed in favour of the service-layer check that already existed, §5. Permission matrix's missing edit/deactivate rows corrected in the same PR (§11). |
 | 0.3.0 | 2026-08-16 | §1a added — written to drive Sprint 32 (M3 item 2, Customers mobile): `customer.create` sync-push (reusing `product.create`'s exact shape), `POST /sales` accepting an optional `customer_id`, and the mobile UI itself — `CustomerPickerSheet` (a bottom sheet, per FR-050's own "without leaving the sale screen" wording taken literally) plus full `/customers`/`/customers/:id` routes for browsing. Reads stay direct-fetch-and-cache (Categories/Units' own shape), not a new sync-pull cursor — named as a deliberate, disciplined scope boundary. |
+| 0.4.0 | 2026-08-16 | §1c added — written to drive Sprint 35 (M3 item 5, **M3's last item**): the conflict-resolution field-merge policy live end to end. Found a real design gap while writing this spec: `base_updated_at` alone can't support the field-level 3-way merge conflict-resolution.md §3 describes, since the server has no field-level edit history — resolved by having the client send each field's own base value alongside its new value, a genuine, dated contract change to `PATCH /customers/{id}` (no prior mobile caller existed to break). New `customer_field_conflicts` table, `GET /customers/conflicts`/`POST /customers/conflicts/{id}/resolve` (Manager/Owner, online-only), `customer.update` as the sync engine's first `.update` operation type of any kind. Mobile gains its first customer-edit screen and a conflict-resolution screen, both reusing the badge/no-role-awareness patterns Sprint 34 already established for Returns. |

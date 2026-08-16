@@ -8,10 +8,13 @@ export const syncPushOperationSchema = z.object({
   // `customer.create` added Sprint 32 (backlog.md M3 item 2) —
   // docs/modules/customers/specification.md §1a. `return.create`/`return.approve`/`return.reject`
   // added Sprint 33 (backlog.md M3 item 3) — docs/modules/returns/specification.md §7.
+  // `customer.update` added Sprint 35 (backlog.md M3 item 5) — this sync engine's first `.update`
+  // operation type of any kind, docs/modules/customers/specification.md §1c.
   type: z.enum([
     "product.create",
     "sale.create",
     "customer.create",
+    "customer.update",
     "return.create",
     "return.approve",
     "return.reject",

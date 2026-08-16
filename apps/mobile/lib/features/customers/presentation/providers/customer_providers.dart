@@ -9,6 +9,7 @@ import '../../../pos/domain/entities/completed_sale.dart';
 import '../../data/data_sources/customers_api.dart' as api;
 import '../../data/repositories/drift_customer_repository.dart';
 import '../../domain/entities/customer.dart';
+import '../../domain/entities/customer_field_conflict.dart';
 import '../../domain/repositories/customer_repository.dart';
 
 /// Manual (non-code-generated) Riverpod syntax, matching `category_providers.dart`.
@@ -18,6 +19,8 @@ final customerRepositoryProvider = Provider<CustomerRepository>((ref) {
     ref.watch(appDatabaseProvider),
     () => api.fetchCustomers(dio),
     (customerId) => api.fetchPurchaseHistory(dio, customerId),
+    () => api.fetchConflicts(dio),
+    (conflictId, resolvedValue) => api.resolveConflict(dio, conflictId, resolvedValue),
   );
 });
 
@@ -85,3 +88,65 @@ class CreateCustomerController extends AsyncNotifier<Customer?> {
 
 final createCustomerControllerProvider =
     AsyncNotifierProvider<CreateCustomerController, Customer?>(CreateCustomerController.new);
+
+/// Drives `CustomerEditScreen` — same `AsyncNotifier` shape as
+/// `CreateCustomerController`. `updateCustomer`'s own local-write-plus-
+/// enqueue never throws for connectivity reasons (customer_repository.dart's
+/// own docstring), so this only ever fails on a genuine local error.
+class UpdateCustomerController extends AsyncNotifier<Customer?> {
+  @override
+  FutureOr<Customer?> build() => null;
+
+  Future<void> updateCustomer({required String id, String? name, String? phone}) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(
+      () => ref.read(customerRepositoryProvider).updateCustomer(id: id, name: name, phone: phone),
+    );
+    if (!state.hasError) {
+      ref.invalidate(customerByIdProvider(id));
+      ref.invalidate(customerSearchResultsProvider);
+    }
+  }
+}
+
+final updateCustomerControllerProvider =
+    AsyncNotifierProvider<UpdateCustomerController, Customer?>(UpdateCustomerController.new);
+
+/// `/customers/conflicts` — live, on demand. `ConflictsScreen`'s own list;
+/// a Cashier's own fetch throws (server `403`), surfaced as the plain error
+/// state every other list screen already uses, per §1c.
+final conflictsProvider = FutureProvider.autoDispose<List<CustomerFieldConflict>>((ref) {
+  return ref.watch(customerRepositoryProvider).listConflicts();
+});
+
+/// The Till's own badge count — the same fetch as [conflictsProvider], but
+/// with the `403` swallowed rather than surfaced, per §1c: the *correct*
+/// behaviour (no badge for a Cashier) falls out of the existing
+/// error-swallowing convention `pendingApprovalsCountProvider` already
+/// established for Returns, not a new role check.
+final pendingConflictsCountProvider = FutureProvider.autoDispose<int>((ref) async {
+  try {
+    final conflicts = await ref.watch(customerRepositoryProvider).listConflicts();
+    return conflicts.length;
+  } catch (_) {
+    return 0;
+  }
+});
+
+/// Drives `ConflictsScreen`'s resolve action.
+class ResolveConflictController extends AsyncNotifier<void> {
+  @override
+  FutureOr<void> build() {}
+
+  Future<void> resolveConflict({required String conflictId, required String? resolvedValue}) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(
+      () => ref
+          .read(customerRepositoryProvider)
+          .resolveConflict(conflictId: conflictId, resolvedValue: resolvedValue),
+    );
+  }
+}
+
+final resolveConflictControllerProvider =
+    AsyncNotifierProvider<ResolveConflictController, void>(ResolveConflictController.new);

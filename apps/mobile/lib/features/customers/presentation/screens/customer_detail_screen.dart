@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/money/money.dart';
 import '../providers/customer_providers.dart';
@@ -25,7 +26,17 @@ class CustomerDetailScreen extends ConsumerWidget {
     final history = ref.watch(customerPurchaseHistoryProvider(customerId));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Customer')),
+      appBar: AppBar(
+        title: const Text('Customer'),
+        actions: [
+          IconButton(
+            key: const Key('customer_edit_button'),
+            icon: const Icon(Icons.edit_outlined),
+            tooltip: 'Edit',
+            onPressed: () => context.push('/customers/$customerId/edit'),
+          ),
+        ],
+      ),
       body: customer.when(
         data: (found) {
           if (found == null) {

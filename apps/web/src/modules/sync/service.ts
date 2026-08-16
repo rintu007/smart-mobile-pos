@@ -4,7 +4,7 @@ import * as customersService from "@/modules/customers/service";
 import * as returnsService from "@/modules/returns/service";
 import { createProductRequestSchema } from "@/modules/products/schema";
 import { createSaleRequestSchema } from "@/modules/pos/schema";
-import { createCustomerRequestSchema } from "@/modules/customers/schema";
+import { createCustomerRequestSchema, syncUpdateCustomerPayloadSchema } from "@/modules/customers/schema";
 import {
   createReturnRequestSchema,
   syncApproveReturnPayloadSchema,
@@ -32,9 +32,12 @@ interface OperationResult {
 // have arrived in the same batch — and `return.approve`/`return.reject` after `return.create`, in
 // case a same-batch approve/reject targets a return also created in that batch (unlikely in
 // practice, but ordered correctly regardless — docs/modules/returns/specification.md §7).
+// `customer.update` (Sprint 35) sits alongside `customer.create`, both in sync-api.md §2's
+// `customer.*` group — before `sale.create`, matching that document's own fixed group order.
 const TYPE_ORDER: SyncPushOperation["type"][] = [
   "product.create",
   "customer.create",
+  "customer.update",
   "sale.create",
   "return.create",
   "return.approve",
@@ -94,6 +97,16 @@ async function runOperation(
         return rejected(operation.client_operation_id, "VALIDATION_FAILED", "Customer payload failed validation.");
       }
       const customer = await customersService.createCustomer(authUserId, tenantId, parsed.data);
+      return { client_operation_id: operation.client_operation_id, status: "accepted", entity_id: customer.id };
+    }
+
+    if (operation.type === "customer.update") {
+      const parsed = syncUpdateCustomerPayloadSchema.safeParse(operation.payload);
+      if (!parsed.success) {
+        return rejected(operation.client_operation_id, "VALIDATION_FAILED", "Customer update payload failed validation.");
+      }
+      const { id, ...updateInput } = parsed.data;
+      const customer = await customersService.updateCustomer(authUserId, tenantId, id, updateInput);
       return { client_operation_id: operation.client_operation_id, status: "accepted", entity_id: customer.id };
     }
 

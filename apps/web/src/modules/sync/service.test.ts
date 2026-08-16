@@ -27,6 +27,7 @@ const opReturnApprove = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
 const opReturnReject = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
 const returnId = "ffffffff-ffff-4fff-8fff-ffffffffffff";
 const originalSaleLineItemId = "12121212-1212-4212-8212-121212121212";
+const opCustomerUpdate = "13131313-1313-4313-8313-131313131313";
 
 describe("pushOperations", () => {
   beforeEach(() => {
@@ -150,6 +151,99 @@ describe("pushOperations", () => {
 
     expect(result.results[0]).toMatchObject({ status: "rejected", error: { code: "VALIDATION_FAILED" } });
     expect(customersService.createCustomer).not.toHaveBeenCalled();
+  });
+
+  it("dispatches customer.update to customersService.updateCustomer", async () => {
+    vi.mocked(customersService.updateCustomer).mockResolvedValue({ id: customerId } as never);
+
+    const input: SyncPushRequest = {
+      operations: [
+        {
+          type: "customer.update",
+          client_operation_id: opCustomerUpdate,
+          payload: {
+            id: customerId,
+            base_updated_at: "2026-08-16T00:00:00.000Z",
+            base_name: "Ramesh Kumar",
+            base_phone: "9876543210",
+            name: "Ramesh Kumar",
+            phone: "9111111111",
+          },
+        },
+      ],
+    };
+
+    const result = await pushOperations(authUserId, tenantId, input);
+
+    expect(customersService.updateCustomer).toHaveBeenCalledWith(authUserId, tenantId, customerId, {
+      base_updated_at: "2026-08-16T00:00:00.000Z",
+      base_name: "Ramesh Kumar",
+      base_phone: "9876543210",
+      name: "Ramesh Kumar",
+      phone: "9111111111",
+    });
+    expect(result.results[0]).toMatchObject({ status: "accepted", entity_id: customerId });
+  });
+
+  it("rejects a customer.update payload missing a required base field", async () => {
+    const input: SyncPushRequest = {
+      operations: [
+        {
+          type: "customer.update",
+          client_operation_id: opCustomerUpdate,
+          payload: { id: customerId, base_updated_at: "2026-08-16T00:00:00.000Z" },
+        },
+      ],
+    };
+
+    const result = await pushOperations(authUserId, tenantId, input);
+
+    expect(result.results[0]).toMatchObject({ status: "rejected", error: { code: "VALIDATION_FAILED" } });
+    expect(customersService.updateCustomer).not.toHaveBeenCalled();
+  });
+
+  it("processes customer.update before sale.create, same as customer.create", async () => {
+    const callOrder: string[] = [];
+    vi.mocked(customersService.updateCustomer).mockImplementation(async () => {
+      callOrder.push("customer.update");
+      return { id: customerId } as never;
+    });
+    vi.mocked(posService.createSale).mockImplementation(async () => {
+      callOrder.push("sale.create");
+      return { id: saleId } as never;
+    });
+
+    const input: SyncPushRequest = {
+      operations: [
+        {
+          type: "sale.create",
+          client_operation_id: opSale,
+          payload: {
+            id: saleId,
+            store_id: "77777777-7777-4777-8777-777777777777",
+            provisional_invoice_number: "DEV-2026-000001",
+            line_items: [{ product_id: productId, quantity: 1, client_unit_price_minor_units: 100 }],
+            payments: [{ method: "cash", amount_minor_units: 100 }],
+          },
+        },
+        {
+          type: "customer.update",
+          client_operation_id: opCustomerUpdate,
+          payload: {
+            id: customerId,
+            base_updated_at: "2026-08-16T00:00:00.000Z",
+            base_name: "Ramesh Kumar",
+            base_phone: "9876543210",
+            name: "Ramesh Kumar",
+            phone: "9111111111",
+          },
+        },
+      ],
+    };
+
+    await pushOperations(authUserId, tenantId, input);
+
+    expect(callOrder).toEqual(["customer.update", "sale.create"]);
   });
 
   it("processes customer.create before sale.create, same as product.create", async () => {
