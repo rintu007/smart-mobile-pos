@@ -1,5 +1,6 @@
 import '../../../pos/domain/entities/completed_sale.dart';
 import '../entities/customer.dart';
+import '../entities/customer_field_conflict.dart';
 
 /// Abstract interface only, per mobile-structure.md §2. Reuses `pos`'s own
 /// `CompletedSale` entity for purchase history rather than duplicating an
@@ -41,4 +42,27 @@ abstract class CustomerRepository {
   /// classification doesn't require this to work fully offline the way
   /// FR-052's search does).
   Future<List<CompletedSale>> getPurchaseHistory(String customerId);
+
+  /// Writes the local row and enqueues a `customer.update` sync operation,
+  /// atomically — the same local-write-path discipline `createCustomer`
+  /// already established. Always succeeds locally regardless of
+  /// connectivity (docs/modules/customers/specification.md §1c/§7): the
+  /// merge conflict, if any, is resolved server-side once the operation
+  /// syncs. The pre-edit local row's own `name`/`phone`/`updatedAt` become
+  /// the operation's `base_name`/`base_phone`/`base_updated_at` — the
+  /// field-level 3-way merge's own required inputs (§1c).
+  Future<Customer> updateCustomer({required String id, String? name, String? phone});
+
+  /// `GET /customers/conflicts` — live, online-only (§1c: a Manager/Owner
+  /// reviewing conflicts that may have originated on a different device
+  /// already needs connectivity to see them). Shown to every role; a
+  /// Cashier's own call surfaces the server's `403` as a plain error, per
+  /// returns/specification.md §1b's already-established
+  /// no-client-side-role-awareness stance.
+  Future<List<CustomerFieldConflict>> listConflicts();
+
+  /// `POST /customers/conflicts/{id}/resolve` — live, online-only, same
+  /// reasoning as [listConflicts]. `resolvedValue` must equal one of the
+  /// conflict's own two candidate values.
+  Future<void> resolveConflict({required String conflictId, required String? resolvedValue});
 }

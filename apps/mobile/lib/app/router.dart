@@ -10,7 +10,9 @@ import '../features/authentication/presentation/screens/login_screen.dart';
 import '../features/catalogue/presentation/screens/add_product_screen.dart';
 import '../features/catalogue/presentation/screens/categories_screen.dart';
 import '../features/catalogue/presentation/screens/units_screen.dart';
+import '../features/customers/presentation/screens/conflicts_screen.dart';
 import '../features/customers/presentation/screens/customer_detail_screen.dart';
+import '../features/customers/presentation/screens/customer_edit_screen.dart';
 import '../features/customers/presentation/screens/customers_screen.dart';
 import '../features/pos/presentation/screens/barcode_scan_screen.dart';
 import '../features/pos/presentation/screens/held_carts_screen.dart';
@@ -100,9 +102,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const CustomersScreen(),
       ),
       GoRoute(
+        path: '/customers/conflicts',
+        builder: (context, state) => const ConflictsScreen(),
+      ),
+      GoRoute(
         path: '/customers/:id',
         builder: (context, state) =>
             CustomerDetailScreen(customerId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/customers/:id/edit',
+        builder: (context, state) =>
+            CustomerEditScreen(customerId: state.pathParameters['id']!),
       ),
       GoRoute(
         path: '/returns/new',

@@ -7,6 +7,7 @@ import 'package:mobile/features/catalogue/domain/repositories/product_repository
 import 'package:mobile/features/catalogue/presentation/providers/category_providers.dart';
 import 'package:mobile/features/catalogue/presentation/providers/product_providers.dart';
 import 'package:mobile/features/customers/domain/entities/customer.dart';
+import 'package:mobile/features/customers/domain/entities/customer_field_conflict.dart';
 import 'package:mobile/features/customers/domain/repositories/customer_repository.dart';
 import 'package:mobile/features/customers/presentation/providers/customer_providers.dart';
 import 'package:mobile/features/pos/domain/entities/cart_line.dart';
@@ -161,6 +162,17 @@ class _FakeCustomerRepository implements CustomerRepository {
 
   @override
   Future<List<CompletedSale>> getPurchaseHistory(String customerId) => throw UnimplementedError();
+
+  @override
+  Future<Customer> updateCustomer({required String id, String? name, String? phone}) =>
+      throw UnimplementedError();
+
+  @override
+  Future<List<CustomerFieldConflict>> listConflicts() => throw UnimplementedError();
+
+  @override
+  Future<void> resolveConflict({required String conflictId, required String? resolvedValue}) =>
+      throw UnimplementedError();
 }
 
 Widget _wrap({

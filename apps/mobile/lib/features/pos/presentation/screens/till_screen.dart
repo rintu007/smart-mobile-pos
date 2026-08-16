@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/money/money.dart';
 import '../../../catalogue/presentation/providers/category_providers.dart';
 import '../../../catalogue/presentation/providers/product_providers.dart';
+import '../../../customers/presentation/providers/customer_providers.dart';
 import '../../../customers/presentation/widgets/customer_picker_sheet.dart';
 import '../../../returns/presentation/providers/return_providers.dart';
 import '../providers/pos_providers.dart';
@@ -57,6 +58,7 @@ class TillScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final pendingApprovals = ref.watch(pendingApprovalsCountProvider);
+    final pendingConflicts = ref.watch(pendingConflictsCountProvider);
     final products = ref.watch(filteredProductListProvider);
     final categories = ref.watch(categoriesListProvider);
     final selectedCategoryId = ref.watch(posCategoryFilterProvider);
@@ -141,6 +143,20 @@ class TillScreen extends ConsumerWidget {
             ),
             tooltip: 'Return approvals',
             onPressed: () => context.push('/returns/approvals'),
+          ),
+          // The same badge/no-role-awareness mechanism as
+          // pos_returns_approvals_button above, for customer field-edit
+          // conflicts (docs/modules/customers/specification.md §1c).
+          IconButton(
+            key: const Key('pos_customer_conflicts_button'),
+            icon: pendingConflicts.maybeWhen(
+              data: (count) => count > 0
+                  ? Badge(label: Text('$count'), child: const Icon(Icons.sync_problem_outlined))
+                  : const Icon(Icons.sync_problem_outlined),
+              orElse: () => const Icon(Icons.sync_problem_outlined),
+            ),
+            tooltip: 'Field conflicts',
+            onPressed: () => context.push('/customers/conflicts'),
           ),
         ],
       ),

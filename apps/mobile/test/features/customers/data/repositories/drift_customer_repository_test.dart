@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/database/database.dart' hide Customer;
 import 'package:mobile/features/customers/data/repositories/drift_customer_repository.dart';
 import 'package:mobile/features/customers/domain/entities/customer.dart';
+import 'package:mobile/features/customers/domain/entities/customer_field_conflict.dart';
 import 'package:mobile/features/pos/domain/entities/completed_sale.dart';
 
 void main() {
@@ -19,11 +20,15 @@ void main() {
   DriftCustomerRepository buildRepository({
     Future<List<Customer>> Function()? fetchAll,
     Future<List<CompletedSale>> Function(String)? fetchPurchaseHistory,
+    Future<List<CustomerFieldConflict>> Function()? fetchConflicts,
+    Future<void> Function(String, String?)? resolveConflictRemote,
   }) {
     return DriftCustomerRepository(
       db,
       fetchAll ?? () async => [],
       fetchPurchaseHistory ?? (id) async => [],
+      fetchConflicts ?? () async => [],
+      resolveConflictRemote ?? (id, value) async {},
     );
   }
 
@@ -172,5 +177,90 @@ void main() {
 
     expect(history, hasLength(1));
     expect(history.single.id, 'sale-1');
+  });
+
+  group('updateCustomer', () {
+    test('writes the row and enqueues a matching customer.update operation, base from the pre-edit local row', () async {
+      final repository = buildRepository();
+      await repository.createCustomer(id: 'customer-1', name: 'Ramesh Kumar', phone: '9111111111');
+
+      final result = await repository.updateCustomer(
+        id: 'customer-1',
+        name: 'Ramesh Kumar',
+        phone: '9876543210',
+      );
+
+      expect(result.phone, '9876543210');
+      final row = await (db.select(
+        db.customers,
+      )..where((t) => t.id.equals('customer-1'))).getSingle();
+      expect(row.phone, '9876543210');
+
+      final queueRows = await (db.select(
+        db.outboundQueue,
+      )..where((t) => t.entityType.equals('customer.update'))).get();
+      expect(queueRows, hasLength(1));
+      final payload = jsonDecode(queueRows.single.payload) as Map<String, dynamic>;
+      expect(payload['id'], 'customer-1');
+      expect(payload['base_name'], 'Ramesh Kumar');
+      expect(payload['base_phone'], '9111111111');
+      expect(payload['name'], 'Ramesh Kumar');
+      expect(payload['phone'], '9876543210');
+      expect(payload['base_updated_at'], isNotNull);
+    });
+
+    test('each edit gets its own operation id, not the customer\'s own id', () async {
+      final repository = buildRepository();
+      await repository.createCustomer(id: 'customer-1', phone: '9111111111');
+
+      await repository.updateCustomer(id: 'customer-1', phone: '9222222222');
+      await repository.updateCustomer(id: 'customer-1', phone: '9333333333');
+
+      final queueRows = await (db.select(
+        db.outboundQueue,
+      )..where((t) => t.entityType.equals('customer.update'))).get();
+      expect(queueRows, hasLength(2));
+      expect(queueRows[0].clientOperationId, isNot(equals(queueRows[1].clientOperationId)));
+    });
+  });
+
+  group('listConflicts / resolveConflict', () {
+    test('listConflicts delegates to the injected fetch function', () async {
+      final repository = buildRepository(
+        fetchConflicts: () async => const [
+          CustomerFieldConflict(
+            id: 'conflict-1',
+            customerId: 'customer-1',
+            customerName: 'Ramesh Kumar',
+            field: 'phone',
+            currentValue: '9876543210',
+            currentSetByName: 'Priya',
+            attemptedValue: '9876500000',
+            attemptedSetByName: 'Anil',
+          ),
+        ],
+      );
+
+      final conflicts = await repository.listConflicts();
+
+      expect(conflicts, hasLength(1));
+      expect(conflicts.single.field, 'phone');
+    });
+
+    test('resolveConflict delegates to the injected remote function', () async {
+      String? capturedId;
+      String? capturedValue;
+      final repository = buildRepository(
+        resolveConflictRemote: (id, value) async {
+          capturedId = id;
+          capturedValue = value;
+        },
+      );
+
+      await repository.resolveConflict(conflictId: 'conflict-1', resolvedValue: '9876500000');
+
+      expect(capturedId, 'conflict-1');
+      expect(capturedValue, '9876500000');
+    });
   });
 }

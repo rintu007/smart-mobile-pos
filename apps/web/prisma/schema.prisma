@@ -35,20 +35,21 @@ model Tenant {
   // and a follow-up migration corrected).
   createdBy     String    @map("created_by") @db.Uuid
 
-  users            User[]
-  stores           Store[]
-  products         Product[]
-  sales            Sale[]
-  stockMovements   StockMovement[]
-  auditLogEntries  AuditLog[]
-  categories       Category[]
-  units            Unit[]
-  userStoreRoles   UserStoreRole[]
-  invoiceSequences InvoiceSequence[]
-  shopSettings     ShopSettings?
-  tradingDays      TradingDay[]
-  customers        Customer[]
-  returns          Return[]
+  users                  User[]
+  stores                 Store[]
+  products               Product[]
+  sales                  Sale[]
+  stockMovements         StockMovement[]
+  auditLogEntries        AuditLog[]
+  categories             Category[]
+  units                  Unit[]
+  userStoreRoles         UserStoreRole[]
+  invoiceSequences       InvoiceSequence[]
+  shopSettings           ShopSettings?
+  tradingDays            TradingDay[]
+  customers              Customer[]
+  returns                Return[]
+  customerFieldConflicts CustomerFieldConflict[]
 
   @@map("tenants")
 }
@@ -98,21 +99,25 @@ model User {
   // DEFERRED`. This matters for this exact relation since it's half of the tenant/user circular
   // bootstrapping pair — found when a hard-delete of test fixtures failed immediately instead of
   // deferring to commit. See implementation-log.md's 2026-08-01 entry.
-  tenant                Tenant          @relation(fields: [tenantId], references: [id], onDelete: NoAction)
-  storesOwned           Store[]
-  productsCreated       Product[]
-  salesCreated          Sale[]
-  stockMovementsCreated StockMovement[]
-  auditLogEntriesActed  AuditLog[]
-  categoriesCreated     Category[]
-  unitsCreated          Unit[]
-  roleAssignments       UserStoreRole[] @relation("UserStoreRoleUser")
-  roleAssignmentsMade   UserStoreRole[] @relation("UserStoreRoleAssigner")
-  tradingDaysCreated    TradingDay[]    @relation("TradingDayCreator")
-  tradingDaysReopened   TradingDay[]    @relation("TradingDayReopener")
-  customersCreated      Customer[]
-  returnsCreated        Return[]        @relation("ReturnCreator")
-  returnsApproved       Return[]        @relation("ReturnApprover")
+  tenant                          Tenant                  @relation(fields: [tenantId], references: [id], onDelete: NoAction)
+  storesOwned                     Store[]
+  productsCreated                 Product[]
+  salesCreated                    Sale[]
+  stockMovementsCreated           StockMovement[]
+  auditLogEntriesActed            AuditLog[]
+  categoriesCreated               Category[]
+  unitsCreated                    Unit[]
+  roleAssignments                 UserStoreRole[]         @relation("UserStoreRoleUser")
+  roleAssignmentsMade             UserStoreRole[]         @relation("UserStoreRoleAssigner")
+  tradingDaysCreated              TradingDay[]            @relation("TradingDayCreator")
+  tradingDaysReopened             TradingDay[]            @relation("TradingDayReopener")
+  customersCreated                Customer[]
+  customersUpdated                Customer[]              @relation("CustomerUpdatedBy")
+  returnsCreated                  Return[]                @relation("ReturnCreator")
+  returnsApproved                 Return[]                @relation("ReturnApprover")
+  fieldConflictsAsCurrentSetter   CustomerFieldConflict[] @relation("ConflictCurrentSetBy")
+  fieldConflictsAsAttemptedSetter CustomerFieldConflict[] @relation("ConflictAttemptedSetBy")
+  fieldConflictsResolved          CustomerFieldConflict[] @relation("ConflictResolvedBy")
 
   @@index([tenantId])
   @@map("users")
@@ -499,13 +504,51 @@ model Customer {
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
   createdBy     String    @map("created_by") @db.Uuid
+  /// Added Sprint 35 (backlog.md M3 item 5) — the actor of the most recent successful field
+  /// application. Nullable: null for a customer never edited since creation (its own `createdBy`
+  /// is attributed instead — docs/modules/customers/specification.md §1c). Feeds
+  /// `customer_field_conflicts.current_set_by` at the moment a conflict is detected.
+  updatedBy     String?   @map("updated_by") @db.Uuid
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  user   User   @relation(fields: [createdBy], references: [id], onDelete: Restrict)
-  sales  Sale[]
+  tenant         Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user           User                    @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  updater        User?                   @relation("CustomerUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+  sales          Sale[]
+  fieldConflicts CustomerFieldConflict[]
 
   @@index([tenantId])
   @@map("customers")
+}
+
+/// Sprint 35 (backlog.md M3 item 5) — docs/modules/customers/specification.md §1c/§3. A field-edit
+/// collision (conflict-resolution.md §3): the currently-applied value and the value a
+/// later-arriving edit wanted instead, both attributed to their own actor, awaiting a Manager/Owner
+/// decision. `current_value`/`attempted_value` nullable, mirroring `customers.name`/`phone`'s own
+/// nullability — a field's "value" can legitimately be null.
+model CustomerFieldConflict {
+  id             String    @id @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  customerId     String    @map("customer_id") @db.Uuid
+  /// 'name' | 'phone' — no CHECK added here, matching every other small-fixed-value-set column's
+  /// own precedent (Sale.status, StockMovement.movementType, ...) of relying on application code.
+  field          String
+  currentValue   String?   @map("current_value")
+  currentSetBy   String    @map("current_set_by") @db.Uuid
+  attemptedValue String?   @map("attempted_value")
+  attemptedSetBy String    @map("attempted_set_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  resolvedAt     DateTime? @map("resolved_at") @db.Timestamptz
+  resolvedValue  String?   @map("resolved_value")
+  resolvedBy     String?   @map("resolved_by") @db.Uuid
+
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  customer           Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  currentSetByUser   User     @relation("ConflictCurrentSetBy", fields: [currentSetBy], references: [id], onDelete: Restrict)
+  attemptedSetByUser User     @relation("ConflictAttemptedSetBy", fields: [attemptedSetBy], references: [id], onDelete: Restrict)
+  resolvedByUser     User?    @relation("ConflictResolvedBy", fields: [resolvedBy], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, resolvedAt])
+  @@map("customer_field_conflicts")
 }
 
 /// Sprint 33 (backlog.md M3 item 3) — docs/07-database/schema-server.md's `returns` table

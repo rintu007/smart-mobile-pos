@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { prisma } from "@/core/db/client";
-import type { CreateCustomerRequest, UpdateCustomerRequest } from "./schema";
+import type { CreateCustomerRequest } from "./schema";
 
 // Prisma queries only, no business logic — docs/08-folder-structure/backend-structure.md §2.
 
@@ -25,10 +26,123 @@ export function createCustomer(
   });
 }
 
-// docs/modules/customers/specification.md §5 — PATCH. Plain update, no optimistic-concurrency
-// check this sprint (§1: no concurrent-offline-edit caller exists yet to make one meaningful).
-export function updateCustomer(id: string, data: UpdateCustomerRequest) {
-  return prisma.customer.update({ where: { id }, data });
+// docs/modules/customers/specification.md §1c — writes only the fields the merge algorithm decided
+// to apply (never a raw copy of the request body — a field left out of `applied` must not be
+// touched, whether because this edit didn't intend to change it or because it's in conflict).
+// `updatedBy` feeds the *next* conflict's own attribution (§1c). A no-op (nothing applied) never
+// reaches here — service.ts skips the call entirely, so `updated_at` never bumps for a request that
+// changed nothing.
+export function updateCustomerFields(
+  id: string,
+  applied: { name?: string | null; phone?: string | null },
+  updatedBy: string,
+) {
+  return prisma.customer.update({ where: { id }, data: { ...applied, updatedBy } });
+}
+
+export interface FieldConflictInput {
+  field: string;
+  currentValue: string | null;
+  currentSetBy: string;
+  attemptedValue: string | null;
+  attemptedSetBy: string;
+}
+
+// docs/modules/customers/specification.md §1c/§3 — one row per genuinely conflicting field in a
+// single update call (a request can conflict on `name`, `phone`, both, or neither, independently).
+export function createFieldConflicts(
+  tenantId: string,
+  customerId: string,
+  conflicts: FieldConflictInput[],
+) {
+  return prisma.customerFieldConflict.createMany({
+    data: conflicts.map((conflict) => ({
+      id: randomUUID(),
+      tenantId,
+      customerId,
+      field: conflict.field,
+      currentValue: conflict.currentValue,
+      currentSetBy: conflict.currentSetBy,
+      attemptedValue: conflict.attemptedValue,
+      attemptedSetBy: conflict.attemptedSetBy,
+    })),
+  });
+}
+
+export function findConflictById(tenantId: string, id: string) {
+  return prisma.customerFieldConflict.findFirst({
+    where: { id, tenantId },
+    include: {
+      customer: true,
+      currentSetByUser: true,
+      attemptedSetByUser: true,
+    },
+  });
+}
+
+export interface ConflictCursor {
+  createdAt: Date;
+  id: string;
+}
+
+// docs/modules/customers/specification.md §4 — GET /customers/conflicts. Unresolved only,
+// most-recent-first (matching purchase-history's own "review list" ordering reasoning).
+export function listUnresolvedConflicts(
+  tenantId: string,
+  cursor: ConflictCursor | null,
+  limit: number,
+) {
+  return prisma.customerFieldConflict.findMany({
+    where: {
+      tenantId,
+      resolvedAt: null,
+      ...(cursor
+        ? {
+            OR: [
+              { createdAt: { lt: cursor.createdAt } },
+              { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+            ],
+          }
+        : {}),
+    },
+    include: { customer: true, currentSetByUser: true, attemptedSetByUser: true },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: limit + 1,
+  });
+}
+
+export interface ResolveConflictInput {
+  conflictId: string;
+  customerId: string;
+  resolvedValue: string | null;
+  resolvedBy: string;
+}
+
+// docs/modules/customers/specification.md §1c — writes the chosen value to the customer row
+// (bumping updated_at/updated_by normally) and marks the conflict resolved, atomically.
+export function resolveConflict(input: ResolveConflictInput) {
+  return prisma.$transaction(async (tx) => {
+    const conflict = await tx.customerFieldConflict.update({
+      where: { id: input.conflictId },
+      data: {
+        resolvedAt: new Date(),
+        resolvedValue: input.resolvedValue,
+        resolvedBy: input.resolvedBy,
+      },
+    });
+
+    // Dynamic-key assignment doesn't type-check against Prisma's strict update input — `field` is
+    // only ever 'name' | 'phone' (enforced when the conflict was created), so an explicit branch.
+    const customer = await tx.customer.update({
+      where: { id: input.customerId },
+      data:
+        conflict.field === "name"
+          ? { name: input.resolvedValue, updatedBy: input.resolvedBy }
+          : { phone: input.resolvedValue, updatedBy: input.resolvedBy },
+    });
+
+    return { conflict, customer };
+  });
 }
 
 // docs/modules/customers/specification.md §2 — soft delete, idempotent (the caller checks

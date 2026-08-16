@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 11 — API Design
-> **Version:** 0.1.8
-> **Last updated:** 2026-08-14
+> **Version:** 0.1.9
+> **Last updated:** 2026-08-16
 > **Owner:** Principal Next.js Engineer
 > **Approved by:** _pending_
 
@@ -51,7 +51,7 @@ single complete list, not a duplicate source of truth — module documents link 
 | `LAST_OWNER_CANNOT_BE_REMOVED`, `ALREADY_ONBOARDED`, `EMAIL_ALREADY_REGISTERED` | [identity.md](endpoints/identity.md) |
 | `CATEGORY_IN_USE`, `BARCODE_ALREADY_ASSIGNED`, `SKU_ALREADY_ASSIGNED`, `UNIT_FRACTIONAL_FLAG_LOCKED` | [catalogue.md](endpoints/catalogue.md) |
 | `ADJUSTMENT_REASON_REQUIRED`, `DIRECT_SALE_MOVEMENT_FORBIDDEN` | [inventory.md](endpoints/inventory.md) |
-| `CUSTOMER_IDENTIFIER_REQUIRED`, `PHONE_ALREADY_ASSIGNED` | [customers.md](endpoints/customers.md) |
+| `CUSTOMER_IDENTIFIER_REQUIRED`, `PHONE_ALREADY_ASSIGNED`, `CONFLICT_RESOLUTION_VALUE_INVALID` | [customers.md](endpoints/customers.md) |
 | `TRADING_DAY_NOT_OPEN`, `TRADING_DAY_ALREADY_OPEN`, `TRADING_DAY_NOT_CLOSED`, `SALE_IMMUTABLE`, `DISCOUNT_REQUIRES_APPROVAL` | [sales.md](endpoints/sales.md) |
 | `RETURN_QUANTITY_EXCEEDS_SOLD`, `RETURN_ALREADY_DECIDED`, `ORIGINAL_SALE_NOT_FOUND` | [returns.md](endpoints/returns.md) |
 | `RECEIPT_TEMPLATE_MISSING_MANDATORY_FIELD`, `SETTINGS_CONFLICT`, `TAX_RATE_REQUIRES_STANDARD_MODE` | [settings.md](endpoints/settings.md) |
@@ -69,3 +69,4 @@ single complete list, not a duplicate source of truth — module documents link 
 | 0.1.6 | 2026-08-14 | Sprint 25: `SETTINGS_CONFLICT` (already reserved) implemented for the first time. Added `TAX_RATE_REQUIRES_STANDARD_MODE` to the module-specific index — `PATCH /settings`'s own rejection of a nonzero tax rate outside `tax_mode: 'standard'` (settings/specification.md §5/§6). |
 | 0.1.7 | 2026-08-14 | Sprint 26: `TRADING_DAY_ALREADY_OPEN` (already reserved) implemented for the first time; `TRADING_DAY_NOT_OPEN` (already reserved) partially implemented — reachable only when `POST /sales`'s optional `trading_day_id` is supplied and invalid, not when omitted (trading-day/specification.md §1). Added `TRADING_DAY_NOT_CLOSED` to the module-specific index. |
 | 0.1.8 | 2026-08-14 | Sprint 27: added `DISCOUNT_REQUIRES_APPROVAL` to the module-specific index — `POST /sales`'s rejection of an over-threshold discount with no valid Manager/Owner approval (DR-012, pos/specification.md §2/§6). |
+| 0.1.9 | 2026-08-16 | Sprint 35: added `CONFLICT_RESOLUTION_VALUE_INVALID` to the module-specific index — `POST /customers/conflicts/{id}/resolve`'s rejection of a `resolved_value` matching neither of the conflict's own two candidate values (customers/specification.md §1c/§6). |
