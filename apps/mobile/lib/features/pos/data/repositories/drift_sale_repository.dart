@@ -8,6 +8,7 @@ import '../../../../core/invoicing/invoice_number_generator.dart';
 import '../../domain/entities/cart_line.dart';
 import '../../domain/entities/completed_sale.dart';
 import '../../domain/entities/held_sale.dart';
+import '../../domain/entities/resumed_cart.dart';
 import '../../domain/entities/sale_detail.dart';
 import '../../domain/repositories/sale_repository.dart';
 
@@ -25,6 +26,7 @@ class DriftSaleRepository implements SaleRepository {
     required String id,
     required String storeId,
     required List<CartLine> lines,
+    String? customerId,
   }) {
     if (lines.isEmpty) {
       throw ArgumentError('A sale requires at least one line item.');
@@ -68,6 +70,7 @@ class DriftSaleRepository implements SaleRepository {
               grandTotalMinorUnits: grandTotalMinorUnits,
               completedAt: Value(completedAt),
               createdAt: Value(createdAt),
+              customerId: Value(customerId),
             ),
           );
 
@@ -120,6 +123,10 @@ class DriftSaleRepository implements SaleRepository {
         'payments': [
           {'method': 'cash', 'amount_minor_units': grandTotalMinorUnits},
         ],
+        // Added Sprint 32 (backlog.md M3 item 2) — omitted entirely when
+        // null, not sent as a literal `null`, matching the request schema's
+        // own `.optional()` (not `.nullable()`) shape.
+        'customer_id': ?customerId,
       });
       // Plain `.insert()`, not `insertOnConflictUpdate` — this point is only
       // ever reached once per genuinely new completion (the idempotent-
@@ -209,6 +216,7 @@ class DriftSaleRepository implements SaleRepository {
     required String id,
     required String storeId,
     required List<CartLine> lines,
+    String? customerId,
   }) {
     if (lines.isEmpty) {
       throw ArgumentError(
@@ -243,6 +251,7 @@ class DriftSaleRepository implements SaleRepository {
               subtotalMinorUnits: grandTotalMinorUnits,
               grandTotalMinorUnits: grandTotalMinorUnits,
               createdAt: Value(existing?.createdAt ?? now),
+              customerId: Value(customerId),
             ),
           );
 
@@ -285,7 +294,7 @@ class DriftSaleRepository implements SaleRepository {
   }
 
   @override
-  Future<List<CartLine>?> resumeSale(String id) {
+  Future<ResumedCart?> resumeSale(String id) {
     return _db.transaction(() async {
       final updated =
           await (_db.update(_db.sales)..where(
@@ -293,6 +302,7 @@ class DriftSaleRepository implements SaleRepository {
               ))
               .writeReturning(const SalesCompanion(status: Value('draft')));
       if (updated.isEmpty) return null;
+      final row = updated.first;
 
       final lineItemRows = await (_db.select(
         _db.saleLineItems,
@@ -312,7 +322,30 @@ class DriftSaleRepository implements SaleRepository {
           ),
         );
       }
-      return lines;
+
+      // Sprint 32 (backlog.md M3 item 2): the attached customer, if any,
+      // survives hold/resume the same way line items already do (FR-026).
+      // Looked up directly against the shared local database — the same
+      // "query another table via the shared AppDatabase" shape this same
+      // function already uses for `_db.products` above, not a cross-feature
+      // file import (mobile-structure.md's layering rule concerns imports
+      // between `data/` packages, not which tables one repository reads).
+      String? customerName;
+      String? customerPhone;
+      if (row.customerId != null) {
+        final customer = await (_db.select(
+          _db.customers,
+        )..where((t) => t.id.equals(row.customerId!))).getSingleOrNull();
+        customerName = customer?.name;
+        customerPhone = customer?.phone;
+      }
+
+      return ResumedCart(
+        lines: lines,
+        customerId: row.customerId,
+        customerName: customerName,
+        customerPhone: customerPhone,
+      );
     });
   }
 

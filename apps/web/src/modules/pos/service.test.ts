@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import * as identityService from "@/modules/identity/service";
 import * as rolesService from "@/modules/roles/service";
 import * as settingsService from "@/modules/settings/service";
+import * as customersService from "@/modules/customers/service";
 import * as repository from "./repository";
 import { createSale } from "./service";
 import type { CreateSaleRequest } from "./schema";
@@ -10,6 +11,7 @@ vi.mock("./repository");
 vi.mock("@/modules/identity/service");
 vi.mock("@/modules/roles/service");
 vi.mock("@/modules/settings/service");
+vi.mock("@/modules/customers/service");
 
 const authUserId = "11111111-1111-4111-8111-111111111111";
 const tenantId = "22222222-2222-4222-8222-222222222222";
@@ -42,6 +44,7 @@ const createdSale = (overrides: Partial<Record<string, unknown>> = {}) => ({
   id: saleId,
   status: "completed",
   tradingDayId: null,
+  customerId: null,
   provisionalInvoiceNumber: input.provisional_invoice_number,
   canonicalInvoiceNumber: BigInt(1),
   financialYear: "2026",
@@ -190,6 +193,38 @@ describe("createSale", () => {
     await expect(
       createSale(authUserId, tenantId, { ...input, trading_day_id: "88888888-8888-4888-8888-888888888888" }),
     ).rejects.toMatchObject({ status: 409, code: "TRADING_DAY_NOT_OPEN" });
+    expect(repository.createSale).not.toHaveBeenCalled();
+  });
+
+  it("succeeds with no customer_id supplied at all -- customerExists is never called", async () => {
+    vi.mocked(repository.createSale).mockResolvedValue(createdSale() as never);
+
+    await createSale(authUserId, tenantId, input);
+
+    expect(customersService.customerExists).not.toHaveBeenCalled();
+  });
+
+  it("links a supplied customer_id that resolves to a real customer under this tenant", async () => {
+    const customerId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    vi.mocked(customersService.customerExists).mockResolvedValue(true);
+    vi.mocked(repository.createSale).mockResolvedValue(createdSale({ customerId }) as never);
+
+    const result = await createSale(authUserId, tenantId, { ...input, customer_id: customerId });
+
+    expect(customersService.customerExists).toHaveBeenCalledWith(tenantId, customerId);
+    expect(repository.createSale).toHaveBeenCalledWith(expect.objectContaining({ customerId }));
+    expect(result.customer_id).toBe(customerId);
+  });
+
+  it("rejects a customer_id that doesn't resolve under this tenant with NOT_FOUND", async () => {
+    vi.mocked(customersService.customerExists).mockResolvedValue(false);
+
+    await expect(
+      createSale(authUserId, tenantId, {
+        ...input,
+        customer_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      }),
+    ).rejects.toMatchObject({ status: 404, code: "NOT_FOUND" });
     expect(repository.createSale).not.toHaveBeenCalled();
   });
 

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import * as identityService from "@/modules/identity/service";
 import * as rolesService from "@/modules/roles/service";
 import * as settingsService from "@/modules/settings/service";
+import * as customersService from "@/modules/customers/service";
 import { ApiError } from "@/core/errors/api-error";
 import * as repository from "./repository";
 import type { CreateSaleRequest } from "./schema";
@@ -22,6 +23,17 @@ async function assertTradingDayOpenIfProvided(
       "TRADING_DAY_NOT_OPEN",
       "trading_day_id does not refer to an open trading day at this store.",
     );
+  }
+}
+
+// docs/modules/customers/specification.md §1a — a supplied customer_id must resolve to a real
+// customers row under the caller's tenant; deactivated customers are still valid targets (§2's
+// soft-delete stance), so this checks existence only, not activation state.
+async function assertCustomerExistsIfProvided(tenantId: string, customerId: string | undefined) {
+  if (customerId === undefined) return;
+  const exists = await customersService.customerExists(tenantId, customerId);
+  if (!exists) {
+    throw new ApiError(404, "NOT_FOUND", `Customer ${customerId} not found.`);
   }
 }
 
@@ -111,6 +123,7 @@ export function formatSale(sale: {
   id: string;
   status: string;
   tradingDayId: string | null;
+  customerId: string | null;
   provisionalInvoiceNumber: string;
   canonicalInvoiceNumber: bigint | null;
   financialYear: string | null;
@@ -135,6 +148,7 @@ export function formatSale(sale: {
     id: sale.id,
     status: sale.status,
     trading_day_id: sale.tradingDayId,
+    customer_id: sale.customerId,
     provisional_invoice_number: sale.provisionalInvoiceNumber,
     // docs/modules/sales-invoices/specification.md §1 — never actually null for a stored sale in
     // this implementation, but the conversion still guards `null` since the column itself is
@@ -184,6 +198,7 @@ export async function createSale(
   }
 
   await assertTradingDayOpenIfProvided(tenantId, input.store_id, input.trading_day_id);
+  await assertCustomerExistsIfProvided(tenantId, input.customer_id);
 
   const productIds = input.line_items.map((item) => item.product_id);
   const products = await repository.findProductsByIds(tenantId, productIds);
@@ -304,6 +319,7 @@ export async function createSale(
     storeId: input.store_id,
     createdBy,
     tradingDayId: input.trading_day_id,
+    customerId: input.customer_id,
     provisionalInvoiceNumber: input.provisional_invoice_number,
     subtotalMinorUnits,
     discountTotalMinorUnits,

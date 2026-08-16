@@ -1,6 +1,7 @@
 import '../entities/cart_line.dart';
 import '../entities/completed_sale.dart';
 import '../entities/held_sale.dart';
+import '../entities/resumed_cart.dart';
 import '../entities/sale_detail.dart';
 
 /// Abstract interface only, per mobile-structure.md §2. Read methods added
@@ -32,6 +33,7 @@ abstract class SaleRepository {
     required String id,
     required String storeId,
     required List<CartLine> lines,
+    String? customerId,
   });
 
   /// This device's own completed sales, most-recent-first —
@@ -52,6 +54,7 @@ abstract class SaleRepository {
     required String id,
     required String storeId,
     required List<CartLine> lines,
+    String? customerId,
   });
 
   /// Deletes a `draft` row entirely — called when the last line item is
@@ -64,9 +67,10 @@ abstract class SaleRepository {
   Future<void> holdSale(String id);
 
   /// WF-005 step 3 — transitions `held -> draft` and returns the cart's own
-  /// line items, ready to load back into `CartController`. Returns `null`
-  /// if `id` doesn't exist or isn't currently `held`.
-  Future<List<CartLine>?> resumeSale(String id);
+  /// line items plus its attached customer, if any (Sprint 32), ready to
+  /// load back into `CartController`. Returns `null` if `id` doesn't exist
+  /// or isn't currently `held`.
+  Future<ResumedCart?> resumeSale(String id);
 
   /// The Held Carts list (`/pos/hold`), most-recently-held first.
   Future<List<HeldSale>> listHeldSales();

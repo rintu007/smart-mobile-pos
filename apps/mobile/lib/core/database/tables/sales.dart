@@ -45,6 +45,15 @@ class Sales extends Table {
   /// list, most-recently-held first.
   DateTimeColumn get createdAt => dateTime().nullable()();
 
+  /// Added Sprint 32 (backlog.md M3 item 2) — schema v4->v5. References
+  /// `Customers.id` (no enforced FK at the Drift layer, matching this
+  /// table's own existing precedent of not enforcing FKs locally); nullable,
+  /// since attaching a customer is optional (FR-050). Set when the till's
+  /// `CustomerPickerSheet` attaches a customer to the active cart, persisted
+  /// through hold/resume alongside the cart's other fields
+  /// (docs/modules/customers/specification.md §1a).
+  TextColumn get customerId => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }

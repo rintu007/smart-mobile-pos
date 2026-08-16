@@ -4,8 +4,8 @@
 > **Module:** Offline Sync Engine
 > **Slice:** V1 — this document scopes only backlog.md item 9's M0-minimal cut, not the full
 > [sync-api.md](../../11-api/sync-api.md) shape (§1)
-> **Version:** 0.3.0
-> **Last updated:** 2026-08-13
+> **Version:** 0.4.0
+> **Last updated:** 2026-08-16
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
 
@@ -39,12 +39,16 @@ not the full connectivity-listener/app-foreground/background-timer trigger set
 named, deferred Phase 18 tuning decision (per that section's own wording).
 
 **Narrower still than [sync-api.md](../../11-api/sync-api.md) itself**, even for the backend half:
-- Push handles exactly two operation types (`product.create`, `sale.create`) — sync-api.md §2's
-  full six-group ordering (`catalogue.*`, `customer.*`, `stock_movement.*`, `trading_day.*`,
-  `sale.*`, `return.*`) collapses to two groups this sprint, since no other operation type has a
-  client-facing write path yet. `stock_movement.*` push (`opening`/`adjustment`) in particular
-  stays out of scope — Sprint 11 built `opening`/`sale` movements as **server-side side effects
-  only**, per [inventory/specification.md §1](../inventory/specification.md#1-purpose-and-business-context);
+- Push handles three operation types (`product.create`, `sale.create`, and — added Sprint 32,
+  [customers/specification.md §1a](../customers/specification.md#1a-sprint-32--customers-mobile-m3-item-2)
+  — `customer.create`) — sync-api.md §2's full six-group ordering (`catalogue.*`, `customer.*`,
+  `stock_movement.*`, `trading_day.*`, `sale.*`, `return.*`) still collapses to a handful of groups
+  this sprint, since no other operation type has a client-facing write path yet. `customer.create`
+  is ordered alongside `product.create`, both before `sale.create` — a sale created in the same
+  batch as a customer it references needs that customer to exist first, the same dependency reason
+  `product.create` already precedes `sale.create`. `stock_movement.*` push (`opening`/`adjustment`)
+  in particular stays out of scope — Sprint 11 built `opening`/`sale` movements as **server-side
+  side effects only**, per [inventory/specification.md §1](../inventory/specification.md#1-purpose-and-business-context);
   there is no public `POST /stock-movements` for a client to push to yet.
 - Pull handles exactly one entity type (`products`) — sync-api.md §6 lists eight
   (`products`, `categories`, `units`, `customers`, `user_store_roles`, `shop_settings`,
@@ -62,9 +66,9 @@ named, deferred Phase 18 tuning decision (per that section's own wording).
   id-based idempotent-creation guarantee (Sprint 04/05) applies unchanged. Resubmitting an
   unresolved batch is safe by construction, not by anything new this module adds.
 - [sync-api.md §2](../../11-api/sync-api.md#2-ordering--dependency-groups-not-raw-client-order):
-  within one push request, every `product.create` operation is processed before every
-  `sale.create` operation, preserving each group's own relative submitted order — the two-group
-  collapse of the full ordering, per §1.
+  within one push request, every `product.create`/`customer.create` operation is processed before
+  every `sale.create` operation, preserving each group's own relative submitted order — the
+  collapsed subset of the full ordering, per §1.
 - [sync-api.md §3](../../11-api/sync-api.md#3-partial-failure-semantics--every-operation-gets-its-own-verdict):
   one operation's rejection never fails the batch or blocks independent operations after it —
   enforced by processing each operation in its own `try`/`catch`, never letting one operation's
@@ -105,7 +109,7 @@ this table's Sync Item state machine, none added. Pull upserts into the local `p
 
 | Method & path | Status |
 | --- | --- |
-| `POST /api/v1/sync/push` | **Implemented this sprint.** Request: `{ operations: [{ type, client_operation_id, payload }] }`, `type ∈ {'product.create', 'sale.create'}`, `payload` validated against the exact same Zod schema the direct endpoint uses (`createProductRequestSchema` / `createSaleRequestSchema`) — per sync-api.md §1's "push does not define a second, parallel request schema." Response: `{ results: [{ client_operation_id, status: 'accepted' \| 'rejected', entity_id?, error? }] }`, one result per submitted operation, in the request's own original order. Requires any active role (`requirePermission`, Sprint 23) — sync is a device-level mechanism, not itself a permission-matrix.md capability, so the check here is simply "has an active, non-deactivated role at all," meaningfully blocking a revoked user even from syncing. |
+| `POST /api/v1/sync/push` | **Implemented Sprint 13, extended Sprint 32.** Request: `{ operations: [{ type, client_operation_id, payload }] }`, `type ∈ {'product.create', 'sale.create', 'customer.create'}`, `payload` validated against the exact same Zod schema the direct endpoint uses (`createProductRequestSchema` / `createSaleRequestSchema` / `createCustomerRequestSchema`) — per sync-api.md §1's "push does not define a second, parallel request schema." Response: `{ results: [{ client_operation_id, status: 'accepted' \| 'rejected', entity_id?, error? }] }`, one result per submitted operation, in the request's own original order. Requires any active role (`requirePermission`, Sprint 23) — sync is a device-level mechanism, not itself a permission-matrix.md capability, so the check here is simply "has an active, non-deactivated role at all," meaningfully blocking a revoked user even from syncing. |
 | `GET /api/v1/sync/pull` | **Implemented this sprint**, `entity_type=products` only. `?entity_type=products&cursor=<opaque>&limit=<n, default 50, max 200>` → `{ data: [...], next_cursor }`, per api-principles.md §4. Any other `entity_type` value is rejected with `VALIDATION_FAILED` (422) — not a silent empty result. Requires any active role (Sprint 23), same reasoning as push. |
 | Every other entity type's pull, `sync_rejections`, the full six-group push ordering | **Already documented** in [sync-api.md](../../11-api/sync-api.md), **not implemented, and not needed this sprint** — see §1. |
 
@@ -114,7 +118,7 @@ this table's Sync Item state machine, none added. Pull upserts into the local `p
 | Field | Rule |
 | --- | --- |
 | `operations` | Array, 1–200 elements |
-| `operations[].type` | Enum: `'product.create'`, `'sale.create'` — any other value is rejected with `VALIDATION_FAILED` at the operation level (its own `results[]` entry, not a whole-batch 422) |
+| `operations[].type` | Enum: `'product.create'`, `'sale.create'`, `'customer.create'` (Sprint 32) — any other value is rejected with `VALIDATION_FAILED` at the operation level (its own `results[]` entry, not a whole-batch 422) |
 | `operations[].client_operation_id` | UUIDv4, required |
 | `operations[].payload` | Validated per-type against the existing direct-endpoint schema — a payload failing that schema is rejected with `VALIDATION_FAILED` at the operation level |
 | `entity_type` (pull) | Enum: `'products'` only this sprint |
@@ -214,3 +218,4 @@ background timer), a persisted/resumable pull cursor (§2).
 | 0.1.0 | 2026-08-13 | First version — written to drive Sprint 13's backend-only sync push/pull (backlog.md item 9). Scope deliberately narrow: two push operation types, one pull entity type, no mobile trigger, no `sync_rejections`. |
 | 0.2.0 | 2026-08-13 | Sprint 14: mobile half built — `apps/mobile/lib/core/sync/` drains `outbound_queue` via push and refreshes local `products` via pull, triggered automatically once per session plus a manual "Sync now" button on the home screen. No pull-cursor persistence and no full trigger set (connectivity/foreground/timer) — both named, deliberate trade-offs, not oversights. |
 | 0.3.0 | 2026-08-14 | Sprint 23: permission enforcement applied — both `POST /sync/push` and `GET /sync/pull` now require any active, non-deactivated role. |
+| 0.4.0 | 2026-08-16 | Sprint 32 (backlog.md M3 item 2): `customer.create` added as a third push operation type, dispatching to `customersService.createCustomer` unchanged — ordered alongside `product.create`, both before `sale.create`, since a sale referencing a customer created in the same batch needs that customer to exist first. |

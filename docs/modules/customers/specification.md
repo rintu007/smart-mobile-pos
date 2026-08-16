@@ -3,15 +3,17 @@
 > **Status:** 🟢 Approved
 > **Module:** Customers (basic)
 > **Slice:** V1, minimal — `customers` table, `sales.customer_id`, `POST`/`GET`/`PATCH`/`DELETE
-> /customers`, `GET /customers/{id}/purchase-history`. Mobile UI, offline queuing, and the
-> conflict-resolution field-merge policy are separate, later backlog items (§1).
-> **Version:** 0.2.0
+> /customers`, `GET /customers/{id}/purchase-history` (Sprint 31); `customer.create` sync-push,
+> `POST /sales` accepting `customer_id`, and the mobile UI (Sprint 32). Conflict-resolution
+> field-merge remains a separate, later backlog item (§1).
+> **Version:** 0.3.0
 > **Last updated:** 2026-08-16
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
 
 All eleven sections per [documentation-standards.md §7](../../00-governance/documentation-standards.md#7-module-specification-template).
-Written to drive [Sprint 31](../../17-sprints/sprint-31.md) — specification before code, per
+Written to drive [Sprint 31](../../17-sprints/sprint-31.md); extended (§1a and throughout) to drive
+[Sprint 32](../../17-sprints/sprint-32.md) — specification before code, per
 [docs/README.md](../../README.md)'s non-negotiable rule #1.
 
 ---
@@ -44,14 +46,62 @@ yet" shape [trading-day/specification.md §1](../trading-day/specification.md#1-
 already established for `trading_day_id`. Building the column with no caller is still correct
 groundwork, not speculative — item 2 depends on it existing.
 
-**Scope explicitly not in this sprint, named rather than silently dropped:** mobile UI (item 2);
+**Scope explicitly not in Sprint 31, named rather than silently dropped:** mobile UI (item 2);
 `customer.create`/`customer.update` sync-push operation types and offline queuing (items 2 and 5);
-the conflict-resolution field-merge policy itself (item 5) — this sprint's `PATCH /customers/{id}` is
+the conflict-resolution field-merge policy itself (item 5) — Sprint 31's `PATCH /customers/{id}` is
 a plain last-write-wins online update, no base-`updated_at` comparison, since no concurrent-offline-
 edit caller exists yet to make a merge policy meaningful. Building it now would be exactly the kind
 of speculative abstraction this project's own practice avoids — see
 [backlog.md §4](../../17-sprints/backlog.md#4-m3--fully-decomposed-2026-08-16-now-that-m2-has-reached-this-point)'s
 own reasoning for why item 5 is scoped separately.
+
+## 1a. Sprint 32 — Customers (mobile), M3 item 2
+
+[Sprint 31](../../17-sprints/sprint-31.md) built and named exactly what item 2 needs: the
+`customer_id` column with no caller, and no `customer.create` sync-push type. This sprint closes
+both, plus the mobile UI itself.
+
+**`customer.create` reuses the `product.create` shape exactly, not a new pattern.** Mobile's
+`DriftCustomerRepository.createCustomer` writes the local `customers` row and enqueues a
+`customer.create` `outbound_queue` entry in the same transaction — identical to
+`DriftProductRepository.createProduct`'s own established shape (Sprint 07), not Categories/Units'
+online-only-direct-call shape, since `customers.md` documents `POST /customers` as genuinely
+offline-queued, unlike `POST /categories`/`POST /units`. `sync/service.ts` gains `customer.create`
+in its `TYPE_ORDER` and dispatch, calling `customersService.createCustomer` unchanged — sync-api.md
+§1's "push does not define a second, parallel request schema" rule, held exactly as every prior
+operation type has held it.
+
+**`POST /sales` gains an optional `customer_id`, validated server-side against the caller's own
+tenant if supplied** — the same tenant-scoped existence check `products/service.ts` already
+established for `category_id`/`unit_id`: an invalid/foreign-tenant value is rejected with the
+already-generic `NOT_FOUND`, matching that exact precedent rather than inventing a new
+per-field error code for what is already a well-established shape.
+
+**Reads stay direct-fetch-and-cache, not a new sync-pull cursor.** FR-052's "matched against the
+locally cached customer list" needs a local cache warm enough to search offline, but building a
+full bidirectional `GET /sync/pull?entity_type=customers` cursor mechanism for a single new read
+path is real, undiscussed scope disproportionate to what this item needs. Mirrors Categories/Units'
+own `refreshFromServer()` shape instead (Sprint 20): a direct `GET /customers` call populates/
+refreshes the local cache, `listAll()`/`searchByPhone()` then query that cache offline. Purchase
+history (`GET /customers/{id}/purchase-history`) is fetched live, on demand, with no local cache at
+all — the same shape `sales-history`'s own detail screen already established for read-through data
+that doesn't need offline availability for a feature (FR-051's own offline classification) whose
+primary use is "look this customer up while online, at the till."
+
+**Capture is a bottom sheet over the till screen, not a route push — FR-050's own wording, taken
+literally.** "captured inline during checkout without leaving the sale screen" is a real UI
+constraint, not just a data-shape one: the till screen gains a Customer chip (next to Hold, in the
+same row) opening a modal `CustomerPickerSheet` — phone-as-you-type search against the local cache,
+tap a match to attach it to the active cart, or (no match) an inline two-field form that creates
+and attaches in the same action. `/customers` and `/customers/:id` remain full routes for the
+separate browse/purchase-history use case (reached via a new `pos_customers_button` app-bar icon,
+the same entry-point shape Hold/Resume's own `pos_held_carts_button` established in Sprint 30) —
+two distinct entry points for two distinct jobs, not one screen serving both awkwardly.
+
+**The active cart's attached customer survives hold/resume**, the same durability guarantee
+[FR-026](../../03-functional-requirements/functional-requirements.md) already requires for line
+items (Sprint 30) — `CartState` gains `customerId`/`customerName`/`customerPhone`, persisted on the
+local `sales` draft row alongside the cart's other fields, restored on resume.
 
 ## 2. Business rules
 
@@ -107,6 +157,8 @@ RLS: tenant-scoped, same template as every other table
 | `PATCH /api/v1/customers/{id}` | **Built this sprint.** Cashier, Manager, Owner. Partial update (`name`/`phone`), plain last-write-wins (§1). |
 | `DELETE /api/v1/customers/{id}` | **Built this sprint.** Manager, Owner only. Soft delete (§2), idempotent. |
 | `GET /api/v1/customers/{id}/purchase-history` | **Built this sprint.** Any authenticated role. Cursor-paginated `sales` for this customer, `status = 'completed'` only (§2), ordered `(completed_at, id)` desc. |
+| `POST /api/v1/sales` | **Extended Sprint 32.** `customer_id` accepted as an optional field, per §1a. When supplied, must resolve to a real `customers` row under the caller's tenant (`NOT_FOUND` otherwise) — deactivated customers are still valid targets (§2's soft-delete stance: a deactivated customer can still complete a sale in progress, only future *lookup* excludes them). |
+| `POST /api/v1/sync/push` (`customer.create`) | **Built Sprint 32** — §1a. Dispatches to the same `customersService.createCustomer` `POST /customers` already calls, per sync-api.md §1. |
 
 Route files: `customers/route.ts` (POST, GET — a static top-level file, no dynamic sibling risk),
 `customers/[id]/route.ts` (PATCH, DELETE), `customers/[id]/purchase-history/route.ts` — applying
@@ -148,15 +200,15 @@ a specific, documented error code.
 
 ## 7. Offline behaviour
 
-**Not built this sprint**, named explicitly rather than silently absorbed: `customers.md` documents
-every write endpoint here as offline-queued, but no `customer.create`/`customer.update` sync-push
-operation type exists yet in `sync/schema.ts`'s operation union — same "table/endpoint exists, sync
-integration is a separate, later item" shape Categories/Units/Trading Day's own online-only-creation
-precedent already established. `customer.create` is [backlog.md M3 item 2](../../17-sprints/backlog.md#4-m3--fully-decomposed-2026-08-16-now-that-m2-has-reached-this-point)'s
-scope (paired with the mobile UI that actually produces the offline-created rows); `customer.update`
-is item 5's scope specifically, since it's also this project's first `.update` operation type of any
-kind and needs the field-merge policy, not just a bare upsert. `GET` endpoints are read-cached like
-every other read endpoint once a mobile caller exists (none does yet this sprint).
+**`POST /customers` is now genuinely offline-capable (Sprint 32)**, per §1a: local write +
+`outbound_queue` enqueue, atomic in one Drift transaction, drained by the existing sync trigger
+(Sprint 14) with no changes needed there. `customer.update` remains **not built** — item 5's scope
+specifically, since it's also this project's first `.update` operation type of any kind and needs
+the field-merge policy, not just a bare upsert; mobile has no customer-edit screen this sprint
+either, so there is still no real caller for it. `GET /customers`/`GET /customers/{id}/purchase-history`
+are not sync-pulled (§1a's direct-fetch-and-cache decision) — the local `customers` cache is
+refreshed via a direct online call, offline search works against whatever was last fetched, the
+same staleness shape Categories/Units already established.
 
 ## 8. Realtime behaviour
 
@@ -166,11 +218,32 @@ Day): the next request re-resolves state fresh, no cross-session push.
 
 ## 9. UI specification
 
-None this sprint — every endpoint built is called only by throwaway live-verification scripts so
-far, the same position Trading Day's own spec (§9) recorded for its first sprint. `/customers` and
-`/customers/:id` already have route-level entries in
-[route-map.md](../../09-navigation/route-map.md) (Cashier+, offline yes) from the original V1 route
-decomposition, but no screen exists yet — that's [backlog.md M3 item 2](../../17-sprints/backlog.md#4-m3--fully-decomposed-2026-08-16-now-that-m2-has-reached-this-point).
+**Built Sprint 32**, per §1a:
+
+- **`CustomerPickerSheet`** — a modal bottom sheet launched from a new `pos_customer_chip` on the
+  till screen (next to `pos_hold_button`), showing "Add customer" when the cart has none attached,
+  or the attached customer's name/phone when it does. Phone-as-you-type search (`pos_customer_search`
+  field) against the local cache; tapping a result attaches it (`pos_customer_result_<id>`); an
+  inline two-field form (`pos_customer_new_name`/`pos_customer_new_phone`, a
+  `pos_customer_create_button`) creates-and-attaches when no result matches. Closing the sheet
+  without a selection leaves the cart's existing attachment (or lack of one) unchanged.
+- **`CustomersScreen`** (`/customers`) — reached via a new `pos_customers_button` app-bar icon on
+  the till screen, the same entry-point shape `pos_held_carts_button` established. Search field,
+  scrollable result list (`customers_list`, rows keyed `customers_row_<id>`), empty state
+  (`customers_empty`). Not a select flow — tapping a row navigates to detail.
+- **`CustomerDetailScreen`** (`/customers/:id`) — name/phone header, purchase history list
+  (`customer_history_list`, fetched live per §1a, empty state `customer_history_empty`).
+
+Tablet/phone: single-column list + sheet, no distinct tablet layout needed — matches every other
+V1 screen's own precedent (no module has needed one yet).
+
+**FR-050's "without leaving the sale screen," checked against
+[tap-count-audit.md](../../09-navigation/tap-count-audit.md)'s standard, not previously verified
+numerically:** attaching an *existing* customer from the sheet is tap chip → tap search result (2
+taps), the same order of magnitude as WF-003's own audited discount flow (5 steps including a typed
+amount, per that row's own count). Creating a *new* customer inline (tap chip → type phone → tap
+create) is comparable in shape — a typed field plus a confirming tap, not a new tap-count category
+this document's existing rows don't already cover.
 
 ## 10. Test plan
 
@@ -201,16 +274,37 @@ decomposition, but no screen exists yet — that's [backlog.md M3 item 2](../../
   9. `GET /customers` after step 8 → the deactivated customer is excluded.
   10. Cross-tenant RLS: tenant B's `GET /customers` never resolves to tenant A's customer.
 
+**Sprint 32 additions:**
+
+- Unit tests: `pos/service.test.ts` — `createSale` accepts a valid `customer_id` and links it;
+  rejects one that doesn't exist under the caller's tenant with `NOT_FOUND`; a sale with no
+  `customer_id` is unchanged from before. `sync/service.test.ts` — `customer.create` dispatches to
+  `customersService.createCustomer`; a validation failure is rejected the same way `product.create`'s
+  own bad-payload case already is.
+  `drift_customer_repository_test.dart` (real in-memory Drift DB): `createCustomer` writes the
+  local row and an `outbound_queue` entry atomically (the same multi-row atomicity proof
+  `drift_product_repository_test.dart` already established); `searchByPhone` matches a partial
+  prefix; `refreshFromServer` upserts without duplicating.
+- **Live verification, real database:** `POST /sales` with a valid `customer_id` links it, visible
+  in the customer's own `purchase-history`; an invalid `customer_id` → `404 NOT_FOUND`; a sync-push
+  batch containing a `customer.create` operation creates the row exactly as the direct endpoint
+  would, confirmed via a follow-up `GET /customers?phone=`.
+- **Mobile:** `flutter analyze`/`flutter test` — `CustomerPickerSheet` attaches an existing customer
+  to the active cart, or creates-and-attaches a new one; `CustomersScreen` search filters the local
+  list; `CustomerDetailScreen` renders purchase history; hold-then-resume preserves the attached
+  customer.
+
 ## 11. Traceability
 
 | Requirement | Covered by | Status |
 | --- | --- | --- |
-| FR-050 (inline capture during checkout) | §4 (`POST /customers`) | Server half met; mobile checkout wiring is item 2 |
-| FR-051 (purchase history on profile) | §2, §4, §10 | Met |
-| FR-052 (phone-match-as-you-type search) | §4 (`GET /customers?phone=`) | Server half met; mobile as-you-type UI is item 2 |
+| FR-050 (inline capture during checkout) | §4 (`POST /customers`), §1a/§9 (mobile picker sheet) | Met (Sprint 32) |
+| FR-051 (purchase history on profile) | §2, §4, §9, §10 | Met |
+| FR-052 (phone-match-as-you-type search) | §4 (`GET /customers?phone=`), §1a/§9 (mobile local-cache search) | Met (Sprint 32) |
 | FR-062 (return lookup by customer phone) | §3 (phone index), §4 | Server half met; consumed by [backlog.md M3 item 3/4](../../17-sprints/backlog.md#4-m3--fully-decomposed-2026-08-16-now-that-m2-has-reached-this-point) (Returns) |
-| [permission-matrix.md — Customers](../../05-personas/permission-matrix.md#customers) | §4 | View/add/purchase-history met; edit/deactivate rows were missing from that matrix entirely — added in this same PR as a dated correction, matching this sprint's own decisions (PATCH: Cashier+, DELETE: Manager/Owner) |
-| `customers.md`'s offline-queued write endpoints | §7 | **Not met this sprint, named explicitly** — no sync push-operation type yet (items 2, 5) |
+| FR-026 (durability guarantee, extended to the attached customer) | §1a | Met (Sprint 32) — survives hold/resume |
+| [permission-matrix.md — Customers](../../05-personas/permission-matrix.md#customers) | §4 | View/add/purchase-history met; edit/deactivate rows were missing from that matrix entirely — added Sprint 31 as a dated correction |
+| `customers.md`'s offline-queued write endpoints | §7 | `POST /customers` met (Sprint 32, `customer.create`); `PATCH` remains not met, named for M3 item 5 |
 | Conflict-resolution field-merge (conflict-resolution.md) | — | **Not in this sprint's scope, named explicitly** — [backlog.md M3 item 5](../../17-sprints/backlog.md#4-m3--fully-decomposed-2026-08-16-now-that-m2-has-reached-this-point) |
 
 ## Change Log
@@ -219,3 +313,4 @@ decomposition, but no screen exists yet — that's [backlog.md M3 item 2](../../
 | --- | --- | --- |
 | 0.1.0 | 2026-08-16 | First version — written to drive Sprint 31's implementation of Customers (backlog.md M3 item 1): `customers` table, `sales.customer_id` (nullable), `POST`/`GET`/`PATCH`/`DELETE /customers`, `GET /customers/{id}/purchase-history`. No design gap found — customers.md/schema-server.md/FR-050-052 were already fully fixed. Mobile UI, offline queuing, and the conflict-resolution merge policy are explicitly out of scope, named for M3 items 2 and 5. |
 | 0.2.0 | 2026-08-16 | Built and live-verified (12/12). Found and fixed a real bug live: a Zod `.refine()` for "at least one of name/phone" always returned the generic `VALIDATION_FAILED` instead of the documented `CUSTOMER_IDENTIFIER_REQUIRED` — removed in favour of the service-layer check that already existed, §5. Permission matrix's missing edit/deactivate rows corrected in the same PR (§11). |
+| 0.3.0 | 2026-08-16 | §1a added — written to drive Sprint 32 (M3 item 2, Customers mobile): `customer.create` sync-push (reusing `product.create`'s exact shape), `POST /sales` accepting an optional `customer_id`, and the mobile UI itself — `CustomerPickerSheet` (a bottom sheet, per FR-050's own "without leaving the sale screen" wording taken literally) plus full `/customers`/`/customers/:id` routes for browsing. Reads stay direct-fetch-and-cache (Categories/Units' own shape), not a new sync-pull cursor — named as a deliberate, disciplined scope boundary. |

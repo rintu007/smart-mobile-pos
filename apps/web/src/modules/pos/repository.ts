@@ -37,6 +37,8 @@ export interface CreateSaleInput {
   storeId: string;
   createdBy: string;
   tradingDayId?: string;
+  // Added Sprint 32 (backlog.md M3 item 2) — docs/modules/customers/specification.md §1a.
+  customerId?: string;
   provisionalInvoiceNumber: string;
   subtotalMinorUnits: bigint;
   discountTotalMinorUnits: bigint;
@@ -93,6 +95,7 @@ export function createSale(input: CreateSaleInput) {
         storeId: input.storeId,
         status: "completed",
         tradingDayId: input.tradingDayId,
+        customerId: input.customerId,
         provisionalInvoiceNumber: input.provisionalInvoiceNumber,
         canonicalInvoiceNumber,
         financialYear,

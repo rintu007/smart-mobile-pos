@@ -6,6 +6,7 @@ import 'package:mobile/core/store_context/store_context_providers.dart';
 import 'package:mobile/features/pos/domain/entities/cart_line.dart';
 import 'package:mobile/features/pos/domain/entities/completed_sale.dart';
 import 'package:mobile/features/pos/domain/entities/held_sale.dart';
+import 'package:mobile/features/pos/domain/entities/resumed_cart.dart';
 import 'package:mobile/features/pos/domain/entities/sale_detail.dart';
 import 'package:mobile/features/pos/domain/repositories/sale_repository.dart';
 import 'package:mobile/features/pos/presentation/providers/pos_providers.dart';
@@ -36,11 +37,11 @@ class _FakeSaleRepository implements SaleRepository {
   }
 
   @override
-  Future<List<CartLine>?> resumeSale(String id) async {
+  Future<ResumedCart?> resumeSale(String id) async {
     final lines = _held.remove(id);
     if (lines == null) return null;
     resumedIds.add(id);
-    return lines;
+    return ResumedCart(lines: lines);
   }
 
   @override
@@ -48,6 +49,7 @@ class _FakeSaleRepository implements SaleRepository {
     required String id,
     required String storeId,
     required List<CartLine> lines,
+    String? customerId,
   }) => throw UnimplementedError();
 
   @override
@@ -61,6 +63,7 @@ class _FakeSaleRepository implements SaleRepository {
     required String id,
     required String storeId,
     required List<CartLine> lines,
+    String? customerId,
   }) => throw UnimplementedError();
 
   @override

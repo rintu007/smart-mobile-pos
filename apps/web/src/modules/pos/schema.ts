@@ -40,6 +40,8 @@ export const createSaleRequestSchema = z.object({
     )
     .min(1),
   discount_approved_by: z.string().uuid().optional(),
+  // Added Sprint 32 (backlog.md M3 item 2) — docs/modules/customers/specification.md §1a.
+  customer_id: z.string().uuid().optional(),
 });
 
 export type CreateSaleRequest = z.infer<typeof createSaleRequestSchema>;

@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/features/pos/domain/entities/cart_line.dart';
 import 'package:mobile/features/pos/domain/entities/completed_sale.dart';
 import 'package:mobile/features/pos/domain/entities/held_sale.dart';
+import 'package:mobile/features/pos/domain/entities/resumed_cart.dart';
 import 'package:mobile/features/pos/domain/entities/sale_detail.dart';
 import 'package:mobile/features/pos/domain/repositories/sale_repository.dart';
 import 'package:mobile/features/pos/presentation/providers/pos_providers.dart';
@@ -19,6 +20,7 @@ class _FakeSaleRepository implements SaleRepository {
     required String id,
     required String storeId,
     required List<CartLine> lines,
+    String? customerId,
   }) => throw UnimplementedError();
 
   @override
@@ -32,6 +34,7 @@ class _FakeSaleRepository implements SaleRepository {
     required String id,
     required String storeId,
     required List<CartLine> lines,
+    String? customerId,
   }) => throw UnimplementedError();
 
   @override
@@ -41,7 +44,7 @@ class _FakeSaleRepository implements SaleRepository {
   Future<void> holdSale(String id) => throw UnimplementedError();
 
   @override
-  Future<List<CartLine>?> resumeSale(String id) => throw UnimplementedError();
+  Future<ResumedCart?> resumeSale(String id) => throw UnimplementedError();
 
   @override
   Future<List<HeldSale>> listHeldSales() => throw UnimplementedError();

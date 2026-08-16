@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import * as productsService from "@/modules/products/service";
 import * as posService from "@/modules/pos/service";
+import * as customersService from "@/modules/customers/service";
 import { ApiError } from "@/core/errors/api-error";
 import * as repository from "./repository";
 import { pushOperations, pullProducts } from "./service";
@@ -8,6 +9,7 @@ import type { SyncPushRequest } from "./schema";
 
 vi.mock("@/modules/products/service");
 vi.mock("@/modules/pos/service");
+vi.mock("@/modules/customers/service");
 vi.mock("./repository");
 
 const authUserId = "11111111-1111-4111-8111-111111111111";
@@ -16,6 +18,8 @@ const productId = "33333333-3333-4333-8333-333333333333";
 const saleId = "44444444-4444-4444-8444-444444444444";
 const opProduct = "55555555-5555-4555-8555-555555555555";
 const opSale = "66666666-6666-4666-8666-666666666666";
+const opCustomer = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const customerId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
 describe("pushOperations", () => {
   beforeEach(() => {
@@ -99,6 +103,84 @@ describe("pushOperations", () => {
     const result = await pushOperations(authUserId, tenantId, input);
 
     expect(result.results[0]).toMatchObject({ status: "rejected", error: { code: "DEPENDENCY_NOT_FOUND" } });
+  });
+
+  it("dispatches customer.create to customersService.createCustomer", async () => {
+    vi.mocked(customersService.createCustomer).mockResolvedValue({ id: customerId } as never);
+
+    const input: SyncPushRequest = {
+      operations: [
+        {
+          type: "customer.create",
+          client_operation_id: opCustomer,
+          payload: { id: customerId, phone: "9876543210" },
+        },
+      ],
+    };
+
+    const result = await pushOperations(authUserId, tenantId, input);
+
+    expect(customersService.createCustomer).toHaveBeenCalledWith(authUserId, tenantId, {
+      id: customerId,
+      phone: "9876543210",
+    });
+    expect(result.results[0]).toMatchObject({ status: "accepted", entity_id: customerId });
+  });
+
+  it("rejects a customer.create payload that fails the direct endpoint's own schema", async () => {
+    const input: SyncPushRequest = {
+      operations: [
+        // Missing `id` entirely -- a real Zod-schema-level failure, distinct from
+        // CUSTOMER_IDENTIFIER_REQUIRED (a service-layer check that runs only once a
+        // schema-valid payload reaches customersService.createCustomer, per customers/
+        // specification.md §5's live-found `.refine()` fix -- name/phone alone omitted is not,
+        // by itself, a schema failure).
+        { type: "customer.create", client_operation_id: opCustomer, payload: { phone: "9876543210" } },
+      ],
+    };
+
+    const result = await pushOperations(authUserId, tenantId, input);
+
+    expect(result.results[0]).toMatchObject({ status: "rejected", error: { code: "VALIDATION_FAILED" } });
+    expect(customersService.createCustomer).not.toHaveBeenCalled();
+  });
+
+  it("processes customer.create before sale.create, same as product.create", async () => {
+    const callOrder: string[] = [];
+    vi.mocked(customersService.createCustomer).mockImplementation(async () => {
+      callOrder.push("customer.create");
+      return { id: customerId } as never;
+    });
+    vi.mocked(posService.createSale).mockImplementation(async () => {
+      callOrder.push("sale.create");
+      return { id: saleId } as never;
+    });
+
+    const input: SyncPushRequest = {
+      operations: [
+        {
+          type: "sale.create",
+          client_operation_id: opSale,
+          payload: {
+            id: saleId,
+            store_id: "77777777-7777-4777-8777-777777777777",
+            provisional_invoice_number: "DEV-2026-000001",
+            line_items: [{ product_id: productId, quantity: 1, client_unit_price_minor_units: 100 }],
+            payments: [{ method: "cash", amount_minor_units: 100 }],
+            customer_id: customerId,
+          },
+        },
+        {
+          type: "customer.create",
+          client_operation_id: opCustomer,
+          payload: { id: customerId, phone: "9876543210" },
+        },
+      ],
+    };
+
+    await pushOperations(authUserId, tenantId, input);
+
+    expect(callOrder).toEqual(["customer.create", "sale.create"]);
   });
 
   it("does not let one operation's rejection stop the rest from running", async () => {

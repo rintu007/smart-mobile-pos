@@ -10,6 +10,8 @@ import '../features/authentication/presentation/screens/login_screen.dart';
 import '../features/catalogue/presentation/screens/add_product_screen.dart';
 import '../features/catalogue/presentation/screens/categories_screen.dart';
 import '../features/catalogue/presentation/screens/units_screen.dart';
+import '../features/customers/presentation/screens/customer_detail_screen.dart';
+import '../features/customers/presentation/screens/customers_screen.dart';
 import '../features/pos/presentation/screens/barcode_scan_screen.dart';
 import '../features/pos/presentation/screens/held_carts_screen.dart';
 import '../features/pos/presentation/screens/till_screen.dart';
@@ -89,6 +91,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/sales-history/:id',
         builder: (context, state) =>
             SaleDetailScreen(saleId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/customers',
+        builder: (context, state) => const CustomersScreen(),
+      ),
+      GoRoute(
+        path: '/customers/:id',
+        builder: (context, state) =>
+            CustomerDetailScreen(customerId: state.pathParameters['id']!),
       ),
     ],
   );

@@ -5,7 +5,9 @@ import { z } from "zod";
 // parallel request schema, so each operation's payload is validated per-type against the exact
 // same schema its direct endpoint already uses (service.ts does that, not this file).
 export const syncPushOperationSchema = z.object({
-  type: z.enum(["product.create", "sale.create"]),
+  // `customer.create` added Sprint 32 (backlog.md M3 item 2) —
+  // docs/modules/customers/specification.md §1a.
+  type: z.enum(["product.create", "sale.create", "customer.create"]),
   client_operation_id: z.string().uuid(),
   payload: z.record(z.string(), z.unknown()),
 });

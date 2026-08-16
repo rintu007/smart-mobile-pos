@@ -6,9 +6,13 @@ import 'package:mobile/features/catalogue/domain/entities/product.dart';
 import 'package:mobile/features/catalogue/domain/repositories/product_repository.dart';
 import 'package:mobile/features/catalogue/presentation/providers/category_providers.dart';
 import 'package:mobile/features/catalogue/presentation/providers/product_providers.dart';
+import 'package:mobile/features/customers/domain/entities/customer.dart';
+import 'package:mobile/features/customers/domain/repositories/customer_repository.dart';
+import 'package:mobile/features/customers/presentation/providers/customer_providers.dart';
 import 'package:mobile/features/pos/domain/entities/cart_line.dart';
 import 'package:mobile/features/pos/domain/entities/completed_sale.dart';
 import 'package:mobile/features/pos/domain/entities/held_sale.dart';
+import 'package:mobile/features/pos/domain/entities/resumed_cart.dart';
 import 'package:mobile/features/pos/domain/entities/sale_detail.dart';
 import 'package:mobile/features/pos/domain/repositories/sale_repository.dart';
 import 'package:mobile/features/pos/presentation/providers/pos_providers.dart';
@@ -43,12 +47,14 @@ class _FakeSaleRepository implements SaleRepository {
 
   final Future<void> Function()? behavior;
   bool completeCalled = false;
+  String? lastSavedCustomerId;
 
   @override
   Future<CompletedSale> completeSale({
     required String id,
     required String storeId,
     required List<CartLine> lines,
+    String? customerId,
   }) async {
     completeCalled = true;
     if (behavior != null) await behavior!();
@@ -77,8 +83,10 @@ class _FakeSaleRepository implements SaleRepository {
     required String id,
     required String storeId,
     required List<CartLine> lines,
+    String? customerId,
   }) async {
     _drafts[id] = lines;
+    lastSavedCustomerId = customerId;
   }
 
   @override
@@ -93,10 +101,11 @@ class _FakeSaleRepository implements SaleRepository {
   }
 
   @override
-  Future<List<CartLine>?> resumeSale(String id) async {
+  Future<ResumedCart?> resumeSale(String id) async {
     if (!_held.contains(id)) return null;
     _held.remove(id);
-    return _drafts[id];
+    final lines = _drafts[id];
+    return lines == null ? null : ResumedCart(lines: lines);
   }
 
   @override
@@ -119,9 +128,35 @@ class _FakeSaleRepository implements SaleRepository {
 const _coffee = Product(id: 'product-1', name: 'Filter coffee', priceMinorUnits: 1500);
 const _sugar = Product(id: 'product-2', name: 'Sugar', priceMinorUnits: 500);
 
+/// A fake, not a mock — same reasoning as `_FakeSaleRepository` above.
+/// `searchByPhone` is the only method `CustomerPickerSheet` actually
+/// exercises in this screen's own test scope; the rest throw.
+class _FakeCustomerRepository implements CustomerRepository {
+  _FakeCustomerRepository([this._customers = const []]);
+
+  final List<Customer> _customers;
+
+  @override
+  Future<List<Customer>> searchByPhone(String query) async => _customers;
+
+  @override
+  Future<Customer> createCustomer({required String id, String? name, String? phone}) =>
+      throw UnimplementedError();
+
+  @override
+  Future<Customer?> findById(String id) => throw UnimplementedError();
+
+  @override
+  Future<void> refreshFromServer() async {}
+
+  @override
+  Future<List<CompletedSale>> getPurchaseHistory(String customerId) => throw UnimplementedError();
+}
+
 Widget _wrap({
   required SaleRepository saleRepository,
   ProductRepository? productRepository,
+  CustomerRepository? customerRepository,
 }) {
   return ProviderScope(
     overrides: [
@@ -132,6 +167,9 @@ Widget _wrap({
       categoriesListProvider.overrideWith((ref) async => []),
       storeContextProvider.overrideWith((ref) async => 'store-1'),
       saleRepositoryProvider.overrideWithValue(saleRepository),
+      customerRepositoryProvider.overrideWithValue(
+        customerRepository ?? _FakeCustomerRepository(),
+      ),
       if (productRepository != null)
         productRepositoryProvider.overrideWithValue(productRepository),
     ],
@@ -282,4 +320,45 @@ void main() {
 
     expect(find.byKey(const Key('pos_held_carts_button')), findsOneWidget);
   });
+
+  testWidgets('the customers browse icon is present in the app bar', (tester) async {
+    await tester.pumpWidget(_wrap(saleRepository: _FakeSaleRepository()));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('pos_customers_button')), findsOneWidget);
+  });
+
+  testWidgets('the customer chip shows "Add customer" by default', (tester) async {
+    await tester.pumpWidget(_wrap(saleRepository: _FakeSaleRepository()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Add customer'), findsOneWidget);
+  });
+
+  testWidgets(
+    'tapping the customer chip, then a search result, attaches it to the cart',
+    (tester) async {
+      final saleRepository = _FakeSaleRepository();
+      const customer = Customer(id: 'customer-1', name: 'Ramesh Kumar', phone: '9876543210');
+      await tester.pumpWidget(
+        _wrap(
+          saleRepository: saleRepository,
+          customerRepository: _FakeCustomerRepository([customer]),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('pos_product_product-1')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('pos_customer_chip')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('pos_customer_result_customer-1')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('pos_customer_result_customer-1')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ramesh Kumar'), findsOneWidget);
+      expect(saleRepository.lastSavedCustomerId, 'customer-1');
+    },
+  );
 }
