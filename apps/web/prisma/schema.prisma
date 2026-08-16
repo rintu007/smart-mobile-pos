@@ -47,6 +47,7 @@ model Tenant {
   invoiceSequences InvoiceSequence[]
   shopSettings     ShopSettings?
   tradingDays      TradingDay[]
+  customers        Customer[]
 
   @@map("tenants")
 }
@@ -107,6 +108,7 @@ model User {
   roleAssignmentsMade   UserStoreRole[] @relation("UserStoreRoleAssigner")
   tradingDaysCreated    TradingDay[]    @relation("TradingDayCreator")
   tradingDaysReopened   TradingDay[]    @relation("TradingDayReopener")
+  customersCreated      Customer[]
 
   @@index([tenantId])
   @@map("users")
@@ -188,6 +190,11 @@ model Sale {
   /// POST /sales on an open trading day until the mobile till screen is updated to open one first,
   /// to avoid regressing the one live, working end-to-end sale flow this project has (Sprint 16).
   tradingDayId              String?  @map("trading_day_id") @db.Uuid
+  /// Added Sprint 31 (backlog.md M3 item 1) — nullable, matching schema-server.md's own documented
+  /// column exactly (a sale outlives a customer record being deactivated). Not yet populated by any
+  /// code path: POST /sales doesn't accept it yet, that's M3 item 2's mobile-checkout-wiring scope
+  /// (docs/modules/customers/specification.md §1). Built now so item 2 has the column to write to.
+  customerId                String?  @map("customer_id") @db.Uuid
   /// Always 'completed' this sprint — draft/held/cancelled are real server states a future
   /// milestone's UI produces (hold/resume is M2 scope).
   status                    String
@@ -225,6 +232,7 @@ model Sale {
   store      Store          @relation(fields: [storeId], references: [id], onDelete: Restrict)
   user       User           @relation(fields: [createdBy], references: [id], onDelete: Restrict)
   tradingDay TradingDay?    @relation(fields: [tradingDayId], references: [id], onDelete: Restrict)
+  customer   Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
   lineItems  SaleLineItem[]
   payments   SalePayment[]
 
@@ -464,4 +472,32 @@ model Unit {
 
   @@index([tenantId])
   @@map("units")
+}
+
+/// Sprint 31 (backlog.md M3 item 1) — docs/07-database/schema-server.md's `customers` table
+/// (Context 4), built in full this sprint (unlike Category/Unit's create+list-only cut): `name`/
+/// `phone` are both nullable at the schema level (CUSTOMER_IDENTIFIER_REQUIRED enforces "at least
+/// one" at the application layer, not the database), `updatedAt` is included from the start (not
+/// deferred the way Category/Unit's was) since M3 item 5's conflict-resolution merge policy needs
+/// it as a real column — docs/modules/customers/specification.md §3. The
+/// `(tenant_id, phone) WHERE deactivated_at IS NULL` uniqueness rule (the return-by-phone lookup,
+/// FR-062, and PHONE_ALREADY_ASSIGNED's actual mechanism) is enforced by a hand-edited partial
+/// unique index in this migration (`customers_tenant_id_phone_active_key`), not expressible in
+/// Prisma's schema DSL — same TradingDay-precedent shape, not declared as `@@unique` below.
+model Customer {
+  id            String    @id @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  name          String?
+  phone         String?
+  deactivatedAt DateTime? @map("deactivated_at") @db.Timestamptz
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdBy     String    @map("created_by") @db.Uuid
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user   User   @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  sales  Sale[]
+
+  @@index([tenantId])
+  @@map("customers")
 }
