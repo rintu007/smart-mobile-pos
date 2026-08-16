@@ -74,4 +74,26 @@ abstract class SaleRepository {
 
   /// The Held Carts list (`/pos/hold`), most-recently-held first.
   Future<List<HeldSale>> listHeldSales();
+
+  /// `GET /api/v1/sales/lookup` — locates any sale under the tenant by its
+  /// invoice number (provisional or canonical), for `/returns/new`'s "locate
+  /// by receipt/invoice number" path (docs/modules/returns/specification.md
+  /// §1b, FR-062). Falls back to a local search of this device's own
+  /// completed sales (by provisional invoice number) when the network call
+  /// itself fails — genuinely offline for the common case (a customer
+  /// returning something bought at this same till); a sale from another
+  /// device that hasn't synced anywhere this device can see it remains the
+  /// one genuine offline gap, per returns-workflows.md's own documented
+  /// failure path.
+  Future<SaleDetail?> lookupSale({
+    String? provisionalInvoiceNumber,
+    String? canonicalInvoiceNumber,
+  });
+
+  /// `GET /api/v1/sales/{id}` — full detail for a sale already located some
+  /// other way (e.g. a row in a customer's purchase history, which only
+  /// carries [CompletedSale]'s summary shape, not line items). Online only —
+  /// purchase history itself was already online-only before this sprint
+  /// (customers/specification.md §1a), unchanged here.
+  Future<SaleDetail?> fetchRemoteSaleDetail(String id);
 }

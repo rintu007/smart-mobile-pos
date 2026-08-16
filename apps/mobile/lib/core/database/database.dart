@@ -7,6 +7,8 @@ import 'tables/device_identity.dart';
 import 'tables/local_provisional_sequence.dart';
 import 'tables/outbound_queue.dart';
 import 'tables/products.dart';
+import 'tables/return_line_items.dart';
+import 'tables/returns.dart';
 import 'tables/sale_line_items.dart';
 import 'tables/sale_payments.dart';
 import 'tables/sales.dart';
@@ -25,6 +27,8 @@ part 'database.g.dart';
 /// why they aren't queued via `outbound_queue` like `Products` is), and
 /// `Customers` (Sprint 32, M3 item 2 — unlike Categories/Units, genuinely
 /// offline-writable via `outbound_queue`, see customers.dart's own
+/// docstring). `Returns`/`ReturnLineItems` (Sprint 34, M3 item 4 — same
+/// genuinely-offline-writable shape as `Customers`, see returns.dart's own
 /// docstring). Every other local table in schema-local.md (the
 /// server-authoritative caches, ...) is added by the sprint that actually
 /// needs it, not stubbed here ahead of the backlog.
@@ -36,6 +40,8 @@ part 'database.g.dart';
     LocalProvisionalSequence,
     OutboundQueue,
     Products,
+    ReturnLineItems,
+    Returns,
     Sales,
     SaleLineItems,
     SalePayments,
@@ -48,13 +54,14 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   // The first schema change was Sprint 20 (schemaVersion 1 -> 2); Sprint 21
   // (backlog.md item 5) adds `sku`/`barcode` to `products` for the till's
   // offline barcode-scan lookup; Sprint 30 (M2 item 6, Hold/Resume) adds
   // `sales.created_at` — see sales.dart's own comment for why; Sprint 32 (M3
-  // item 2) adds the `Customers` table and `sales.customer_id`. Same
+  // item 2) adds the `Customers` table and `sales.customer_id`; Sprint 34 (M3
+  // item 4) adds the `Returns`/`ReturnLineItems` tables. Same
   // non-destructive-migration discipline — a real founder device already
   // has real local data. Existing `'completed'` rows get `created_at`
   // backfilled from `completed_at` (a reasonable historical approximation,
@@ -82,6 +89,10 @@ class AppDatabase extends _$AppDatabase {
       if (from < 5) {
         await m.createTable(customers);
         await m.addColumn(sales, sales.customerId);
+      }
+      if (from < 6) {
+        await m.createTable(returns);
+        await m.createTable(returnLineItems);
       }
     },
   );

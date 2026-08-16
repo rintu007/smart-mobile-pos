@@ -71,6 +71,15 @@ class _FakeSaleRepository implements SaleRepository {
 
   @override
   Future<void> holdSale(String id) => throw UnimplementedError();
+
+  @override
+  Future<SaleDetail?> lookupSale({
+    String? provisionalInvoiceNumber,
+    String? canonicalInvoiceNumber,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<SaleDetail?> fetchRemoteSaleDetail(String id) => throw UnimplementedError();
 }
 
 const _coffeeLine = CartLine(

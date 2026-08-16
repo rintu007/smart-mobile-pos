@@ -6,6 +6,7 @@ import '../../../../core/money/money.dart';
 import '../../../catalogue/presentation/providers/category_providers.dart';
 import '../../../catalogue/presentation/providers/product_providers.dart';
 import '../../../customers/presentation/widgets/customer_picker_sheet.dart';
+import '../../../returns/presentation/providers/return_providers.dart';
 import '../providers/pos_providers.dart';
 
 /// `/pos`, per route-map.md — backlog.md item 6's till screen. No design-
@@ -55,6 +56,7 @@ class TillScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final pendingApprovals = ref.watch(pendingApprovalsCountProvider);
     final products = ref.watch(filteredProductListProvider);
     final categories = ref.watch(categoriesListProvider);
     final selectedCategoryId = ref.watch(posCategoryFilterProvider);
@@ -111,6 +113,34 @@ class TillScreen extends ConsumerWidget {
             icon: const Icon(Icons.people_outline),
             tooltip: 'Customers',
             onPressed: () => context.push('/customers'),
+          ),
+          // navigation-model.md §2's "Return" icon — WF-012 (filing).
+          IconButton(
+            key: const Key('pos_return_button'),
+            icon: const Icon(Icons.assignment_return_outlined),
+            tooltip: 'New return',
+            onPressed: () => context.push('/returns/new'),
+          ),
+          // The approvals-queue badge, per returns/specification.md §1b's
+          // dated correction to returns.md's own "Reports-tab badge"
+          // forward reference (no Reports tab exists yet, M4). Shown to
+          // every role; a Cashier's own background count fetch 403s and is
+          // swallowed inside the repository, so it simply shows no badge —
+          // the correct behaviour falling out of the existing
+          // error-swallowing convention, not a role check.
+          IconButton(
+            key: const Key('pos_returns_approvals_button'),
+            icon: pendingApprovals.maybeWhen(
+              data: (count) => count > 0
+                  ? Badge(
+                      label: Text('$count'),
+                      child: const Icon(Icons.assignment_late_outlined),
+                    )
+                  : const Icon(Icons.assignment_late_outlined),
+              orElse: () => const Icon(Icons.assignment_late_outlined),
+            ),
+            tooltip: 'Return approvals',
+            onPressed: () => context.push('/returns/approvals'),
           ),
         ],
       ),

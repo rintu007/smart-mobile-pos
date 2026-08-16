@@ -7,6 +7,7 @@ import 'package:mobile/core/database/database.dart';
 import 'package:mobile/core/invoicing/invoice_number_generator.dart';
 import 'package:mobile/features/pos/data/repositories/drift_sale_repository.dart';
 import 'package:mobile/features/pos/domain/entities/cart_line.dart';
+import 'package:mobile/features/pos/domain/entities/sale_detail.dart';
 
 void main() {
   late AppDatabase db;
@@ -489,6 +490,115 @@ void main() {
         db.sales,
       )..where((t) => t.id.equals('sale-1'))).getSingle();
       expect(row.status, 'completed');
+    });
+  });
+
+  group('lookupSale', () {
+    test('returns the network result when the injected lookup succeeds', () async {
+      final networked = SaleDetail(
+        id: 'sale-remote',
+        provisionalInvoiceNumber: 'DEV-2026-000099',
+        completedAt: DateTime(2026, 8, 16),
+        grandTotalMinorUnits: 9900,
+        lines: const [
+          SaleLineDetail(
+            id: 'line-remote-1',
+            productId: 'product-1',
+            productName: null,
+            quantity: 1,
+            unitPriceMinorUnits: 9900,
+            lineTotalMinorUnits: 9900,
+          ),
+        ],
+      );
+      final networkedRepository = DriftSaleRepository(
+        db,
+        InvoiceNumberGenerator(db),
+        ({provisionalInvoiceNumber, canonicalInvoiceNumber}) async => networked,
+        (id) async => null,
+      );
+
+      final result = await networkedRepository.lookupSale(provisionalInvoiceNumber: 'DEV-2026-000099');
+
+      expect(result?.id, 'sale-remote');
+      // Product names aren't known locally either, so they stay null.
+      expect(result?.lines.single.productName, isNull);
+    });
+
+    test('falls back to a local match when the injected lookup throws', () async {
+      await repository.completeSale(id: 'sale-1', storeId: 'store-1', lines: lines);
+      final localOnlyRepository = DriftSaleRepository(
+        db,
+        InvoiceNumberGenerator(db),
+        ({provisionalInvoiceNumber, canonicalInvoiceNumber}) async => throw Exception('offline'),
+        (id) async => null,
+      );
+
+      final saleRow = await (db.select(
+        db.sales,
+      )..where((t) => t.id.equals('sale-1'))).getSingle();
+      final result = await localOnlyRepository.lookupSale(
+        provisionalInvoiceNumber: saleRow.provisionalInvoiceNumber,
+      );
+
+      expect(result?.id, 'sale-1');
+    });
+
+    test('returns null when neither the network nor the local fallback finds anything', () async {
+      final noResultRepository = DriftSaleRepository(
+        db,
+        InvoiceNumberGenerator(db),
+        ({provisionalInvoiceNumber, canonicalInvoiceNumber}) async => null,
+        (id) async => null,
+      );
+
+      final result = await noResultRepository.lookupSale(provisionalInvoiceNumber: 'nonexistent');
+
+      expect(result, isNull);
+    });
+  });
+
+  group('fetchRemoteSaleDetail', () {
+    test('resolves product names against the local product cache', () async {
+      await db
+          .into(db.products)
+          .insert(
+            ProductsCompanion.insert(
+              id: 'product-1',
+              name: 'Amul Milk',
+              priceMinorUnits: 2800,
+            ),
+          );
+      final networkedRepository = DriftSaleRepository(
+        db,
+        InvoiceNumberGenerator(db),
+        ({provisionalInvoiceNumber, canonicalInvoiceNumber}) async => null,
+        (id) async => SaleDetail(
+          id: id,
+          provisionalInvoiceNumber: 'DEV-2026-000099',
+          completedAt: DateTime(2026, 8, 16),
+          grandTotalMinorUnits: 2800,
+          lines: const [
+            SaleLineDetail(
+              id: 'line-remote-1',
+              productId: 'product-1',
+              productName: null,
+              quantity: 1,
+              unitPriceMinorUnits: 2800,
+              lineTotalMinorUnits: 2800,
+            ),
+          ],
+        ),
+      );
+
+      final result = await networkedRepository.fetchRemoteSaleDetail('sale-remote');
+
+      expect(result?.lines.single.productName, 'Amul Milk');
+    });
+
+    test('returns null when the injected fetch resolves null', () async {
+      final result = await repository.fetchRemoteSaleDetail('missing');
+      expect(result, isNull);
     });
   });
 }

@@ -15,6 +15,9 @@ import '../features/customers/presentation/screens/customers_screen.dart';
 import '../features/pos/presentation/screens/barcode_scan_screen.dart';
 import '../features/pos/presentation/screens/held_carts_screen.dart';
 import '../features/pos/presentation/screens/till_screen.dart';
+import '../features/returns/presentation/screens/new_return_screen.dart';
+import '../features/returns/presentation/screens/return_approvals_screen.dart';
+import '../features/returns/presentation/screens/return_detail_screen.dart';
 import '../features/sales_history/presentation/screens/sale_detail_screen.dart';
 import '../features/sales_history/presentation/screens/sales_history_screen.dart';
 import 'home_screen.dart';
@@ -100,6 +103,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/customers/:id',
         builder: (context, state) =>
             CustomerDetailScreen(customerId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/returns/new',
+        builder: (context, state) => const NewReturnScreen(),
+      ),
+      GoRoute(
+        path: '/returns/approvals',
+        builder: (context, state) => const ReturnApprovalsScreen(),
+      ),
+      GoRoute(
+        path: '/returns/:id',
+        builder: (context, state) =>
+            ReturnDetailScreen(returnId: state.pathParameters['id']!),
       ),
     ],
   );
