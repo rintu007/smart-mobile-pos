@@ -203,7 +203,11 @@ model Sale {
   /// InvoiceNumberGenerator._financialYearFor string format exactly.
   financialYear            String?  @map("financial_year")
   /// BigInt, matching schema-server.md's BIGINT exactly — same reasoning as Product.priceMinorUnits.
+  /// Sprint 27 correction: means post-discount, pre-tax (money-and-tax.md's always-fixed formula),
+  /// not the pre-discount raw sum this column silently held before Discount existed to diverge it.
   subtotalMinorUnits       BigInt   @map("subtotal_minor_units")
+  /// Added Sprint 27 (backlog.md M2 item 3) — DR-011/DR-012, docs/modules/pos/specification.md §2.
+  discountTotalMinorUnits  BigInt   @default(0) @map("discount_total_minor_units")
   grandTotalMinorUnits     BigInt   @map("grand_total_minor_units")
   completedAt              DateTime @map("completed_at") @db.Timestamptz
   createdAt                DateTime @default(now()) @map("created_at") @db.Timestamptz
@@ -306,18 +310,19 @@ model TradingDay {
 }
 
 /// M0-minimal slice of docs/07-database/schema-server.md's `sale_line_items` — omits `variant_id`
-/// (V2+ stub), `hsn_sac_code_at_sale`/`tax_rate_basis_points`/`line_discount_minor_units`/
-/// `line_tax_minor_units` (M2 scope, see Sale's comment above).
+/// (V2+ stub), `hsn_sac_code_at_sale`/`tax_rate_basis_points`/`line_tax_minor_units` (M2 item 4).
+/// `line_discount_minor_units` added Sprint 27 (M2 item 3).
 model SaleLineItem {
-  id                  String @id @db.Uuid
-  saleId              String @map("sale_id") @db.Uuid
-  productId           String @map("product_id") @db.Uuid
+  id                     String @id @db.Uuid
+  saleId                 String @map("sale_id") @db.Uuid
+  productId              String @map("product_id") @db.Uuid
   /// NUMERIC(14,3) on schema-server.md; Int here — M0 rejects fractional quantities entirely
   /// (docs/modules/pos/specification.md §2, since Units doesn't exist yet to say whether a
   /// product allows them), so no fixed-point representation is needed yet either.
-  quantity            Int
-  unitPriceMinorUnits BigInt @map("unit_price_minor_units")
-  lineTotalMinorUnits BigInt @map("line_total_minor_units")
+  quantity               Int
+  unitPriceMinorUnits    BigInt @map("unit_price_minor_units")
+  lineDiscountMinorUnits BigInt @default(0) @map("line_discount_minor_units")
+  lineTotalMinorUnits    BigInt @map("line_total_minor_units")
 
   sale    Sale    @relation(fields: [saleId], references: [id], onDelete: Restrict)
   product Product @relation(fields: [productId], references: [id], onDelete: Restrict)

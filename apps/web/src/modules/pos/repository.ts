@@ -39,12 +39,14 @@ export interface CreateSaleInput {
   tradingDayId?: string;
   provisionalInvoiceNumber: string;
   subtotalMinorUnits: bigint;
+  discountTotalMinorUnits: bigint;
   grandTotalMinorUnits: bigint;
   lineItems: {
     id: string;
     productId: string;
     quantity: number;
     unitPriceMinorUnits: bigint;
+    lineDiscountMinorUnits: bigint;
     lineTotalMinorUnits: bigint;
   }[];
   payment: { id: string; method: string; amountMinorUnits: bigint };
@@ -88,6 +90,7 @@ export function createSale(input: CreateSaleInput) {
         canonicalInvoiceNumber,
         financialYear,
         subtotalMinorUnits: input.subtotalMinorUnits,
+        discountTotalMinorUnits: input.discountTotalMinorUnits,
         grandTotalMinorUnits: input.grandTotalMinorUnits,
         completedAt,
         createdBy: input.createdBy,
@@ -97,6 +100,7 @@ export function createSale(input: CreateSaleInput) {
             productId: item.productId,
             quantity: item.quantity,
             unitPriceMinorUnits: item.unitPriceMinorUnits,
+            lineDiscountMinorUnits: item.lineDiscountMinorUnits,
             lineTotalMinorUnits: item.lineTotalMinorUnits,
           })),
         },
@@ -146,6 +150,7 @@ export function createSale(input: CreateSaleInput) {
           provisional_invoice_number: input.provisionalInvoiceNumber,
           canonical_invoice_number: Number(canonicalInvoiceNumber),
           subtotal_minor_units: Number(input.subtotalMinorUnits),
+          discount_total_minor_units: Number(input.discountTotalMinorUnits),
           grand_total_minor_units: Number(input.grandTotalMinorUnits),
           completed_at: completedAt.toISOString(),
         },
