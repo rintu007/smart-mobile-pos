@@ -1,19 +1,22 @@
-# Module Specification — Returns & Refund (server)
+# Module Specification — Returns & Refund
 
 > **Status:** 🟢 Approved
 > **Module:** Returns & Refund
-> **Slice:** V1, server half — `returns`/`return_line_items` tables, `POST /returns`,
-> `GET /returns/{id}`/`GET /returns`/`GET /returns/approvals`, `POST /returns/{id}/approve`/`reject`,
-> the `return` stock movement, `return.create`/`return.approve`/`return.reject` sync-push operation
-> types (Sprint 33, backlog.md M3 item 3). Mobile UI is a separate, later item (M3 item 4).
-> **Version:** 0.1.0
+> **Slice:** V1 — server half (Sprint 33, backlog.md M3 item 3): `returns`/`return_line_items`
+> tables, `POST /returns`, `GET /returns/{id}`/`GET /returns`/`GET /returns/approvals`,
+> `POST /returns/{id}/approve`/`reject`, the `return` stock movement,
+> `return.create`/`return.approve`/`return.reject` sync-push operation types. Mobile UI (Sprint 34,
+> backlog.md M3 item 4, §1b): local `returns`/`return_line_items` tables + outbound-queue enqueue,
+> `/returns/new`/`/returns/:id`/`/returns/approvals`.
+> **Version:** 0.2.0
 > **Last updated:** 2026-08-16
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
 
 All eleven sections per [documentation-standards.md §7](../../00-governance/documentation-standards.md#7-module-specification-template).
 Written to drive [Sprint 33](../../17-sprints/sprint-33.md) — specification before code, per
-[docs/README.md](../../README.md)'s non-negotiable rule #1.
+[docs/README.md](../../README.md)'s non-negotiable rule #1. Extended (§1b and throughout) to drive
+[Sprint 34](../../17-sprints/sprint-34.md).
 
 ---
 
@@ -96,6 +99,101 @@ as [offline-workflows.md Finding 1](../../06-workflows/offline-workflows.md#find
 still-unbuilt full resolution — remain deferred; this sprint builds the underlying server-side
 correctness that risk actually needs (§2 below), not the review UI around a rejection once it
 happens.
+
+## 1b. Sprint 34 — Returns & Refund (mobile), M3 item 4
+
+[Sprint 33](../../17-sprints/sprint-33.md) built the full server contract with no mobile caller.
+This sprint closes that gap: `/returns/new`, `/returns/:id`, `/returns/approvals`, local
+`returns`/`return_line_items` tables, and `return.create`/`return.approve`/`return.reject` as real
+`outbound_queue` operations.
+
+**A real, blocking gap found while designing this sprint, not by writing code first: the server's
+own `POST /returns` request shape needs `original_sale_line_item_id` per line, but no existing
+server response ever exposes a sale line item's own `id`.** `pos/service.ts`'s `formatSale` — the
+function every sale-reading endpoint (`GET /sales/{id}`, `GET /sales/lookup`, the `POST /sales`
+response itself) shares — maps each line item to `{ product_id, quantity, unit_price_minor_units,
+discount_minor_units, tax_rate_basis_points, tax_minor_units, line_total_minor_units }`, deliberately
+omitting the row's own `id` (never needed by any caller before this one). Without it, no mobile
+screen can construct a valid `POST /returns` request against a sale it just looked up. Resolved as a
+small, backward-compatible server correction in this same sprint: `formatSale`'s `line_items`
+mapping gains an `id` field (the existing `sale_line_items.id`, simply exposed) — every existing
+consumer already tolerates additional response fields (nothing destructures line items positionally),
+so this is additive, not a breaking change to an already-shipped, live contract.
+
+**Locating the original sale — two paths, both hitting the network, per backlog.md item 4's own
+wording** ("locate the original sale via `GET /sales/lookup` or via a customer's purchase history"):
+`SaleRepository` (owned by `pos`, reused rather than duplicated — the same cross-feature-reuse
+precedent `customers` already established for `CompletedSale`) gains two new, network-backed methods
+— `lookupSale({provisionalInvoiceNumber, canonicalInvoiceNumber})` (`GET /sales/lookup`) and
+`fetchRemoteSaleDetail(id)` (`GET /sales/{id}`, used after picking a sale from a customer's purchase
+history, since `CompletedSale` alone has no line items). Both are network calls injected as plain
+functions into `DriftSaleRepository`'s constructor — the same testability pattern
+`DriftCustomerRepository`'s `fetchAll`/`fetchPurchaseHistory` already established, not a raw `Dio`
+parameter. `SaleLineDetail` gains the same `id` field the server response now carries, threaded
+through unchanged from `getSaleDetail`'s existing purely-local path (the local `sale_line_items`
+table already had its own `id` — it was simply never read into this entity before). No separate
+`/sales-history/lookup` route is added: route-map.md names it as "needed for returns," but
+`/returns/new` already provides both lookup paths inline — a second entry point for the identical
+capability would be redundant, undiscussed scope, not a documented requirement in its own right.
+
+**No mobile pull exists for `returns`, matching the server spec's own stated scope
+([returns/specification.md §7](#7-offline-behaviour) as it stood after Sprint 33) — this sprint
+builds the mobile caller that section already anticipated, as a direct-fetch-and-cache shape, not a
+sync-pull cursor.** `ReturnRepository.listMine()`/`listApprovals()` each do a best-effort live
+`GET /returns`/`GET /returns/approvals` call, upsert the results into the local `returns` cache, then
+read that cache — the same "cache-first, refresh best-effort" shape `customerSearchResultsProvider`
+already established, just folded into the repository method itself rather than split across a
+provider (this feature has no separate search-filter concern needing that split). `getDetail(id)`
+checks the local cache first, falling back to a live `GET /returns/{id}` fetch-and-cache only if
+absent. `createReturn`/`approveReturn`/`rejectReturn` all write locally and enqueue in the same
+transaction, the exact `DriftCustomerRepository.createCustomer`/`DriftSaleRepository.completeSale`
+shape — genuinely offline-capable creation and decisions, matching `returns.md`'s own documented
+offline column for all three.
+
+**No client-side role-awareness exists anywhere in this mobile app yet — a real, pre-existing gap,
+not specific to Returns, and not solved here.** The mobile app has never once needed to know its own
+signed-in user's role before this feature; every prior screen's permission boundary was enforced
+purely server-side, with the client never gating its own UI by role (confirmed: no `role` concept
+appears anywhere in `apps/mobile/lib` before this sprint). Building a role-fetch mechanism now, for
+this feature alone, would be exactly the kind of speculative, disproportionate infrastructure this
+project's own practice avoids. Resolved instead by leaning on the server's own enforcement, honestly:
+the `/returns/approvals` entry point and screen are shown to every signed-in user regardless of role;
+a Cashier who reaches it sees the server's `403 PERMISSION_DENIED` surfaced as a plain, honest error
+state (`Text('Could not load approvals: $error')`, the same pattern every other list screen's error
+state already uses) — not hidden speculatively behind a role check this codebase has no way to
+perform correctly yet. The Till's own pending-approvals badge count (below) benefits from this same
+honesty for free: a Cashier's background badge-count fetch simply fails and is swallowed (no badge
+shown), the same `try { ... } catch (_) {}` best-effort-refresh shape `customerSearchResultsProvider`
+already established — the *correct* behaviour (no badge for a Cashier) falls out of the existing
+error-swallowing convention, not a new role check.
+
+**The approvals queue badge, resolved as a dated correction to `returns.md`'s own forward
+reference.** `returns.md` line 21 attributes the badge to "the Reports-tab badge, per
+navigation-model.md" — but navigation-model.md's own body text never actually describes this
+mechanism, and no Reports tab exists in the mobile app at all yet (Reports is M4, unbuilt). Resolved
+here: the badge lives on a new `pos_returns_approvals_button` app-bar icon on the Till screen
+(sibling to `pos_held_carts_button`/`pos_customers_button`), showing the live pending-approval count
+(via the swallowed-error fetch above) as a small `Badge` overlay, tapping through to
+`/returns/approvals` regardless of the count (including zero) — the honest, currently-buildable
+equivalent of the badge `tap-count-audit.md`'s WF-013 queue-path numbers already assume exists,
+without inventing a Reports tab a full milestone early.
+
+**The interrupt vs. queue approval split (WF-013), resolved without new real-time infrastructure.**
+`returns/specification.md §7`'s own Sprint 33 text names this explicitly as undecided, mobile-side
+scope: "mobile's own UI... decides whether the Manager sees an interrupting prompt or a queued list
+row." No push/realtime mechanism exists in this app (§8, unchanged) to notify a *different* device's
+Manager the instant a return needs approval — building one is real, disproportionate scope for a
+single navigation decision. Resolved as: immediately after `POST /returns` returns
+`status: 'pending_approval'`, `NewReturnScreen` shows an inline "This return needs approval" prompt
+with its own `returns_approve_now_button`, calling `approveReturn` right there — WF-013's interrupt
+path in its only realistic mobile shape (a Manager/Owner operating the till themselves, the same
+single-signed-in-identity-per-device reality this whole app already assumes everywhere else). If the
+signed-in identity isn't Manager/Owner, tapping it surfaces the server's `403` as a plain error, the
+same honest-server-enforcement stance the badge above already established — a minor, accepted V1
+rough edge (a Cashier can tap a button that will always 403 for them) rather than new role-detection
+machinery. The queue path (no one interrupts; a Manager finds it later via the badge) needs no
+special handling at all — it's simply what happens when the inline prompt's own approve action is
+never taken.
 
 ## 2. Business rules
 
@@ -211,6 +309,20 @@ RLS: none, by design — matching `sale_line_items`/`sale_payments`' own stated 
 (`005_rls_sales.sql`'s own comment): access is always via `return_id`, never queried directly across
 tenants.
 
+**Mobile (Sprint 34) — local `Returns`/`ReturnLineItems` Drift tables**, schema v5→v6: `id`,
+`originalSaleId`, `status`, `refundTotalMinorUnits`, `approvedBy` (nullable), `completedAt`
+(nullable), `createdAt` mirror the server row exactly; `ReturnLineItems` mirrors `return_line_items`
+(`id`, `returnId`, `originalSaleLineItemId`, `quantity`, `refundAmountMinorUnits`). No FK enforced
+from `returns.originalSaleId` to the local `sales` table at the Drift layer — the referenced sale may
+legitimately not exist locally at all (it was located via a live network fetch, per §1b), the same
+softer, unenforced-FK precedent `sales.customerId` already established, not `sale_line_items.saleId`'s
+enforced one. Domain entities are named `ReturnSummary`/`ReturnDetail` (not a bare `Return`) —
+sidestepping the usual Drift-generated-row-class collision for the parent table entirely (the same
+`CompletedSale`/`SaleDetail` split `pos` already uses for an analogous list-vs-detail shape); the
+line-item domain entity, `ReturnLineItem`, does still collide with `ReturnLineItems`' own generated
+row class the same way `Customer`/`Category`/`Unit`/`Product` already did, resolved identically — a
+`hide ReturnLineItem` import wherever both are needed in one file.
+
 ## 4. API contract
 
 | Method & path | Status |
@@ -228,6 +340,17 @@ Route files: `returns/route.ts` (POST, GET), `returns/approvals/route.ts` (GET),
 `returns/[id]/route.ts` (GET), `returns/[id]/approve/route.ts` (POST),
 `returns/[id]/reject/route.ts` (POST) — the same static-siblings-of-`[id]` layout Trading Day/Sales
 already established.
+
+**Sprint 34 — small server correction, not a new endpoint:** `pos/service.ts`'s `formatSale` gains an
+`id` field per line item in its `line_items` mapping (§1b) — additive, every existing consumer
+(`GET /sales/{id}`, `GET /sales/lookup`, `POST /sales`'s own response) already tolerates extra
+response fields.
+
+**Mobile (Sprint 34) routes** — `/returns/new` (Cashier+, locates the original sale via
+`GET /sales/lookup` or a customer's purchase history + `GET /sales/{id}`, then `POST /returns`),
+`/returns/:id` (Cashier+, `GET /returns/{id}` cache-first), `/returns/approvals` (shown to every
+role; the server's own `403 PERMISSION_DENIED` is what actually restricts it to Manager/Owner, per
+§1b's role-awareness decision) — `route-map.md`'s three named routes, all built this sprint.
 
 ## 5. Validation rules (client and server)
 
@@ -280,6 +403,24 @@ on the *mobile* side, not a server-contract one — both paths call the identica
 distinguishes them; mobile's own UI (M3 item 4) is what decides whether the Manager sees an
 interrupting prompt or a queued list row.
 
+**Sprint 34 — the mobile caller §7's Sprint 33 text anticipated, now built**, per §1b:
+`createReturn`/`approveReturn`/`rejectReturn` all write the local `Returns`/`ReturnLineItems` cache
+and enqueue `return.create`/`return.approve`/`return.reject` atomically in one Drift transaction —
+genuinely offline-capable, matching this table's own documented offline column exactly. Reads
+(`listMine`/`listApprovals`/`getDetail`) are direct-fetch-and-cache, not sync-pulled — the same
+disciplined scope boundary `customers/specification.md §1a` already drew for its own reads, restated
+here rather than silently generalised into a real sync-pull cursor mechanism nothing yet needs.
+`SaleRepository.lookupSale` falls back to a local search of this device's own completed sales (by
+provisional invoice number) when the network call itself fails — genuinely offline for the common
+case (a customer returning something bought at this same till), matching
+[returns-workflows.md](../../06-workflows/returns-workflows.md)'s own documented failure path
+verbatim ("Fully offline against locally synced sales history; if the original sale hasn't yet
+reached this device, the return cannot be located here" — a sale from *another* device, not yet
+synced anywhere this device can see it, remains the one genuine offline gap, unchanged from that
+pre-existing text). The customer-purchase-history path (`fetchRemoteSaleDetail`) has no local
+fallback — purchase history was already online-only before this sprint (customers/specification.md
+§1a), unchanged here.
+
 ## 8. Realtime behaviour
 
 None specified for V1 — no requirement found for a live push when a return's status changes on
@@ -291,11 +432,36 @@ honest-staleness stance every other list endpoint here already accepts.
 
 ## 9. UI specification
 
-**Not built this sprint** — this is the server half only. `/returns/new`, `/returns/:id`,
-`/returns/approvals` (with the Manager-queue badge per
-[navigation-model.md](../../09-navigation/navigation-model.md)) are M3 item 4's scope, to be
-specified in that item's own sprint document when planning reaches it, per this project's own
-practice of not designing UI ahead of the sprint that builds it.
+**Built Sprint 34**, per §1b:
+
+- **`NewReturnScreen`** (`/returns/new`) — two locate-the-sale entry points: an invoice-number field
+  (`returns_lookup_field`, `returns_lookup_button`, calling `SaleRepository.lookupSale`) and a
+  "Find by customer" button (`returns_find_by_customer_button`) opening the existing
+  `CustomerPickerSheet` in a search-only mode, then that customer's purchase history
+  (`returns_customer_history_list`) to pick a sale, resolved to full detail via
+  `fetchRemoteSaleDetail`. Once a sale is located, its line items are listed
+  (`returns_line_item_<id>`) each with a quantity stepper (`returns_line_item_decrement_<id>`/
+  `returns_line_item_increment_<id>`, 0 up to the line's original quantity — DR-013's own
+  cumulative-remaining check is server-side, only re-validated at submit) and a
+  `returns_confirm_button` (disabled until at least one line has a positive quantity). On success:
+  an auto-approved return navigates straight to `/returns/:id`; a `pending_approval` one shows the
+  inline `returns_approve_now_button` prompt described in §1b before navigating.
+- **`ReturnDetailScreen`** (`/returns/:id`) — status, refund total, line items
+  (`return_detail_line_<id>`), and, only when `status == 'pending_approval'`, `returns_approve_button`/
+  `returns_reject_button` (the latter opening a small reason prompt, `returns_reject_reason_field`) —
+  the same actions `NewReturnScreen`'s own inline prompt and `ReturnApprovalsScreen`'s rows both
+  reach, so a return can be decided from wherever it's currently being viewed, not only the queue.
+- **`ReturnApprovalsScreen`** (`/returns/approvals`) — a plain list (`returns_approvals_list`,
+  rows keyed `returns_approval_row_<id>`, empty state `returns_approvals_empty`), tapping a row
+  navigates to `/returns/:id` for the actual decision (reusing `ReturnDetailScreen`'s own
+  approve/reject actions rather than duplicating them inline in the list — the queue's job is
+  surfacing what's pending, not re-implementing the decision UI a second time).
+- **Till screen** gains `pos_return_button` (→ `/returns/new`, visible to every role — filing a
+  return is a Cashier-baseline capability) and `pos_returns_approvals_button` (→
+  `/returns/approvals`, with a live pending-count `Badge` per §1b's resolved badge-placement
+  decision).
+
+Tablet/phone: single-column throughout, matching every other V1 screen's own precedent.
 
 ## 10. Test plan
 
@@ -338,6 +504,29 @@ practice of not designing UI ahead of the sprint that builds it.
      fetchable via `GET /returns/{id}`.
   10. Cross-tenant RLS: tenant B's `GET /returns` never resolves to tenant A's return.
 
+**Sprint 34 additions:**
+
+- Unit test (`pos/service.test.ts`): `formatSale`'s `line_items` mapping includes each line's own
+  `id`.
+- Widget/repository tests (`flutter test`, real in-memory Drift DB —
+  `drift_return_repository_test.dart`): `createReturn` writes the local row(s) and enqueues a
+  matching `return.create` operation, atomically (the same pre-seeded-conflict atomicity proof
+  `drift_customer_repository_test.dart` established); idempotent replay on a repeated `id`;
+  `approveReturn`/`rejectReturn` update the local row and enqueue `return.approve`/`return.reject`;
+  `listMine`/`listApprovals` upsert the live-fetched page into the cache without duplicating, and
+  fall back to the cache when the injected fetch throws; `getDetail` prefers the cache, falls back to
+  a live fetch when absent. `drift_sale_repository_test.dart` (new group): `lookupSale` falls back to
+  a local provisional-invoice-number match when the injected network function throws.
+  `customers_screen_test.dart`-style fakes for `NewReturnScreen`/`ReturnDetailScreen`/
+  `ReturnApprovalsScreen`: locating a sale and submitting a return; the inline approve-now prompt
+  appearing only after a `pending_approval` response; approving/rejecting from the detail screen;
+  the approvals list rendering and its empty state; the till's badge count reflecting a fake
+  approvals-list length, and showing nothing when the fake throws (the Cashier case).
+- **Live verification, real database:** `GET /sales/{id}` and `GET /sales/lookup` both now return
+  each line item's own `id`; a `return.create` sync-push operation, submitted the way the mobile
+  outbound queue would submit it, still creates the row exactly as before (no server-contract
+  regression from the `formatSale` addition).
+
 ## 11. Traceability
 
 | Requirement | Covered by | Status |
@@ -351,10 +540,13 @@ practice of not designing UI ahead of the sprint that builds it.
 | [permission-matrix.md — Returns](../../05-personas/permission-matrix.md#returns) | §4 | Met — matrix already had both rows correct, no correction needed this sprint |
 | `returns.md`'s offline-queued endpoints | §7 | `POST /returns`, `POST /returns/{id}/approve`, `POST /returns/{id}/reject` all met (server contract) |
 | [offline-workflows.md Finding 1](../../06-workflows/offline-workflows.md#finding-1--offline-approvals-are-provisional-until-sync-and-that-needs-a-defined-ux) | §2 (DR-017/018 fresh re-check) | Underlying correctness met; dedicated `sync_rejections` table/review UI explicitly deferred, named in §1 |
-| Mobile UI (`/returns/new`, `/returns/:id`, `/returns/approvals`) | — | **Not in this sprint's scope, named explicitly** — [backlog.md M3 item 4](../../17-sprints/backlog.md#4-m3--fully-decomposed-2026-08-16-now-that-m2-has-reached-this-point) |
+| Mobile UI (`/returns/new`, `/returns/:id`, `/returns/approvals`) | §1b, §9 | Met (Sprint 34) |
+| FR-062 (locate original sale, mobile) | §1b, §9 (`NewReturnScreen`'s two lookup paths) | Met (Sprint 34) |
+| WF-013 interrupt/queue split | §1b (resolved without new realtime infrastructure) | Met (Sprint 34) — a named, accepted V1 shape, not the fullest possible design |
 
 ## Change Log
 
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-08-16 | First version — written to drive Sprint 33's implementation of Returns & Refund (server), backlog.md M3 item 3. Found and resolved four real gaps while writing, not by writing code first: `returns` needed a `created_by`/`created_at` column pair schema-server.md never listed; a redundant `client_operation_id` column with no working precedent elsewhere in this schema was dropped in favour of `id` alone; only 3 of 5 documented `status` values are reachable this sprint; `reject`'s `reason` has no column, captured in the audit log instead. DR-014's per-unit-price rounding ambiguity resolved: exact-remaining-amount for a full-remaining-quantity return, proportional rounding only for a genuine partial. |
+| 0.2.0 | 2026-08-16 | §1b added — written to drive Sprint 34 (M3 item 4, Returns & Refund mobile). Found and fixed a real, blocking gap: no server response ever exposed a sale line item's own `id`, which `POST /returns` requires — `pos/service.ts`'s `formatSale` corrected to include it (additive, non-breaking). Two real design decisions resolved, both named as undecided in the Sprint 33 text: the approvals-queue badge (`returns.md`'s own forward reference to a "Reports-tab badge" that doesn't exist yet — placed on a new Till app-bar icon instead) and the WF-013 interrupt/queue split (resolved via an inline post-creation approve prompt, not new realtime infrastructure). Named, not solved: no client-side role-awareness exists anywhere in mobile yet — the approvals screen leans on the server's own `403` enforcement, surfaced honestly, rather than a speculative role check. |

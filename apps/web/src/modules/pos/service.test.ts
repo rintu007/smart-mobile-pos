@@ -86,6 +86,7 @@ describe("createSale", () => {
       createdSale({
         lineItems: [
           {
+            id: "line-item-1",
             productId,
             quantity: 2,
             unitPriceMinorUnits: BigInt(2800),
@@ -113,6 +114,8 @@ describe("createSale", () => {
     expect(result.grand_total_minor_units).toBe(5600);
     expect(result.discount_total_minor_units).toBe(0);
     expect(result.line_items).toHaveLength(1);
+    // Sprint 34 (backlog.md M3 item 4) — the mobile Returns client needs each line item's own id.
+    expect(result.line_items[0]?.id).toBe("line-item-1");
     expect(result.canonical_invoice_number).toBe(1);
     expect(result.financial_year).toBe("2026");
   });

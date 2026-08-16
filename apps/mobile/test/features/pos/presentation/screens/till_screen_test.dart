@@ -17,6 +17,7 @@ import 'package:mobile/features/pos/domain/entities/sale_detail.dart';
 import 'package:mobile/features/pos/domain/repositories/sale_repository.dart';
 import 'package:mobile/features/pos/presentation/providers/pos_providers.dart';
 import 'package:mobile/features/pos/presentation/screens/till_screen.dart';
+import 'package:mobile/features/returns/presentation/providers/return_providers.dart';
 
 /// A fake, not a mock — same reasoning as `_FakeSaleRepository` below.
 class _FakeProductRepository implements ProductRepository {
@@ -123,6 +124,15 @@ class _FakeSaleRepository implements SaleRepository {
         )
         .toList();
   }
+
+  @override
+  Future<SaleDetail?> lookupSale({
+    String? provisionalInvoiceNumber,
+    String? canonicalInvoiceNumber,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<SaleDetail?> fetchRemoteSaleDetail(String id) => throw UnimplementedError();
 }
 
 const _coffee = Product(id: 'product-1', name: 'Filter coffee', priceMinorUnits: 1500);
@@ -166,6 +176,10 @@ Widget _wrap({
       // renders nothing when the list is empty), same reasoning storeContextProvider below.
       categoriesListProvider.overrideWith((ref) async => []),
       storeContextProvider.overrideWith((ref) async => 'store-1'),
+      // Same reasoning as categoriesListProvider above — otherwise this pulls in the real
+      // returnRepositoryProvider (a real AppDatabase + Dio), not exercised by this screen's own
+      // test scope (only the badge count itself is read).
+      pendingApprovalsCountProvider.overrideWith((ref) async => 0),
       saleRepositoryProvider.overrideWithValue(saleRepository),
       customerRepositoryProvider.overrideWithValue(
         customerRepository ?? _FakeCustomerRepository(),

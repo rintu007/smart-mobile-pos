@@ -48,6 +48,15 @@ class _FakeSaleRepository implements SaleRepository {
 
   @override
   Future<List<HeldSale>> listHeldSales() => throw UnimplementedError();
+
+  @override
+  Future<SaleDetail?> lookupSale({
+    String? provisionalInvoiceNumber,
+    String? canonicalInvoiceNumber,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<SaleDetail?> fetchRemoteSaleDetail(String id) => throw UnimplementedError();
 }
 
 Widget _wrap(SaleDetail? detail, {String saleId = 'sale-1'}) {
@@ -77,6 +86,7 @@ void main() {
           grandTotalMinorUnits: 3500,
           lines: const [
             SaleLineDetail(
+              id: 'line-item-1',
               productId: 'product-1',
               productName: 'Filter coffee',
               quantity: 2,
@@ -84,6 +94,7 @@ void main() {
               lineTotalMinorUnits: 3000,
             ),
             SaleLineDetail(
+              id: 'line-item-2',
               productId: 'product-2',
               productName: null,
               quantity: 1,

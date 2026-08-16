@@ -12,14 +12,37 @@ import '../../domain/entities/resumed_cart.dart';
 import '../../domain/entities/sale_detail.dart';
 import '../../domain/repositories/sale_repository.dart';
 
-/// Concrete implementation, per mobile-structure.md §2. Nothing here calls
-/// the network directly — matches sync-architecture.md's "the local write
-/// path is the one and only way any entity is created or changed on-device."
+/// Concrete implementation, per mobile-structure.md §2. Writes never call the
+/// network directly — matches sync-architecture.md's "the local write path
+/// is the one and only way any entity is created or changed on-device." The
+/// two new Sprint 34 reads (`lookupSale`/`fetchRemoteSaleDetail`) are a
+/// deliberate exception — reading *any* sale under the tenant (not just this
+/// device's own) has no local source of truth to fall back on for a sale
+/// this device never wrote, the same reasoning `CustomerRepository`'s own
+/// network reads already established. Both are injected as plain functions,
+/// not a raw `Dio` — `DriftCustomerRepository`'s established testability
+/// pattern.
 class DriftSaleRepository implements SaleRepository {
-  DriftSaleRepository(this._db, this._invoiceNumbers);
+  /// The two network functions are optional, defaulting to "always
+  /// unresolved" — deliberately, so every existing call site/test
+  /// constructing `DriftSaleRepository(db, invoiceNumbers)` for
+  /// write-path/local-read behaviour (the overwhelming majority) keeps
+  /// working unchanged; only a test that actually exercises
+  /// `lookupSale`/`fetchRemoteSaleDetail` needs to supply them.
+  DriftSaleRepository(
+    this._db,
+    this._invoiceNumbers, [
+    Future<SaleDetail?> Function({String? provisionalInvoiceNumber, String? canonicalInvoiceNumber})?
+    lookupSaleRemote,
+    Future<SaleDetail?> Function(String id)? fetchSaleByIdRemote,
+  ]) : _lookupSaleRemote = lookupSaleRemote ?? (({provisionalInvoiceNumber, canonicalInvoiceNumber}) async => null),
+       _fetchSaleByIdRemote = fetchSaleByIdRemote ?? ((id) async => null);
 
   final AppDatabase _db;
   final InvoiceNumberGenerator _invoiceNumbers;
+  final Future<SaleDetail?> Function({String? provisionalInvoiceNumber, String? canonicalInvoiceNumber})
+  _lookupSaleRemote;
+  final Future<SaleDetail?> Function(String id) _fetchSaleByIdRemote;
 
   @override
   Future<CompletedSale> completeSale({
@@ -193,6 +216,7 @@ class DriftSaleRepository implements SaleRepository {
       )..where((t) => t.id.equals(lineItem.productId))).getSingleOrNull();
       lines.add(
         SaleLineDetail(
+          id: lineItem.id,
           productId: lineItem.productId,
           productName: product?.name,
           quantity: lineItem.quantity.round(),
@@ -208,6 +232,70 @@ class DriftSaleRepository implements SaleRepository {
       completedAt: sale.completedAt!,
       grandTotalMinorUnits: sale.grandTotalMinorUnits,
       lines: lines,
+    );
+  }
+
+  @override
+  Future<SaleDetail?> lookupSale({
+    String? provisionalInvoiceNumber,
+    String? canonicalInvoiceNumber,
+  }) async {
+    try {
+      final remote = await _lookupSaleRemote(
+        provisionalInvoiceNumber: provisionalInvoiceNumber,
+        canonicalInvoiceNumber: canonicalInvoiceNumber,
+      );
+      if (remote != null) return await _withLocalProductNames(remote);
+    } catch (_) {
+      // Deliberately swallowed — falls through to the local fallback below,
+      // per the docstring on `SaleRepository.lookupSale`.
+    }
+
+    if (provisionalInvoiceNumber == null) return null;
+    final sale = await (_db.select(_db.sales)..where(
+          (t) =>
+              t.provisionalInvoiceNumber.equals(provisionalInvoiceNumber) &
+              t.status.equals('completed'),
+        ))
+        .getSingleOrNull();
+    if (sale == null) return null;
+    return getSaleDetail(sale.id);
+  }
+
+  @override
+  Future<SaleDetail?> fetchRemoteSaleDetail(String id) async {
+    final remote = await _fetchSaleByIdRemote(id);
+    if (remote == null) return null;
+    return _withLocalProductNames(remote);
+  }
+
+  /// The network-mapped [SaleDetail] has no product names (a catalogue
+  /// concern the server's sale response never carries) — resolved here
+  /// against the local product cache, the same join `getSaleDetail`'s own
+  /// local path already does.
+  Future<SaleDetail> _withLocalProductNames(SaleDetail detail) async {
+    final resolvedLines = <SaleLineDetail>[];
+    for (final line in detail.lines) {
+      final product = await (_db.select(
+        _db.products,
+      )..where((t) => t.id.equals(line.productId))).getSingleOrNull();
+      resolvedLines.add(
+        SaleLineDetail(
+          id: line.id,
+          productId: line.productId,
+          productName: product?.name,
+          quantity: line.quantity,
+          unitPriceMinorUnits: line.unitPriceMinorUnits,
+          lineTotalMinorUnits: line.lineTotalMinorUnits,
+        ),
+      );
+    }
+    return SaleDetail(
+      id: detail.id,
+      provisionalInvoiceNumber: detail.provisionalInvoiceNumber,
+      completedAt: detail.completedAt,
+      grandTotalMinorUnits: detail.grandTotalMinorUnits,
+      lines: resolvedLines,
     );
   }
 

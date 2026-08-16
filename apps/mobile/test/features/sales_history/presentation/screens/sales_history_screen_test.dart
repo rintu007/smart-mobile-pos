@@ -48,6 +48,15 @@ class _FakeSaleRepository implements SaleRepository {
 
   @override
   Future<List<HeldSale>> listHeldSales() => throw UnimplementedError();
+
+  @override
+  Future<SaleDetail?> lookupSale({
+    String? provisionalInvoiceNumber,
+    String? canonicalInvoiceNumber,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<SaleDetail?> fetchRemoteSaleDetail(String id) => throw UnimplementedError();
 }
 
 Widget _wrap(List<CompletedSale> sales) {

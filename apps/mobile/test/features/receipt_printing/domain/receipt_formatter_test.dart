@@ -12,6 +12,7 @@ void main() {
     grandTotalMinorUnits: 6800,
     lines: const [
       SaleLineDetail(
+        id: 'line-item-1',
         productId: 'p1',
         productName: 'Amul Milk 500ml',
         quantity: 1,
@@ -19,6 +20,7 @@ void main() {
         lineTotalMinorUnits: 2800,
       ),
       SaleLineDetail(
+        id: 'line-item-2',
         productId: 'p2',
         productName: 'Parle-G Biscuit 200g',
         quantity: 2,
@@ -56,6 +58,7 @@ void main() {
       grandTotalMinorUnits: sale.grandTotalMinorUnits,
       lines: const [
         SaleLineDetail(
+          id: 'line-item-1',
           productId: 'deleted-product',
           productName: null,
           quantity: 1,

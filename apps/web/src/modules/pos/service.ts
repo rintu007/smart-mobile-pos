@@ -137,6 +137,7 @@ export function formatSale(sale: {
   grandTotalMinorUnits: bigint;
   completedAt: Date | null;
   lineItems: {
+    id: string;
     productId: string;
     quantity: number;
     unitPriceMinorUnits: bigint;
@@ -165,7 +166,11 @@ export function formatSale(sale: {
     tax_total_minor_units: Number(sale.taxTotalMinorUnits),
     tax_registration_type_at_sale: sale.taxRegistrationTypeAtSale,
     grand_total_minor_units: Number(sale.grandTotalMinorUnits),
+    // `id` added Sprint 34 (backlog.md M3 item 4) — the mobile Returns client needs each line
+    // item's own id to submit as POST /returns' original_sale_line_item_id (docs/modules/returns/
+    // specification.md §1b); additive, no existing consumer destructures this list positionally.
     line_items: sale.lineItems.map((item) => ({
+      id: item.id,
       product_id: item.productId,
       quantity: item.quantity,
       unit_price_minor_units: Number(item.unitPriceMinorUnits),

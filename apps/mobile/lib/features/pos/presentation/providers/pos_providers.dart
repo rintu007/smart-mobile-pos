@@ -8,6 +8,7 @@ import '../../../../core/invoicing/invoice_number_generator.dart';
 import '../../../../core/store_context/store_context_providers.dart';
 import '../../../catalogue/domain/entities/product.dart';
 import '../../../catalogue/presentation/providers/product_providers.dart';
+import '../../data/data_sources/sales_api.dart' as sales_api;
 import '../../data/repositories/drift_sale_repository.dart';
 import '../../domain/entities/cart_line.dart';
 import '../../domain/entities/completed_sale.dart';
@@ -66,9 +67,16 @@ final invoiceNumberGeneratorProvider = Provider<InvoiceNumberGenerator>((ref) {
 });
 
 final saleRepositoryProvider = Provider<SaleRepository>((ref) {
+  final dio = ref.watch(apiClientProvider);
   return DriftSaleRepository(
     ref.watch(appDatabaseProvider),
     ref.watch(invoiceNumberGeneratorProvider),
+    ({provisionalInvoiceNumber, canonicalInvoiceNumber}) => sales_api.fetchSaleByLookup(
+      dio,
+      provisionalInvoiceNumber: provisionalInvoiceNumber,
+      canonicalInvoiceNumber: canonicalInvoiceNumber,
+    ),
+    (id) => sales_api.fetchSaleById(dio, id),
   );
 });
 
