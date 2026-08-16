@@ -2,13 +2,13 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.26.0
-> **Last updated:** 2026-08-14
+> **Version:** 0.28.0
+> **Last updated:** 2026-08-16
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
 
-Ordered, estimated, with dependencies. **M0, M1, and M2 are decomposed in full, item by item, in
-the order planning actually reached them; M3–M4 are still listed at module grain only** — per this
+Ordered, estimated, with dependencies. **M0, M1, M2, and M3 are decomposed in full, item by item, in
+the order planning actually reached them; M4 is still listed at module grain only** — per this
 documentation set's standing practice of not over-planning work several milestones away (the same
 reasoning [roadmap.md §5](../16-milestones/roadmap.md#5-v2v4--ordering-confirmed-not-yet-effort-estimated)
 already applied to V2–V4), each decomposed to this level of detail only once actual sprint planning
@@ -119,14 +119,71 @@ solved. See [money-and-tax.md](../07-database/money-and-tax.md) and
 
 **Total: 12 person-days.** Items 1–6 done. **M2 — Full POS Loop is now fully closed, all 6 items done.**
 
-## 3a. M3–M4 — module grain only, decomposed when reached
+## 4. M3 — fully decomposed 2026-08-16, now that M2 has reached this point
+
+Per this document's own stated practice (§ intro), M3 is decomposed to item grain only now that
+planning has actually reached it — M4 stays at module grain below.
+[dependency-graph.md §2](../16-milestones/dependency-graph.md#2-the-critical-path-named-explicitly)
+places Customers and Returns as parallel branches off Sales & Invoices with no dependency on each
+other, **except** a `Customers → Returns` edge — traced here (not previously explained anywhere) to
+[returns-workflows.md](returns-workflows.md)'s WF-012 step 1: locating the original sale "by
+receipt, invoice number, or customer phone" ([FR-062](../03-functional-requirements/functional-requirements.md))
+needs the Customers module's phone-search to exist first for that third path to work at all — not a
+server-schema dependency (`returns` has no FK to `customers`), only a mobile-flow one. Item order
+below follows the graph regardless.
+
+**A real, previously-invisible gap found while decomposing, not by writing code first:** the sync
+engine (`apps/web/src/modules/sync/service.ts`) has supported exactly two operation types since
+Sprint 13 — `product.create` and `sale.create` — and **no `.update` operation type exists for any
+entity at all**, despite [entity-classification.md](../13-offline-sync/entity-classification.md)
+already classifying `categories`/`units`/`products`/`customers` as "Client-editable" (bidirectional,
+needing [conflict-resolution.md](../13-offline-sync/conflict-resolution.md)'s field-merge policy)
+since Phase 13. That policy has been fully specified on paper since 2026-07-31 and never had a single
+line of implementation to exercise it — M3's item 5 below is genuinely new sync-engine capability,
+not incremental wiring onto existing infrastructure the way M2's items mostly were. Scoped to
+`customers` only, matching [milestones.md](../16-milestones/milestones.md)'s own M3 exit criterion
+("a field-edit conflict on a customer record... surfaces in the exact business-language form"), not
+speculatively generalised to `categories`/`units`/`products` — none of which has a mobile *edit*
+screen built yet either (M1 items 1/2 explicitly deferred `PATCH`/`DELETE` for both), so there is no
+real caller for that generalisation today. The mechanism built here is reusable when that changes;
+building it now for entities with no edit UI would be exactly the kind of speculative abstraction
+this project's own practice avoids.
+
+**A second real gap found the same way:** [offline-workflows.md Finding 1](../06-workflows/offline-workflows.md#finding-1--offline-approvals-are-provisional-until-sync-and-that-needs-a-defined-ux)
+(an offline return/discount approval rejected post-hoc if the approving Manager's role was revoked
+before sync) was resolved *on paper* in
+[failure-scenarios.md §2](../13-offline-sync/failure-scenarios.md#2-resolving-finding-1--provisional-approvals-rejected-after-the-fact)
+via a `sync_rejections` table and an Owner-facing review flow — but `sync_rejections` has no Prisma
+model and no code anywhere; it was never built. Returns' `POST /returns/{id}/approve` is exactly the
+workflow this risk applies to (WF-013, genuinely offline-capable per
+[returns.md](../11-api/endpoints/returns.md)). Item 3 below builds the actual correctness the risk
+requires — the sync-push handler re-validates the approver's role server-side at sync time and
+rejects the operation if it was revoked (DR-017/DR-018, the same "resolved fresh at request time"
+principle Discount's `DISCOUNT_REQUIRES_APPROVAL` already established, M2 item 3) — but the dedicated
+`sync_rejections` table and Owner-facing "review and decide what happens to this rejected sale/return"
+screen are **explicitly deferred**, named here rather than silently dropped: neither
+[milestones.md](../16-milestones/milestones.md)'s M3 exit criteria nor any built screen today
+requires it, and it is real, separate scope (an Owner-facing review workflow, arguably nearer M4's
+Reports/release-readiness territory) — the same kind of reasoned, dated deferral M2's Trading Day
+item (Sprint 26) already set precedent for with `TRADING_DAY_NOT_OPEN`.
+
+| # | Item | Depends on | Estimate (person-days) |
+| --- | --- | --- | --- |
+| 1 | Customers (server): `customers` table (new migration + RLS, Tier 1) per [schema-server.md](../07-database/schema-server.md), `sales.customer_id` FK (nullable, `ON DELETE SET NULL`, new migration), `POST`/`GET`/`PATCH`/`DELETE /customers`, `GET /customers/{id}/purchase-history` — [customers.md](../11-api/endpoints/customers.md), FR-050/051/052 — done, [Sprint 31](sprint-31.md); found and fixed a real bug live: a Zod `.refine()` for "at least one identifier" always returned the generic `VALIDATION_FAILED` instead of the documented `CUSTOMER_IDENTIFIER_REQUIRED`, moved to the service layer; corrected permission-matrix.md's own missing edit/deactivate rows in the same pass | — | 2.5 |
+| 2 | Customers (mobile): local `customers` Drift table, `/customers` list with phone-match-as-you-type search (FR-052), `/customers/:id` detail with purchase history (FR-051), inline capture/select wired into the till's checkout flow (FR-050, offline-queued create) | 1 | 2.5 |
+| 3 | Returns & Refund (server): `returns`/`return_line_items` tables (new migration + RLS, Tier 2), `POST /returns` (auto-approve vs. `pending_approval` against `shop_settings.return_auto_approval_threshold_minor_units`, DR-013–016), a `return` stock-movement created atomically in the same transaction (the already-specified, not-yet-built counterpart to `sale`/`opening`, per [stock-ledger.md](../07-database/stock-ledger.md)), `GET /returns/{id}`/`GET /returns`/`GET /returns/approvals`, `POST /returns/{id}/approve`/`reject` (interrupt/queue split, [tap-count-audit.md](../09-navigation/tap-count-audit.md)) — [returns.md](../11-api/endpoints/returns.md), WF-012/WF-013 | 1 | 3 |
+| 4 | Returns & Refund (mobile): `/returns/new` (locate the original sale via `GET /sales/lookup` or via a customer's purchase history), `/returns/:id`, `/returns/approvals` (Manager+, queue badge per [navigation-model.md](../09-navigation/navigation-model.md)), local `returns`/`return_line_items` tables + outbound-queue enqueue for create/approve/reject | 2, 3 | 2.5 |
+| 5 | Conflict-resolution field-merge, `customers` only: sync push gains a `customer.update` operation type; base-`updated_at` comparison, non-overlapping-field auto-merge, same-field-different-value surfaces the exact business-language prompt [conflict-resolution.md](../13-offline-sync/conflict-resolution.md) specifies (worked example given verbatim for a customer's `phone` field) — the sync engine's first `.update` operation type of any kind, see the gap named above | 1, 2 | 3 |
+
+**Total: 13.5 person-days.**
+
+## 4a. M4 — module grain only, decomposed when reached
 
 | Milestone | Modules (decomposition pending) |
 | --- | --- |
-| M3 | Customers, Returns & Refund, conflict-resolution field-merge |
 | M4 | Reports (4), release-readiness closeout (printer/device testing, load test, adversarial suite in CI) |
 
-## 4. Ordering rule, restated
+## 5. Ordering rule, restated
 
 Every dependency column above traces directly to
 [dependency-graph.md](../16-milestones/dependency-graph.md)'s critical path — item order in this
@@ -163,3 +220,5 @@ specifically.
 | 0.24.0 | 2026-08-14 | Item 4 (Tax computation) done — [Sprint 28](sprint-28.md): `tax_total_minor_units`/`tax_registration_type_at_sale`/per-line `tax_rate_basis_points`/`tax_minor_units` built and live-verified (20/20), both exclusive and inclusive pricing modes. Found and resolved a real gap in money-and-tax.md's own worked examples in the same pass: inclusive pricing combined with a discount was never jointly specified. M2 now has items 5–6 remaining. |
 | 0.25.0 | 2026-08-14 | Item 5 (Split Payment) done — [Sprint 29](sprint-29.md): `payments` loosened to one-or-more entries across `cash`/`card`/`other` (FR-028), `PAYMENT_AMOUNT_MISMATCH` restated as a sum check, built and live-verified (14/14). No schema change; Trading Day's `expected_cash_minor_units` aggregation confirmed live to already exclude card/other portions correctly. M2 now has item 6 remaining. |
 | 0.26.0 | 2026-08-14 | Item 6 (Hold/Resume) done — [Sprint 30](sprint-30.md): mobile-only, `sales.status` transitions `draft`→`held`→`completed` on the client, built to navigation-model.md §4's fuller continuous-auto-persistence requirement, `flutter analyze`/`flutter test` 118/118. **M2 — Full POS Loop is now fully closed, all 6 items done.** |
+| 0.27.0 | 2026-08-16 | M3 fully decomposed (5 items, 13.5 person-days) — Customers (server+mobile), Returns & Refund (server+mobile), conflict-resolution field-merge scoped to `customers`. Traced the `Customers → Returns` graph edge to WF-012's phone-lookup step, never previously explained. Two real gaps found while decomposing, not by writing code first: (1) the sync engine has never had a single `.update` operation type for any entity despite `categories`/`units`/`products`/`customers` being classified "Client-editable" since Phase 13 — item 5 is genuinely new sync-engine capability, deliberately scoped to `customers` only since no other client-editable entity has a mobile edit screen yet either; (2) `offline-workflows.md` Finding 1's on-paper resolution (`sync_rejections` table + Owner review flow, `failure-scenarios.md`) was never actually built — item 3 builds the underlying server-side re-validation correctness Returns' offline approval needs (DR-017/018), but the dedicated `sync_rejections` table/review screen is explicitly deferred, named rather than silently dropped, the same reasoned-deferral precedent Sprint 26 set with `TRADING_DAY_NOT_OPEN`. |
+| 0.28.0 | 2026-08-16 | Item 1 (Customers, server) done — [Sprint 31](sprint-31.md): `customers` table, `sales.customer_id` (nullable), `POST`/`GET`/`PATCH`/`DELETE /customers`, `GET /customers/{id}/purchase-history` built and live-verified (12/12). Found and fixed a real bug live: a Zod `.refine()` returned the wrong error code (`VALIDATION_FAILED` instead of `CUSTOMER_IDENTIFIER_REQUIRED`), moved to the service layer. Corrected permission-matrix.md's missing edit/deactivate rows in the same pass. M3 now has items 2–5 remaining. |

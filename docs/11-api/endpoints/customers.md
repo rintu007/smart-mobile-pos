@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 11 — API Design
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-30
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-16
 > **Owner:** Principal Next.js Engineer
 > **Approved by:** _pending_
 
@@ -15,11 +15,21 @@ keeps customer management minimal in V1 (name, phone, purchase lookup), not a fu
 
 | Method & path | Permission | Offline | Idempotent | Notes |
 | --- | --- | --- | --- | --- |
-| `GET /customers` | Any authenticated role | Read cached | N/A | Filter: `phone` (exact match — the return-by-phone lookup, [FR-062](../../03-functional-requirements/functional-requirements.md), and inline checkout search, [FR-052](../../03-functional-requirements/functional-requirements.md)). Cursor-paginated on `(updated_at, id)`. |
-| `POST /customers` | Cashier, Manager, Owner | **Yes — queued** | Creation | Deliberately open to Cashier — a walk-in customer is captured inline during checkout, under queue pressure, and must not require a Manager to be present. |
-| `PATCH /customers/{id}` | Cashier, Manager, Owner | Yes — queued | State-transition | |
-| `DELETE /customers/{id}` | Manager, Owner | Yes — queued | State-transition | Soft delete; existing `sales.customer_id` references are set null on the *next* sale involving that customer, not retroactively — a completed sale's historical record is immutable regardless of the customer record's later state, per [sales.md](sales.md). |
-| `GET /customers/{id}/purchase-history` | Any authenticated role | Read cached | N/A | Cursor-paginated list of the customer's `sales`, ordered `(completed_at, id)` desc — [FR-051](../../03-functional-requirements/functional-requirements.md). |
+| `GET /customers` | Any authenticated role | Read cached | N/A | **Built Sprint 31**, live-verified (12/12). Filter: `phone` (exact match — the return-by-phone lookup, [FR-062](../../03-functional-requirements/functional-requirements.md), and inline checkout search, [FR-052](../../03-functional-requirements/functional-requirements.md)). Cursor-paginated on `(updated_at, id)`. Excludes deactivated customers, no query param to include them yet. |
+| `POST /customers` | Cashier, Manager, Owner | Not yet — online-only this sprint (§ implementation note below) | Creation | **Built Sprint 31.** Deliberately open to Cashier — a walk-in customer is captured inline during checkout, under queue pressure, and must not require a Manager to be present. |
+| `PATCH /customers/{id}` | Cashier, Manager, Owner | Not yet — online-only this sprint | State-transition | **Built Sprint 31**, plain last-write-wins — the conflict-resolution field-merge policy (§ implementation note) is separate, later scope. |
+| `DELETE /customers/{id}` | Manager, Owner | Not yet — online-only this sprint | State-transition | **Built Sprint 31**, idempotent (live-verified). Soft delete; existing `sales.customer_id` references are set null on the *next* sale involving that customer, not retroactively — a completed sale's historical record is immutable regardless of the customer record's later state, per [sales.md](sales.md). |
+| `GET /customers/{id}/purchase-history` | Any authenticated role | Read cached | N/A | **Built Sprint 31.** Cursor-paginated list of the customer's `sales`, ordered `(completed_at, id)` desc, `status = 'completed'` only — [FR-051](../../03-functional-requirements/functional-requirements.md). |
+
+## Implementation note (Sprint 31, [customers/specification.md](../../modules/customers/specification.md))
+
+Every write endpoint above is documented as offline-queued, but no `customer.create`/
+`customer.update` sync-push operation type exists yet — same "table/endpoint exists, sync
+integration is a separate, later item" shape Categories/Units/Trading Day's own online-only-creation
+precedent already established. `customer.create` is [backlog.md M3 item 2](../../17-sprints/backlog.md#4-m3--fully-decomposed-2026-08-16-now-that-m2-has-reached-this-point)'s
+scope; `customer.update` — and the conflict-resolution field-merge policy `PATCH` needs to actually
+honour concurrent offline edits — is item 5's scope. `POST /sales` does not yet accept
+`customer_id`; that wiring is item 2's mobile-checkout scope, not this sprint's.
 
 ## Request/response shape — `POST /customers`
 
@@ -58,3 +68,4 @@ one of the two is, so a customer record is never created with no way to ever loo
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial customer endpoint set: minimal CRM, phone lookup, purchase history. |
+| 0.2.0 | 2026-08-16 | All five endpoints built and live-verified (12/12) — Sprint 31, backlog.md M3 item 1. Online-only this sprint (no sync-push operation type yet, named explicitly); `POST /sales` does not yet accept `customer_id`. |

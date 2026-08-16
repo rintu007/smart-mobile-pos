@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 05 — User Personas
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-30
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-16
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
 
@@ -61,6 +61,8 @@ established fact.
 | Capability | Cashier | Manager | Owner | Source |
 | --- | --- | --- | --- | --- |
 | View / add a customer | ✅ | ✅ | ✅ | Judgment call — directly required by the checkout flow (BR-027, BR-029). |
+| Edit a customer's name/phone | ✅ | ✅ | ✅ | **Correction, found live (Sprint 31):** this row was missing entirely, even though [customers.md](../11-api/endpoints/customers.md) already documented `PATCH /customers/{id}` as Cashier+ before this matrix was ever checked against it. Same reasoning as "add" — a Cashier under time pressure needs to correct a walk-in customer's own details without waiting for a Manager. |
+| Deactivate a customer | ❌ | ✅ | ✅ | **Correction, found live (Sprint 31):** also missing. Grouped with catalogue/inventory's own back-office judgment call (this row's "Create/edit... not in DR-019's Cashier allow-list" reasoning above) rather than with "add," since removing a customer record is a data-governance action, not a checkout-flow necessity — matches `customers.md`'s own already-documented Manager/Owner-only `DELETE`. |
 | View a customer's purchase history | ✅ | ✅ | ✅ | Judgment call — directly required by the return-without-receipt workflow (BR-036). |
 
 ## Cash Drawer / Day Close
@@ -114,3 +116,4 @@ restrictions above are wrong for how these shops actually want to delegate trust
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial matrix: 16 capabilities × 3 roles, 8 rows DR-derived, 8 rows judgment calls, including the resolved "void a completed sale" inconsistency. |
+| 0.2.0 | 2026-08-16 | **Correction, found live building Sprint 31 (Customers, backlog.md M3 item 1):** the Customers section never listed "edit" or "deactivate" at all, despite [customers.md](../11-api/endpoints/customers.md) already documenting `PATCH /customers/{id}` (Cashier+) and `DELETE /customers/{id}` (Manager/Owner) since Phase 11. Added both rows, matching customers.md's already-fixed decisions exactly rather than re-deciding them here. |
