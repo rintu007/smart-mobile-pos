@@ -4,7 +4,7 @@
 > **Module:** Offline Sync Engine
 > **Slice:** V1 — this document scopes only backlog.md item 9's M0-minimal cut, not the full
 > [sync-api.md](../../11-api/sync-api.md) shape (§1)
-> **Version:** 0.7.0
+> **Version:** 0.8.0
 > **Last updated:** 2026-08-16
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
@@ -57,10 +57,12 @@ named, deferred Phase 18 tuning decision (per that section's own wording).
   movements as **server-side side effects only**, per
   [inventory/specification.md §1](../inventory/specification.md#1-purpose-and-business-context);
   there is no public `POST /stock-movements` for a client to push to yet.
-- Pull handles three of sync-api.md §6's eight documented entity types: `products` (Sprint 13),
-  `stock_movements` and `sales` (Sprint 36, backlog.md M4 item 1 — see the dedicated note below).
-  `categories`, `units`, `customers`, `user_store_roles`, `shop_settings`, `sync_rejections` remain
-  undocumented at the endpoint level.
+- Pull handles four of sync-api.md §6's eight documented entity types: `products` (Sprint 13),
+  `stock_movements` and `sales` (Sprint 36, backlog.md M4 item 1 — see the dedicated note below),
+  and `shop_settings` (Sprint 37, backlog.md M4 item 2 — deliberately minimal, one field only, see
+  [reports/specification.md §3](../reports/specification.md#3-database-tables-and-relationships)).
+  `categories`, `units`, `customers`, `user_store_roles`, `sync_rejections` remain undocumented at
+  the endpoint level.
 - No `sync_rejections` table/read path — a rejected operation's reason is returned synchronously in
   the same push response (§3 below); nothing is queryable after the fact yet.
 
@@ -164,7 +166,7 @@ since this sprint only adds read-cache rows through the columns that already exi
 | Method & path | Status |
 | --- | --- |
 | `POST /api/v1/sync/push` | **Implemented Sprint 13, extended Sprint 32/33/35.** Request: `{ operations: [{ type, client_operation_id, payload }] }`, `type ∈ {'product.create', 'sale.create', 'customer.create', 'customer.update', 'return.create', 'return.approve', 'return.reject'}`, `payload` validated per-type — `product.create`/`sale.create`/`customer.create`/`return.create` against the exact same Zod schema their direct endpoint uses; `customer.update` against the same merge-aware schema `PATCH /customers/{id}` itself now uses, with `id` added (no URL in a push batch); `return.approve`/`return.reject` against a dedicated sync-only payload schema carrying `{ id }`/`{ id, reason }` (the same structural reason — [returns/specification.md §5](../returns/specification.md#5-validation-rules-client-and-server)). Response: `{ results: [{ client_operation_id, status: 'accepted' \| 'rejected', entity_id?, error? }] }`, one result per submitted operation, in the request's own original order. Requires any active role (`requirePermission`, Sprint 23) — sync is a device-level mechanism, not itself a permission-matrix.md capability, so the check here is simply "has an active, non-deactivated role at all," meaningfully blocking a revoked user even from syncing. |
-| `GET /api/v1/sync/pull` | **Implemented Sprint 13** (`entity_type=products`), **extended Sprint 36** (`stock_movements`/`sales`). `?entity_type=products\|stock_movements\|sales&cursor=<opaque>&limit=<n, default 50, max 200>` → `{ data: [...], next_cursor }` for `products`; `{ data: [...], next_cursor, has_more }` for `stock_movements`/`sales` (sync-api.md §6's dated correction — `next_cursor` is always the last row seen, `has_more` says whether to keep paging now). Any other `entity_type` value is rejected with `VALIDATION_FAILED` (422) — not a silent empty result. Requires any active role (Sprint 23), same reasoning as push — no role-specific filtering, per §1's Reports-gate note. |
+| `GET /api/v1/sync/pull` | **Implemented Sprint 13** (`entity_type=products`), **extended Sprint 36** (`stock_movements`/`sales`), **extended Sprint 37** (`shop_settings`). `?entity_type=products\|stock_movements\|sales\|shop_settings&cursor=<opaque>&limit=<n, default 50, max 200>` → `{ data: [...], next_cursor }` for `products`; `{ data: [...], next_cursor, has_more }` for `stock_movements`/`sales` (sync-api.md §6's dated correction — `next_cursor` is always the last row seen, `has_more` says whether to keep paging now); `{ data: [{ low_stock_threshold_quantity }] \| [], next_cursor: null, has_more: false }` for `shop_settings` (never paginated — exactly one row per tenant). Any other `entity_type` value is rejected with `VALIDATION_FAILED` (422) — not a silent empty result. Requires any active role (Sprint 23), same reasoning as push — no role-specific filtering, per §1's Reports-gate note. |
 | Every other entity type's pull, `sync_rejections`, the full six-group push ordering | **Already documented** in [sync-api.md](../../11-api/sync-api.md), **not implemented, and not needed yet** — see §1. |
 
 ## 5. Validation rules (client and server)
@@ -175,7 +177,7 @@ since this sprint only adds read-cache rows through the columns that already exi
 | `operations[].type` | Enum: `'product.create'`, `'sale.create'`, `'customer.create'` (Sprint 32), `'return.create'`/`'return.approve'`/`'return.reject'` (Sprint 33), `'customer.update'` (Sprint 35) — any other value is rejected with `VALIDATION_FAILED` at the operation level (its own `results[]` entry, not a whole-batch 422) |
 | `operations[].client_operation_id` | UUIDv4, required |
 | `operations[].payload` | Validated per-type against the existing direct-endpoint schema — a payload failing that schema is rejected with `VALIDATION_FAILED` at the operation level |
-| `entity_type` (pull) | Enum: `'products'`, `'stock_movements'`, `'sales'` (the latter two added Sprint 36) |
+| `entity_type` (pull) | Enum: `'products'`, `'stock_movements'`, `'sales'` (added Sprint 36), `'shop_settings'` (added Sprint 37) |
 | `cursor` (pull) | Opaque, base64url; a malformed cursor is rejected with `VALIDATION_FAILED` (422) rather than silently treated as "no cursor" |
 | `limit` (pull) | Integer, 1–200, default 50 |
 
@@ -305,6 +307,23 @@ Riverpod's idiomatic "run once" mechanism) fires automatically the first time
   zero of the first tenant's data via either pull (cross-tenant isolation); a malformed cursor and
   an unsupported `entity_type` both `422 VALIDATION_FAILED`. **24/24 checks passed.**
 
+**Sprint 37 additions:**
+- Unit tests (`sync/service.test.ts`, mocking `settings/repository`): `pullShopSettings` returns the
+  tenant's row wrapped in the standard envelope with `next_cursor`/`has_more` always `null`/`false`;
+  a tenant with no row returns an empty `data` array rather than throwing.
+- Repository tests (`sync_repository_test.dart`, real in-memory Drift database): the pulled threshold
+  and the role-probe result are both written into the new `ShopSettingsCache` table; a swallowed probe
+  failure (`false`) never throws out of `syncNow()`; a `null` `shop_settings` pull (no server row)
+  leaves a previously-cached threshold untouched rather than overwriting it with nothing; every
+  pre-existing 3-through-5-arg `SyncRepository(...)` call site still works unchanged (two more
+  optional trailing constructor params, same precedent §1 already established for Sprint 36's own
+  two).
+- **No live-HTTP verification of the mobile pull mechanics this sprint** — the server-side
+  `pullShopSettings`/`low_stock_threshold_quantity` additions themselves *are* live-verified (11/11,
+  [reports/specification.md §10](../reports/specification.md#10-test-plan)); the mobile half is
+  local-only sync-cache plumbing, `flutter analyze`/`flutter test` is the verification bar, same
+  position Sprint 30 already established for comparable mobile-only work.
+
 **Explicitly deferred:** every other operation/entity type (§1), `sync_rejections`, the full
 six-group push ordering (only `catalogue.*`/`trading_day.*`/`stock_movement.*` push remain
 unbuilt), sync-api.md §7's full trigger set (connectivity listener, app foreground, background
@@ -316,7 +335,7 @@ trade-off, not an oversight).
 | Requirement | Covered by | Status |
 | --- | --- | --- |
 | [sync-api.md §1](../../11-api/sync-api.md#1-push--postsyncpush)–[§5](../../11-api/sync-api.md#5-duplicate-detection--replays-are-free) (push mechanics) | §2, §4, §10 | Met, for the two in-scope operation types only |
-| [sync-api.md §6](../../11-api/sync-api.md#6-pull--getsyncpull) (cursor pull) | §4, §10 | Met, for `products`/`stock_movements`/`sales` (3 of 8 documented entity types) |
+| [sync-api.md §6](../../11-api/sync-api.md#6-pull--getsyncpull) (cursor pull) | §4, §10 | Met, for `products`/`stock_movements`/`sales`/`shop_settings` (4 of 8 documented entity types) |
 | [FR-071](../../03-functional-requirements/functional-requirements.md#group-j--reports-core-four)–[FR-074](../../03-functional-requirements/functional-requirements.md#group-j--reports-core-four) (Reports' own data dependency) | §1, §3, §10 | **Enabled, not yet consumed** — the local caches Reports needs now exist and stay current; M4 item 2 builds the report screens themselves |
 | [milestones.md — M0 exit criterion](../../16-milestones/milestones.md#m0--walking-skeleton) ("...watch it sync...") | §9, §10 | Met — a device can now actually push its queue and pull products, on-device, observable via the home screen's own sync status |
 | [sync-api.md §7](../../11-api/sync-api.md#7-what-triggers-a-sync-cycle) (sync-cycle triggers) | §9 | **Partially met** — automatic-once-per-session and manual triggers exist; connectivity-listener/app-foreground/background-timer triggers remain a named, deferred Phase 18 tuning decision |
@@ -332,3 +351,4 @@ trade-off, not an oversight).
 | 0.5.0 | 2026-08-16 | Sprint 33 (backlog.md M3 item 3): `return.create`/`return.approve`/`return.reject` added, ordered after `sale.create`. `return.approve`/`return.reject` use a dedicated sync-only payload schema (`{ id }`/`{ id, reason }`) distinct from their direct endpoints' own bodies, since a push batch has no URL to carry the target id — a structural difference, not an inconsistency. `ORIGINAL_SALE_NOT_FOUND` joins `NOT_FOUND` in the sync-context `DEPENDENCY_NOT_FOUND` remap. |
 | 0.6.0 | 2026-08-16 | Sprint 35 (backlog.md M3 item 5): `customer.update` added — **this engine's first `.update` operation type of any kind** — ordered alongside `customer.create`, both before `sale.create`. Dispatches to the same, now-merge-aware `customersService.updateCustomer` `PATCH /customers/{id}` itself now uses, holding sync-api.md §1's "push calls the exact same service method as the direct endpoint" rule intact. |
 | 0.7.0 | 2026-08-16 | Sprint 36 (backlog.md M4 item 1): `GET /sync/pull` gains `stock_movements`/`sales` entity types — the "reporting parity across devices" pull sync-api.md §6 has named since Phase 11 and this sprint finally implements, unblocking Reports (M4 item 2). New response fields `next_cursor`(always the last row seen)/`has_more` for these two types only, a dated correction to sync-api.md §6's own conflated semantics; mobile persists a per-entity-type resume cursor in a new local `sync_cursors` table (schema v6→v7), unlike `products`' own unchanged full-re-pull-every-cycle trade-off. Named, not silently deferred: Reports' Manager/Owner permission-matrix.md gate has no server call left to enforce it against once this data is on every device, so it will necessarily be client-side-only when M4 item 2 builds the report screens. Live-verified 24/24. |
+| 0.8.0 | 2026-08-16 | Sprint 37 (backlog.md M4 item 2): `GET /sync/pull` gains a fourth entity type, `shop_settings` — deliberately minimal (`low_stock_threshold_quantity` only), never paginated (exactly one row per tenant). Closes Reports' second found gap: FR-074's low-stock report needs its threshold offline, and `shop_settings` had never been synced to any device despite being documented since Phase 11. Also closes the third gap §1 named at Sprint 36: mobile gains its first genuine client-side role-awareness, a probe against the already-existing `GET /users` endpoint (Manager/Owner-only), cached in a new local `ShopSettingsCache` table (schema v7→v8) alongside the threshold, fail-closed by default. Server-side additions live-verified 11/11; mobile half verified via `flutter analyze`/`flutter test` only (local-only plumbing, no live HTTP needed for it specifically). |

@@ -289,6 +289,11 @@ model ShopSettings {
   currencyCode                            String   @default("INR") @map("currency_code")
   discountAutoApprovalThresholdMinorUnits BigInt   @map("discount_auto_approval_threshold_minor_units")
   returnAutoApprovalThresholdMinorUnits   BigInt   @map("return_auto_approval_threshold_minor_units")
+  /// Added Sprint 37 (backlog.md M4 item 2) — a real, blocking gap found starting Reports: BR-024/
+  /// BR-045 require the low-stock report's threshold to be "configurable, per-product or shop-wide,"
+  /// and no such field existed anywhere in this schema. A single shop-wide default, matching
+  /// taxRateBasisPoints' own V1-simplification precedent (per-product granularity deferred, named).
+  lowStockThresholdQuantity               Int      @default(5) @map("low_stock_threshold_quantity")
   printerConfig                           Json?    @map("printer_config")
   receiptTemplateConfig                   Json?    @map("receipt_template_config")
   createdAt                               DateTime @default(now()) @map("created_at") @db.Timestamptz

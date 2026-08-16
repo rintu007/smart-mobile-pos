@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 07 — Database Design
-> **Version:** 0.1.1
-> **Last updated:** 2026-08-14
+> **Version:** 0.1.2
+> **Last updated:** 2026-08-16
 > **Owner:** PostgreSQL Architect
 > **Approved by:** _pending_
 
@@ -420,6 +420,7 @@ WF-013.
 | `currency_code` | `TEXT` | `NOT NULL DEFAULT 'INR'` |
 | `discount_auto_approval_threshold_minor_units` | `BIGINT` | `NOT NULL` |
 | `return_auto_approval_threshold_minor_units` | `BIGINT` | `NOT NULL` |
+| `low_stock_threshold_quantity` | `INTEGER` | `NOT NULL DEFAULT 5` — added Sprint 37 ([backlog.md M4 item 2](../17-sprints/backlog.md#5-m4--fully-decomposed-2026-08-16-now-that-m3-has-reached-this-point)): a real, blocking gap found starting Reports — [BR-024](../02-business-requirements/business-requirements.md)/[BR-045](../02-business-requirements/business-requirements.md) require the low-stock report's threshold to be configurable, and no such field existed anywhere in this schema. A single shop-wide value, matching `tax_rate_basis_points`' own V1-simplification precedent (per-product granularity deferred, named) |
 | `printer_config` | `JSONB` | nullable |
 | `receipt_template_config` | `JSONB` | nullable — cannot disable mandatory fields, enforced at the service layer, not here ([BR-049](../02-business-requirements/business-requirements.md)) |
 
@@ -485,3 +486,4 @@ records an *anomaly to be worked*, not a financial fact; the underlying rejected
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial 22-table schema across 7 bounded contexts. Trading Day scoped per-device, resolving the Phase 06 Finding 2 open question. |
 | 0.1.1 | 2026-08-14 | Correction found decomposing M2 (backlog.md): `shop_settings` never named where DR-008's `tax_rate` comes from. Added `tax_rate_basis_points` — a single shop-wide flat rate, not a per-product/per-HSN table (named, deferred to V2+). |
+| 0.1.2 | 2026-08-16 | Correction found starting Reports, Sprint 37 (backlog.md M4 item 2): BR-024/BR-045 require a configurable low-stock threshold and none existed anywhere. Added `shop_settings.low_stock_threshold_quantity` — a single shop-wide value, not per-product (named, deferred). |

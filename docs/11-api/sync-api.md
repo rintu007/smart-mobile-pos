@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 11 — API Design
-> **Version:** 0.2.0
+> **Version:** 0.3.0
 > **Last updated:** 2026-08-16
 > **Owner:** Principal Next.js Engineer / CTO
 > **Approved by:** _pending_
@@ -155,3 +155,4 @@ fixed here.
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial sync API: batch push reusing per-operation service methods, dependency-ordered groups, per-operation partial-failure results, `DEPENDENCY_NOT_FOUND` as a distinct retryable code, cursor-based pull per entity type. |
 | 0.2.0 | 2026-08-16 | Sprint 36 (backlog.md M4 item 1): `stock_movements`/`sales` pull implemented — the "reporting parity across devices" this section named since Phase 11 (§6). Corrected §6's own conflated `next_cursor` semantics: these two entity types now carry `has_more` as a distinct field alongside `next_cursor` (always the last row seen, a durable resume point), since an ever-growing transaction history can't afford `products`' own "no persisted cursor, full re-pull every cycle" trade-off. `products` unchanged. |
+| 0.3.0 | 2026-08-16 | Sprint 37 (backlog.md M4 item 2): `shop_settings` pull implemented — never paginated, exactly one row per tenant, `next_cursor`/`has_more` always `null`/`false`. Closes Reports' low-stock threshold dependency (FR-074). |

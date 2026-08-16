@@ -12,6 +12,7 @@ import {
 } from "@/modules/returns/schema";
 import * as stockMovementsRepository from "@/modules/stock-movements/repository";
 import type { StockMovementCursor } from "@/modules/stock-movements/repository";
+import * as settingsRepository from "@/modules/settings/repository";
 import { ApiError } from "@/core/errors/api-error";
 import * as repository from "./repository";
 import type { ProductCursor, SaleCursor } from "./repository";
@@ -330,4 +331,22 @@ function decodeSaleCursor(cursor: string): SaleCursor {
   }
 
   return { completedAt, id };
+}
+
+/**
+ * docs/modules/sync-engine/specification.md#4-api-contract — GET /sync/pull, entity_type=shop_settings.
+ * Added Sprint 37 (backlog.md M4 item 2). Unlike every other pull entity type, `shop_settings` is
+ * exactly one row per tenant — no cursor pagination is meaningful, `cursor`/`limit` are accepted
+ * (schema-level) but unused. Deliberately minimal: only `low_stock_threshold_quantity`, the one
+ * field Reports needs offline (docs/modules/reports/specification.md §3) — not the full `GET
+ * /settings` shape, which stays role-shaped and full-featured for its own direct callers.
+ */
+export async function pullShopSettings(tenantId: string) {
+  const settings = await settingsRepository.findSettings(tenantId);
+
+  return {
+    data: settings ? [{ low_stock_threshold_quantity: settings.lowStockThresholdQuantity }] : [],
+    next_cursor: null,
+    has_more: false,
+  };
 }

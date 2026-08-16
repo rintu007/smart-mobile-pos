@@ -17,6 +17,11 @@ import '../features/customers/presentation/screens/customers_screen.dart';
 import '../features/pos/presentation/screens/barcode_scan_screen.dart';
 import '../features/pos/presentation/screens/held_carts_screen.dart';
 import '../features/pos/presentation/screens/till_screen.dart';
+import '../features/reports/presentation/screens/daily_sales_report_screen.dart';
+import '../features/reports/presentation/screens/low_stock_report_screen.dart';
+import '../features/reports/presentation/screens/reports_screen.dart';
+import '../features/reports/presentation/screens/stock_value_report_screen.dart';
+import '../features/reports/presentation/screens/top_products_report_screen.dart';
 import '../features/returns/presentation/screens/new_return_screen.dart';
 import '../features/returns/presentation/screens/return_approvals_screen.dart';
 import '../features/returns/presentation/screens/return_detail_screen.dart';
@@ -127,6 +132,26 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/returns/:id',
         builder: (context, state) =>
             ReturnDetailScreen(returnId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/reports',
+        builder: (context, state) => const ReportsScreen(),
+      ),
+      GoRoute(
+        path: '/reports/daily-sales',
+        builder: (context, state) => const DailySalesReportScreen(),
+      ),
+      GoRoute(
+        path: '/reports/top-products',
+        builder: (context, state) => const TopProductsReportScreen(),
+      ),
+      GoRoute(
+        path: '/reports/stock-value',
+        builder: (context, state) => const StockValueReportScreen(),
+      ),
+      GoRoute(
+        path: '/reports/low-stock',
+        builder: (context, state) => const LowStockReportScreen(),
       ),
     ],
   );

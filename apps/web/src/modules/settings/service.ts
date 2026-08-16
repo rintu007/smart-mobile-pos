@@ -54,6 +54,10 @@ export async function getSettings(tenantId: string, role: Role) {
     pricing_mode: settings.pricingMode,
     rounding_rule: settings.roundingRule,
     currency_code: settings.currencyCode,
+    // Added Sprint 37 (backlog.md M4 item 2) — visible to everyone, same as tax_mode/pricing_mode
+    // above: unlike the two auto-approval thresholds below, there's no "a Cashier could game this"
+    // concern for a low-stock number.
+    low_stock_threshold_quantity: settings.lowStockThresholdQuantity,
     printer_config: settings.printerConfig,
     receipt_template_config: settings.receiptTemplateConfig,
     updated_at: settings.updatedAt.toISOString(),
@@ -122,6 +126,9 @@ export async function updateSettings(tenantId: string, input: UpdateSettingsRequ
       returnAutoApprovalThresholdMinorUnits: BigInt(
         input.return_auto_approval_threshold_minor_units,
       ),
+    }),
+    ...(input.low_stock_threshold_quantity !== undefined && {
+      lowStockThresholdQuantity: input.low_stock_threshold_quantity,
     }),
   };
 

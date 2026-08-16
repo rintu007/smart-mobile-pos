@@ -18,6 +18,8 @@ final syncRepositoryProvider = Provider<SyncRepository>((ref) {
     ({cursor}) => api.pullProductsPage(dio, cursor: cursor),
     ({cursor}) => api.pullStockMovementsPage(dio, cursor: cursor),
     ({cursor}) => api.pullSalesPage(dio, cursor: cursor),
+    () => api.pullShopSettings(dio),
+    () => api.probeCanViewReports(dio),
   );
 });
 
