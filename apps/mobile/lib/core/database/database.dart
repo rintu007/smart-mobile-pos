@@ -14,6 +14,7 @@ import 'tables/sale_payments.dart';
 import 'tables/sales.dart';
 import 'tables/stock_movements.dart';
 import 'tables/store_context.dart';
+import 'tables/sync_cursors.dart';
 import 'tables/units.dart';
 
 part 'database.g.dart';
@@ -47,6 +48,7 @@ part 'database.g.dart';
     SalePayments,
     StockMovements,
     StoreContext,
+    SyncCursors,
     Units,
   ],
 )
@@ -54,15 +56,16 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   // The first schema change was Sprint 20 (schemaVersion 1 -> 2); Sprint 21
   // (backlog.md item 5) adds `sku`/`barcode` to `products` for the till's
   // offline barcode-scan lookup; Sprint 30 (M2 item 6, Hold/Resume) adds
   // `sales.created_at` — see sales.dart's own comment for why; Sprint 32 (M3
   // item 2) adds the `Customers` table and `sales.customer_id`; Sprint 34 (M3
-  // item 4) adds the `Returns`/`ReturnLineItems` tables. Same
-  // non-destructive-migration discipline — a real founder device already
+  // item 4) adds the `Returns`/`ReturnLineItems` tables; Sprint 36 (M4 item 1)
+  // adds the `SyncCursors` table for stock_movements/sales pull resumability.
+  // Same non-destructive-migration discipline — a real founder device already
   // has real local data. Existing `'completed'` rows get `created_at`
   // backfilled from `completed_at` (a reasonable historical approximation,
   // not a precision claim) rather than left null.
@@ -93,6 +96,9 @@ class AppDatabase extends _$AppDatabase {
       if (from < 6) {
         await m.createTable(returns);
         await m.createTable(returnLineItems);
+      }
+      if (from < 7) {
+        await m.createTable(syncCursors);
       }
     },
   );

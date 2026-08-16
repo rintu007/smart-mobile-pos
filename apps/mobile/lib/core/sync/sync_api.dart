@@ -70,3 +70,76 @@ Future<SyncPullPage> pullProductsPage(Dio dio, {String? cursor}) async {
     nextCursor: response.data?['next_cursor'] as String?,
   );
 }
+
+/// `GET /api/v1/sync/pull?entity_type=stock_movements` — one page. Added
+/// Sprint 36 (backlog.md M4 item 1).
+Future<StockMovementPullPage> pullStockMovementsPage(Dio dio, {String? cursor}) async {
+  final response = await dio.get<Map<String, dynamic>>(
+    '/api/v1/sync/pull',
+    queryParameters: {'entity_type': 'stock_movements', 'cursor': ?cursor},
+  );
+
+  final data = response.data?['data'] as List<dynamic>? ?? const [];
+  final movements = data
+      .cast<Map<String, dynamic>>()
+      .map(
+        (json) => PulledStockMovement(
+          id: json['id'] as String,
+          productId: json['product_id'] as String,
+          quantityDelta: (json['quantity_delta'] as num).toDouble(),
+          movementType: json['movement_type'] as String,
+          createdAt: DateTime.parse(json['created_at'] as String),
+        ),
+      )
+      .toList();
+
+  return StockMovementPullPage(
+    movements: movements,
+    nextCursor: response.data?['next_cursor'] as String?,
+    hasMore: response.data?['has_more'] as bool? ?? false,
+  );
+}
+
+/// `GET /api/v1/sync/pull?entity_type=sales` — one page. Added Sprint 36
+/// (backlog.md M4 item 1).
+Future<SalePullPage> pullSalesPage(Dio dio, {String? cursor}) async {
+  final response = await dio.get<Map<String, dynamic>>(
+    '/api/v1/sync/pull',
+    queryParameters: {'entity_type': 'sales', 'cursor': ?cursor},
+  );
+
+  final data = response.data?['data'] as List<dynamic>? ?? const [];
+  final sales = data.cast<Map<String, dynamic>>().map((json) {
+    final lineItemsJson = json['line_items'] as List<dynamic>? ?? const [];
+    return PulledSale(
+      id: json['id'] as String,
+      status: json['status'] as String,
+      provisionalInvoiceNumber: json['provisional_invoice_number'] as String,
+      subtotalMinorUnits: json['subtotal_minor_units'] as int,
+      grandTotalMinorUnits: json['grand_total_minor_units'] as int,
+      completedAt: json['completed_at'] == null
+          ? null
+          : DateTime.parse(json['completed_at'] as String),
+      createdAt: DateTime.parse(json['created_at'] as String),
+      customerId: json['customer_id'] as String?,
+      lineItems: lineItemsJson
+          .cast<Map<String, dynamic>>()
+          .map(
+            (item) => PulledSaleLineItem(
+              id: item['id'] as String,
+              productId: item['product_id'] as String,
+              quantity: (item['quantity'] as num).toDouble(),
+              unitPriceMinorUnits: item['unit_price_minor_units'] as int,
+              lineTotalMinorUnits: item['line_total_minor_units'] as int,
+            ),
+          )
+          .toList(),
+    );
+  }).toList();
+
+  return SalePullPage(
+    sales: sales,
+    nextCursor: response.data?['next_cursor'] as String?,
+    hasMore: response.data?['has_more'] as bool? ?? false,
+  );
+}

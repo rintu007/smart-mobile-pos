@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 11 — API Design
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-30
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-16
 > **Owner:** Principal Next.js Engineer / CTO
 > **Approved by:** _pending_
 
@@ -119,9 +119,28 @@ authoritative, per [schema-server.md](../07-database/schema-server.md)), `shop_s
 `sync_rejections` (filtered to this device/store), and — for reporting parity across devices in a
 future multi-device store — `stock_movements` and `sales` from **other** devices. Cursor semantics
 match [api-principles.md §4](api-principles.md#4-pagination--cursor-only) exactly: `(updated_at, id)`
-for Tier 1 tables, `(created_at, id)` for Tier 2 tables. The client loops pulling pages until
-`next_cursor` is `null`, then stores that final cursor as its new starting point for the next sync
-cycle — an incremental, resumable feed, never a full re-download.
+for Tier 1 tables, `(created_at, id)` for Tier 2 tables (`(completed_at, id)` for `sales` specifically
+— every synced sale is `status: 'completed'`, so `completed_at` is as reliable a monotonic key as
+`created_at`, and it is the cursor field `GET /sales` already established, docs/modules/
+sales-invoices/specification.md). The client loops pulling pages until `next_cursor` is `null`, then
+stores that final cursor as its new starting point for the next sync cycle — an incremental,
+resumable feed, never a full re-download.
+
+**Correction, found implementing `stock_movements`/`sales` (Sprint 36, backlog.md M4 item 1):** the
+paragraph above conflates two things a `next_cursor` of `null` was being asked to signal at once —
+"no more pages in this pull run" and "nothing to persist as next cycle's resume point." Those are the
+same signal only for an entity type whose pull cursor is never persisted between sync cycles in the
+first place (`products`, per [sync-engine/specification.md §2](../modules/sync-engine/specification.md#2-business-rules)'s
+own named trade-off — its near-static catalogue makes a full re-pull cheap enough not to bother). For
+`stock_movements`/`sales`, an ever-growing transaction history, a full re-pull every cycle is real,
+avoidable cost — but resuming needs a durable cursor, and "the last page had no next page" is not the
+same fact as "here is the position to resume from." These two entity types' pull response therefore
+carries **two** fields instead of one: `next_cursor` (always the last row actually returned, even on
+the final page — a stable resume point) and `has_more` (`true`/`false`, "keep paging within this run
+right now"). An empty page (no new rows since the caller's own cursor) echoes that cursor back
+unchanged rather than `null`, so a quiet sync cycle never resets an established resume point back to
+the start. `products`' existing single-field `next_cursor` contract is unchanged — this is additive
+to two specific entity types' own response shape, not a retroactive change to an already-working one.
 
 ## 7. What triggers a sync cycle
 
@@ -135,3 +154,4 @@ fixed here.
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial sync API: batch push reusing per-operation service methods, dependency-ordered groups, per-operation partial-failure results, `DEPENDENCY_NOT_FOUND` as a distinct retryable code, cursor-based pull per entity type. |
+| 0.2.0 | 2026-08-16 | Sprint 36 (backlog.md M4 item 1): `stock_movements`/`sales` pull implemented — the "reporting parity across devices" this section named since Phase 11 (§6). Corrected §6's own conflated `next_cursor` semantics: these two entity types now carry `has_more` as a distinct field alongside `next_cursor` (always the last row seen, a durable resume point), since an ever-growing transaction history can't afford `products`' own "no persisted cursor, full re-pull every cycle" trade-off. `products` unchanged. |

@@ -10,9 +10,11 @@ import {
   syncApproveReturnPayloadSchema,
   syncRejectReturnPayloadSchema,
 } from "@/modules/returns/schema";
+import * as stockMovementsRepository from "@/modules/stock-movements/repository";
+import type { StockMovementCursor } from "@/modules/stock-movements/repository";
 import { ApiError } from "@/core/errors/api-error";
 import * as repository from "./repository";
-import type { ProductCursor } from "./repository";
+import type { ProductCursor, SaleCursor } from "./repository";
 import type { SyncPushOperation, SyncPushRequest } from "./schema";
 
 // Business rules live here, not in the Route Handler — docs/08-folder-structure/backend-structure.md §2.
@@ -225,4 +227,107 @@ function decodeCursor(cursor: string): ProductCursor {
   }
 
   return { updatedAt, id };
+}
+
+/**
+ * docs/modules/sync-engine/specification.md#4-api-contract — GET /sync/pull, entity_type=stock_movements.
+ * Added Sprint 36 (backlog.md M4 item 1). Reuses stock-movements/repository.ts's own
+ * `listStockMovements` unfiltered — the same tenant-scoped, `(created_at, id)`-cursor, `limit + 1`
+ * peek query GET /stock-movements already relies on, no dedicated sync-only query needed here
+ * (unlike sales, below, which does need one for its line items).
+ */
+export async function pullStockMovements(tenantId: string, cursor: string | undefined, limit: number) {
+  const decodedCursor = cursor ? decodeStockMovementCursor(cursor) : null;
+  const fetched = await stockMovementsRepository.listStockMovements(tenantId, {}, decodedCursor, limit);
+  const hasMore = fetched.length > limit;
+  const rows = hasMore ? fetched.slice(0, limit) : fetched;
+  const lastRow = rows[rows.length - 1];
+
+  return {
+    data: rows.map((movement) => ({
+      id: movement.id,
+      product_id: movement.productId,
+      store_id: movement.storeId,
+      quantity_delta: movement.quantityDelta,
+      movement_type: movement.movementType,
+      reason_code: movement.reasonCode,
+      reference_type: movement.referenceType,
+      reference_id: movement.referenceId,
+      created_at: movement.createdAt.toISOString(),
+    })),
+    // Unlike pullProducts' next_cursor (null once the last page is reached — a "keep paging within
+    // this run?" signal only), this entity type's next_cursor is always the last row actually seen,
+    // so the mobile client can persist it as the next sync cycle's own resume point — a real
+    // efficiency need `pullProducts` never had (a small, near-static catalogue vs. an
+    // ever-growing transaction history, docs/modules/sync-engine/specification.md §2). `has_more`
+    // carries the "keep paging right now" signal instead. An empty page (no new rows since the
+    // caller's own cursor) echoes that cursor back unchanged, never null, so a quiet sync never
+    // resets an established resume point back to the beginning.
+    next_cursor: lastRow ? encodeStockMovementCursor(lastRow) : (cursor ?? null),
+    has_more: hasMore,
+  };
+}
+
+function encodeStockMovementCursor(row: StockMovementCursor): string {
+  return Buffer.from(`${row.createdAt.toISOString()}|${row.id}`).toString("base64url");
+}
+
+function decodeStockMovementCursor(cursor: string): StockMovementCursor {
+  let createdAtIso: string | undefined;
+  let id: string | undefined;
+  try {
+    [createdAtIso, id] = Buffer.from(cursor, "base64url").toString("utf8").split("|");
+  } catch {
+    throw new ApiError(422, "VALIDATION_FAILED", "Malformed cursor.");
+  }
+
+  const createdAt = createdAtIso ? new Date(createdAtIso) : undefined;
+  if (!createdAt || Number.isNaN(createdAt.getTime()) || !id) {
+    throw new ApiError(422, "VALIDATION_FAILED", "Malformed cursor.");
+  }
+
+  return { createdAt, id };
+}
+
+/**
+ * docs/modules/sync-engine/specification.md#4-api-contract — GET /sync/pull, entity_type=sales.
+ * Added Sprint 36 (backlog.md M4 item 1). Reuses `posService.formatSale` — the exact same shape
+ * `GET /sales/{id}` already returns — plus `created_at`, which that endpoint's own contract never
+ * needed to expose but this pull does (schema-local.md's local `Sales.createdAt` column, used to
+ * order/scope Reports queries by date range, FR-073).
+ */
+export async function pullSales(tenantId: string, cursor: string | undefined, limit: number) {
+  const decodedCursor = cursor ? decodeSaleCursor(cursor) : null;
+  const fetched = await repository.listSalesForSync(tenantId, decodedCursor, limit);
+  const hasMore = fetched.length > limit;
+  const rows = hasMore ? fetched.slice(0, limit) : fetched;
+  const lastRow = rows[rows.length - 1];
+
+  return {
+    data: rows.map((sale) => ({ ...posService.formatSale(sale), created_at: sale.createdAt.toISOString() })),
+    // Same always-the-last-row-seen / has_more split as pullStockMovements above, same reasoning.
+    next_cursor: lastRow ? encodeSaleCursor(lastRow) : (cursor ?? null),
+    has_more: hasMore,
+  };
+}
+
+function encodeSaleCursor(row: SaleCursor): string {
+  return Buffer.from(`${row.completedAt.toISOString()}|${row.id}`).toString("base64url");
+}
+
+function decodeSaleCursor(cursor: string): SaleCursor {
+  let completedAtIso: string | undefined;
+  let id: string | undefined;
+  try {
+    [completedAtIso, id] = Buffer.from(cursor, "base64url").toString("utf8").split("|");
+  } catch {
+    throw new ApiError(422, "VALIDATION_FAILED", "Malformed cursor.");
+  }
+
+  const completedAt = completedAtIso ? new Date(completedAtIso) : undefined;
+  if (!completedAt || Number.isNaN(completedAt.getTime()) || !id) {
+    throw new ApiError(422, "VALIDATION_FAILED", "Malformed cursor.");
+  }
+
+  return { completedAt, id };
 }

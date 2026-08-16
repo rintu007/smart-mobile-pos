@@ -3,34 +3,61 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 
 import '../database/database.dart';
+import '../database/tables/stock_movements.dart' show MovementType, MovementTypeConverter;
 import 'sync_dto.dart';
 
 /// Drains `outbound_queue` via `POST /sync/push`, then refreshes the local
-/// `products` cache via `GET /sync/pull` — docs/modules/sync-engine/specification.md.
-/// The network calls are injected (same reasoning `StoreContextRepository`
-/// already established) so tests can fake them without a mocking package.
+/// `products`/`stock_movements`/`sales` caches via `GET /sync/pull` —
+/// docs/modules/sync-engine/specification.md. `stock_movements`/`sales`
+/// added Sprint 36 (backlog.md M4 item 1) — Reports (M4 item 2) reads from
+/// the local caches this fills. The network calls are injected (same
+/// reasoning `StoreContextRepository` already established) so tests can fake
+/// them without a mocking package.
 class SyncRepository {
-  SyncRepository(this._db, this._pushOperations, this._pullProductsPage);
+  /// The last two pull functions are optional, trailing positional params
+  /// with safe no-op defaults — added Sprint 36 (backlog.md M4 item 1) —
+  /// the same "avoid a mass test-signature rewrite" precedent Sprint 34's
+  /// `DriftSaleRepository` already established, rather than breaking every
+  /// existing 3-arg test call site.
+  SyncRepository(
+    this._db,
+    this._pushOperations,
+    this._pullProductsPage, [
+    Future<StockMovementPullPage> Function({String? cursor})? pullStockMovementsPage,
+    Future<SalePullPage> Function({String? cursor})? pullSalesPage,
+  ]) : _pullStockMovementsPage = pullStockMovementsPage ?? _noPullStockMovements,
+       _pullSalesPage = pullSalesPage ?? _noPullSales;
 
   final AppDatabase _db;
   final Future<SyncPushResponse> Function(List<QueuedOperation>) _pushOperations;
   final Future<SyncPullPage> Function({String? cursor}) _pullProductsPage;
+  final Future<StockMovementPullPage> Function({String? cursor}) _pullStockMovementsPage;
+  final Future<SalePullPage> Function({String? cursor}) _pullSalesPage;
 
-  /// Pushes every queued/retrying operation, then pulls the full `products`
-  /// list. No local pull cursor is persisted between calls — every call pages
-  /// from the start; incremental/resumable pulling is a Phase 13 performance
-  /// tuning decision (sync-api.md §6), not needed at M0's dataset size, and
-  /// avoids a schema migration risk against the founder's already-installed,
-  /// persistent app (docs/modules/sync-engine/specification.md §1).
+  static Future<StockMovementPullPage> _noPullStockMovements({String? cursor}) async =>
+      const StockMovementPullPage(movements: [], nextCursor: null, hasMore: false);
+
+  static Future<SalePullPage> _noPullSales({String? cursor}) async =>
+      const SalePullPage(sales: [], nextCursor: null, hasMore: false);
+
+  /// Pushes every queued/retrying operation, then pulls `products` (full
+  /// re-pull every call, no persisted cursor — §2's own named trade-off,
+  /// unchanged this sprint) and `stock_movements`/`sales` (Sprint 36,
+  /// resumable via a persisted per-entity-type cursor — see
+  /// `_pullAllStockMovements`/`_pullAllSales` below).
   Future<SyncRunSummary> syncNow() async {
     final pushResult = await _pushQueuedOperations();
     final pulledCount = await _pullAllProducts();
+    final stockMovementsPulled = await _pullAllStockMovements();
+    final salesPulled = await _pullAllSales();
 
     return SyncRunSummary(
       accepted: pushResult.accepted,
       pending: pushResult.pending,
       rejected: pushResult.rejected,
       productsPulled: pulledCount,
+      stockMovementsPulled: stockMovementsPulled,
+      salesPulled: salesPulled,
     );
   }
 
@@ -133,6 +160,108 @@ class SyncRepository {
     }
 
     return count;
+  }
+
+  /// Sprint 36 (backlog.md M4 item 1). Resumes from the persisted
+  /// `sync_cursors` row for `'stock_movements'`, pages until `hasMore` is
+  /// false, then persists the last cursor seen — so a growing transaction
+  /// history is never re-pulled from scratch on every sync, unlike
+  /// `_pullAllProducts` above (a small, near-static catalogue, where that
+  /// cost is negligible and a persisted cursor isn't worth the complexity).
+  Future<int> _pullAllStockMovements() async {
+    String? cursor = await _readCursor('stock_movements');
+    var count = 0;
+
+    while (true) {
+      final page = await _pullStockMovementsPage(cursor: cursor);
+      for (final movement in page.movements) {
+        await _db
+            .into(_db.stockMovements)
+            .insertOnConflictUpdate(
+              StockMovementsCompanion(
+                id: Value(movement.id),
+                productId: Value(movement.productId),
+                quantityDelta: Value(movement.quantityDelta),
+                movementType: Value(_movementTypeFromWire(movement.movementType)),
+                createdAt: Value(movement.createdAt),
+              ),
+            );
+        count++;
+      }
+      cursor = page.nextCursor;
+      if (!page.hasMore) break;
+    }
+
+    await _writeCursor('stock_movements', cursor);
+    return count;
+  }
+
+  /// Sprint 36 (backlog.md M4 item 1). Same resumable-cursor shape as
+  /// `_pullAllStockMovements`. Each pulled sale's line items are upserted
+  /// into `SaleLineItems` right after their parent `Sales` row, in the same
+  /// iteration — that FK must exist first regardless of transaction
+  /// boundaries.
+  Future<int> _pullAllSales() async {
+    String? cursor = await _readCursor('sales');
+    var count = 0;
+
+    while (true) {
+      final page = await _pullSalesPage(cursor: cursor);
+      for (final sale in page.sales) {
+        await _db
+            .into(_db.sales)
+            .insertOnConflictUpdate(
+              SalesCompanion(
+                id: Value(sale.id),
+                status: Value(sale.status),
+                provisionalInvoiceNumber: Value(sale.provisionalInvoiceNumber),
+                subtotalMinorUnits: Value(sale.subtotalMinorUnits),
+                grandTotalMinorUnits: Value(sale.grandTotalMinorUnits),
+                completedAt: Value(sale.completedAt),
+                createdAt: Value(sale.createdAt),
+                customerId: Value(sale.customerId),
+              ),
+            );
+        for (final item in sale.lineItems) {
+          await _db
+              .into(_db.saleLineItems)
+              .insertOnConflictUpdate(
+                SaleLineItemsCompanion(
+                  id: Value(item.id),
+                  saleId: Value(sale.id),
+                  productId: Value(item.productId),
+                  quantity: Value(item.quantity),
+                  unitPriceMinorUnits: Value(item.unitPriceMinorUnits),
+                  lineTotalMinorUnits: Value(item.lineTotalMinorUnits),
+                ),
+              );
+        }
+        count++;
+      }
+      cursor = page.nextCursor;
+      if (!page.hasMore) break;
+    }
+
+    await _writeCursor('sales', cursor);
+    return count;
+  }
+
+  MovementType _movementTypeFromWire(String wire) =>
+      const MovementTypeConverter().fromSql(wire);
+
+  Future<String?> _readCursor(String entityType) async {
+    final row = await (_db.select(
+      _db.syncCursors,
+    )..where((t) => t.entityType.equals(entityType))).getSingleOrNull();
+    return row?.cursor;
+  }
+
+  Future<void> _writeCursor(String entityType, String? cursor) {
+    return _db
+        .into(_db.syncCursors)
+        .insertOnConflictUpdate(
+          SyncCursorsCompanion(entityType: Value(entityType), cursor: Value(cursor)),
+        );
   }
 }
 

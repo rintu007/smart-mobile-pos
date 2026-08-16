@@ -3,15 +3,17 @@ import * as productsService from "@/modules/products/service";
 import * as posService from "@/modules/pos/service";
 import * as customersService from "@/modules/customers/service";
 import * as returnsService from "@/modules/returns/service";
+import * as stockMovementsRepository from "@/modules/stock-movements/repository";
 import { ApiError } from "@/core/errors/api-error";
 import * as repository from "./repository";
-import { pushOperations, pullProducts } from "./service";
+import { pushOperations, pullProducts, pullStockMovements, pullSales } from "./service";
 import type { SyncPushRequest } from "./schema";
 
 vi.mock("@/modules/products/service");
 vi.mock("@/modules/pos/service");
 vi.mock("@/modules/customers/service");
 vi.mock("@/modules/returns/service");
+vi.mock("@/modules/stock-movements/repository");
 vi.mock("./repository");
 
 const authUserId = "11111111-1111-4111-8111-111111111111";
@@ -535,6 +537,141 @@ describe("pullProducts", () => {
       unit_id: "unit-1",
       sku: "AML-500",
       barcode: "8901234567890",
+    });
+  });
+});
+
+describe("pullStockMovements", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  const movement = (id: string, createdAt: Date) => ({
+    id,
+    productId: "p1",
+    storeId: "store-1",
+    quantityDelta: -2,
+    movementType: "sale",
+    reasonCode: null,
+    referenceType: null,
+    referenceId: null,
+    createdAt,
+  });
+
+  it("returns has_more true and a next_cursor from the last row when more exist beyond limit", async () => {
+    const rows = [
+      movement("m1", new Date("2026-08-01T00:00:00Z")),
+      movement("m2", new Date("2026-08-02T00:00:00Z")),
+      movement("m3", new Date("2026-08-03T00:00:00Z")),
+    ];
+    vi.mocked(stockMovementsRepository.listStockMovements).mockResolvedValue(rows as never);
+
+    const result = await pullStockMovements(tenantId, undefined, 2);
+
+    expect(result.data).toHaveLength(2);
+    expect(result.has_more).toBe(true);
+    expect(result.next_cursor).not.toBeNull();
+  });
+
+  it("echoes the caller's own cursor back, not null, when no new rows exist since it", async () => {
+    vi.mocked(stockMovementsRepository.listStockMovements).mockResolvedValue([]);
+    const createdAt = new Date("2026-08-01T00:00:00Z");
+    const cursor = Buffer.from(`${createdAt.toISOString()}|m1`).toString("base64url");
+
+    const result = await pullStockMovements(tenantId, cursor, 50);
+
+    expect(result.next_cursor).toBe(cursor);
+    expect(result.has_more).toBe(false);
+  });
+
+  it("returns a null next_cursor only when there is truly nothing to resume from", async () => {
+    vi.mocked(stockMovementsRepository.listStockMovements).mockResolvedValue([]);
+
+    const result = await pullStockMovements(tenantId, undefined, 50);
+
+    expect(result.next_cursor).toBeNull();
+  });
+
+  it("passes a tenant-scoped, unfiltered query through to the repository", async () => {
+    vi.mocked(stockMovementsRepository.listStockMovements).mockResolvedValue([]);
+
+    await pullStockMovements(tenantId, undefined, 50);
+
+    expect(stockMovementsRepository.listStockMovements).toHaveBeenCalledWith(tenantId, {}, null, 50);
+  });
+
+  it("rejects a malformed cursor with VALIDATION_FAILED rather than crashing", async () => {
+    await expect(pullStockMovements(tenantId, "not-a-real-cursor!!", 50)).rejects.toMatchObject({
+      status: 422,
+      code: "VALIDATION_FAILED",
+    });
+  });
+});
+
+describe("pullSales", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  const sale = (id: string, completedAt: Date) => ({
+    id,
+    status: "completed",
+    tradingDayId: null,
+    customerId: null,
+    provisionalInvoiceNumber: "DEV-2026-000001",
+    canonicalInvoiceNumber: null,
+    financialYear: null,
+    subtotalMinorUnits: BigInt(100),
+    discountTotalMinorUnits: BigInt(0),
+    taxTotalMinorUnits: BigInt(0),
+    taxRegistrationTypeAtSale: null,
+    grandTotalMinorUnits: BigInt(100),
+    completedAt,
+    createdAt: completedAt,
+    lineItems: [],
+    payments: [],
+  });
+
+  it("returns has_more true and a next_cursor from the last row when more exist beyond limit", async () => {
+    const rows = [
+      sale("s1", new Date("2026-08-01T00:00:00Z")),
+      sale("s2", new Date("2026-08-02T00:00:00Z")),
+      sale("s3", new Date("2026-08-03T00:00:00Z")),
+    ];
+    vi.mocked(repository.listSalesForSync).mockResolvedValue(rows as never);
+    vi.mocked(posService.formatSale).mockImplementation((s) => ({ id: s.id }) as never);
+
+    const result = await pullSales(tenantId, undefined, 2);
+
+    expect(result.data).toHaveLength(2);
+    expect(result.has_more).toBe(true);
+    expect(result.next_cursor).not.toBeNull();
+  });
+
+  it("includes created_at alongside formatSale's own shape", async () => {
+    const completedAt = new Date("2026-08-01T00:00:00Z");
+    vi.mocked(repository.listSalesForSync).mockResolvedValue([sale("s1", completedAt)] as never);
+    vi.mocked(posService.formatSale).mockReturnValue({ id: "s1" } as never);
+
+    const result = await pullSales(tenantId, undefined, 50);
+
+    expect(result.data[0]).toMatchObject({ id: "s1", created_at: completedAt.toISOString() });
+  });
+
+  it("echoes the caller's own cursor back, not null, when no new sales exist since it", async () => {
+    vi.mocked(repository.listSalesForSync).mockResolvedValue([]);
+    const completedAt = new Date("2026-08-01T00:00:00Z");
+    const cursor = Buffer.from(`${completedAt.toISOString()}|s1`).toString("base64url");
+
+    const result = await pullSales(tenantId, cursor, 50);
+
+    expect(result.next_cursor).toBe(cursor);
+  });
+
+  it("rejects a malformed cursor with VALIDATION_FAILED rather than crashing", async () => {
+    await expect(pullSales(tenantId, "not-a-real-cursor!!", 50)).rejects.toMatchObject({
+      status: 422,
+      code: "VALIDATION_FAILED",
     });
   });
 });

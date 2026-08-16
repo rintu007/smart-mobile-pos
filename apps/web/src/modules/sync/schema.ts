@@ -31,10 +31,11 @@ export type SyncPushOperation = z.infer<typeof syncPushOperationSchema>;
 export type SyncPushRequest = z.infer<typeof syncPushRequestSchema>;
 
 // docs/modules/sync-engine/specification.md §5 — query params for GET /api/v1/sync/pull.
-// `entity_type` is `'products'` only this sprint — sync-api.md §6 documents eight, of which this
-// is the first ever implemented.
+// `stock_movements`/`sales` added Sprint 36 (backlog.md M4 item 1) — the "reporting parity across
+// devices" pull sync-api.md §6 has named since Phase 11 but never implemented; Reports (M4 item 2)
+// depends on it. `entity_type` now covers 3 of sync-api.md §6's eight documented values.
 export const syncPullQuerySchema = z.object({
-  entity_type: z.enum(["products"]),
+  entity_type: z.enum(["products", "stock_movements", "sales"]),
   cursor: z.string().optional(),
   limit: z.coerce.number().int().positive().max(200).default(50),
 });
