@@ -45,6 +45,7 @@ describe("createSale", () => {
     const created = {
       id: saleId,
       status: "completed",
+      tradingDayId: null,
       provisionalInvoiceNumber: input.provisional_invoice_number,
       canonicalInvoiceNumber: BigInt(1),
       financialYear: "2026",
@@ -117,6 +118,7 @@ describe("createSale", () => {
     const existing = {
       id: saleId,
       status: "completed",
+      tradingDayId: null,
       provisionalInvoiceNumber: input.provisional_invoice_number,
       canonicalInvoiceNumber: BigInt(1),
       financialYear: "2026",
@@ -138,6 +140,61 @@ describe("createSale", () => {
 
     expect(result.id).toBe(saleId);
     expect(repository.findProductsByIds).not.toHaveBeenCalled();
+    expect(repository.createSale).not.toHaveBeenCalled();
+  });
+
+  it("succeeds with no trading_day_id supplied at all -- the gate is deliberately not enforced yet", async () => {
+    vi.mocked(repository.createSale).mockResolvedValue({
+      id: saleId,
+      status: "completed",
+      tradingDayId: null,
+      provisionalInvoiceNumber: input.provisional_invoice_number,
+      canonicalInvoiceNumber: BigInt(1),
+      financialYear: "2026",
+      subtotalMinorUnits: BigInt(5600),
+      grandTotalMinorUnits: BigInt(5600),
+      completedAt: new Date("2026-08-01T00:00:00Z"),
+      lineItems: [],
+      payments: [],
+    } as never);
+
+    await createSale(authUserId, tenantId, input);
+
+    expect(repository.findOpenTradingDayById).not.toHaveBeenCalled();
+  });
+
+  it("links a supplied trading_day_id that resolves to an open day at this store", async () => {
+    const tradingDayId = "77777777-7777-4777-8777-777777777777";
+    vi.mocked(repository.findOpenTradingDayById).mockResolvedValue({ id: tradingDayId } as never);
+    vi.mocked(repository.createSale).mockResolvedValue({
+      id: saleId,
+      status: "completed",
+      tradingDayId,
+      provisionalInvoiceNumber: input.provisional_invoice_number,
+      canonicalInvoiceNumber: BigInt(1),
+      financialYear: "2026",
+      subtotalMinorUnits: BigInt(5600),
+      grandTotalMinorUnits: BigInt(5600),
+      completedAt: new Date("2026-08-01T00:00:00Z"),
+      lineItems: [],
+      payments: [],
+    } as never);
+
+    const result = await createSale(authUserId, tenantId, { ...input, trading_day_id: tradingDayId });
+
+    expect(repository.findOpenTradingDayById).toHaveBeenCalledWith(tenantId, storeId, tradingDayId);
+    expect(repository.createSale).toHaveBeenCalledWith(
+      expect.objectContaining({ tradingDayId }),
+    );
+    expect(result.trading_day_id).toBe(tradingDayId);
+  });
+
+  it("rejects a supplied trading_day_id that doesn't resolve to an open day here with TRADING_DAY_NOT_OPEN", async () => {
+    vi.mocked(repository.findOpenTradingDayById).mockResolvedValue(null);
+
+    await expect(
+      createSale(authUserId, tenantId, { ...input, trading_day_id: "88888888-8888-4888-8888-888888888888" }),
+    ).rejects.toMatchObject({ status: 409, code: "TRADING_DAY_NOT_OPEN" });
     expect(repository.createSale).not.toHaveBeenCalled();
   });
 });

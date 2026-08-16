@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 11 — API Design
-> **Version:** 0.1.6
+> **Version:** 0.1.7
 > **Last updated:** 2026-08-14
 > **Owner:** Principal Next.js Engineer
 > **Approved by:** _pending_
@@ -52,7 +52,7 @@ single complete list, not a duplicate source of truth — module documents link 
 | `CATEGORY_IN_USE`, `BARCODE_ALREADY_ASSIGNED`, `SKU_ALREADY_ASSIGNED`, `UNIT_FRACTIONAL_FLAG_LOCKED` | [catalogue.md](endpoints/catalogue.md) |
 | `ADJUSTMENT_REASON_REQUIRED`, `DIRECT_SALE_MOVEMENT_FORBIDDEN` | [inventory.md](endpoints/inventory.md) |
 | `CUSTOMER_IDENTIFIER_REQUIRED`, `PHONE_ALREADY_ASSIGNED` | [customers.md](endpoints/customers.md) |
-| `TRADING_DAY_NOT_OPEN`, `TRADING_DAY_ALREADY_OPEN`, `SALE_IMMUTABLE` | [sales.md](endpoints/sales.md) |
+| `TRADING_DAY_NOT_OPEN`, `TRADING_DAY_ALREADY_OPEN`, `TRADING_DAY_NOT_CLOSED`, `SALE_IMMUTABLE` | [sales.md](endpoints/sales.md) |
 | `RETURN_QUANTITY_EXCEEDS_SOLD`, `RETURN_ALREADY_DECIDED`, `ORIGINAL_SALE_NOT_FOUND` | [returns.md](endpoints/returns.md) |
 | `RECEIPT_TEMPLATE_MISSING_MANDATORY_FIELD`, `SETTINGS_CONFLICT`, `TAX_RATE_REQUIRES_STANDARD_MODE` | [settings.md](endpoints/settings.md) |
 
@@ -67,3 +67,4 @@ single complete list, not a duplicate source of truth — module documents link 
 | 0.1.4 | 2026-08-14 | Added `SKU_ALREADY_ASSIGNED` to the module-specific index — Sprint 19's `(tenant_id, sku)` unique constraint on `products` needed the same treatment `BARCODE_ALREADY_ASSIGNED` already got, rather than surfacing as an unhandled 500. |
 | 0.1.5 | 2026-08-14 | Sprint 23: `PERMISSION_DENIED` and `LAST_OWNER_CANNOT_BE_REMOVED` (both already reserved) implemented for the first time. Added `EMAIL_ALREADY_REGISTERED` to the module-specific index — `POST /users/invite`'s own Supabase-Admin duplicate-email rejection needed a named code, the same pattern `BARCODE_ALREADY_ASSIGNED`/`SKU_ALREADY_ASSIGNED` already set. |
 | 0.1.6 | 2026-08-14 | Sprint 25: `SETTINGS_CONFLICT` (already reserved) implemented for the first time. Added `TAX_RATE_REQUIRES_STANDARD_MODE` to the module-specific index — `PATCH /settings`'s own rejection of a nonzero tax rate outside `tax_mode: 'standard'` (settings/specification.md §5/§6). |
+| 0.1.7 | 2026-08-14 | Sprint 26: `TRADING_DAY_ALREADY_OPEN` (already reserved) implemented for the first time; `TRADING_DAY_NOT_OPEN` (already reserved) partially implemented — reachable only when `POST /sales`'s optional `trading_day_id` is supplied and invalid, not when omitted (trading-day/specification.md §1). Added `TRADING_DAY_NOT_CLOSED` to the module-specific index. |

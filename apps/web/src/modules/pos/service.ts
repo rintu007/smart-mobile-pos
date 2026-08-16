@@ -4,6 +4,25 @@ import { ApiError } from "@/core/errors/api-error";
 import * as repository from "./repository";
 import type { CreateSaleRequest } from "./schema";
 
+// docs/modules/trading-day/specification.md §1 — full-V1-shape rejection of an unresolvable
+// trading_day_id: distinct from "no store found" (NOT_FOUND) because the day may genuinely exist
+// under this tenant, just not open (or not at this store) right now.
+async function assertTradingDayOpenIfProvided(
+  tenantId: string,
+  storeId: string,
+  tradingDayId: string | undefined,
+) {
+  if (tradingDayId === undefined) return;
+  const tradingDay = await repository.findOpenTradingDayById(tenantId, storeId, tradingDayId);
+  if (!tradingDay) {
+    throw new ApiError(
+      409,
+      "TRADING_DAY_NOT_OPEN",
+      "trading_day_id does not refer to an open trading day at this store.",
+    );
+  }
+}
+
 // Business rules live here, not in the Route Handler — docs/08-folder-structure/backend-structure.md §2.
 
 // Exported for reuse by sales-invoices/service.ts (GET /sales/{id}, GET /sales/lookup) — the
@@ -13,6 +32,7 @@ import type { CreateSaleRequest } from "./schema";
 export function formatSale(sale: {
   id: string;
   status: string;
+  tradingDayId: string | null;
   provisionalInvoiceNumber: string;
   canonicalInvoiceNumber: bigint | null;
   financialYear: string | null;
@@ -30,6 +50,7 @@ export function formatSale(sale: {
   return {
     id: sale.id,
     status: sale.status,
+    trading_day_id: sale.tradingDayId,
     provisional_invoice_number: sale.provisionalInvoiceNumber,
     // docs/modules/sales-invoices/specification.md §1 — never actually null for a stored sale in
     // this implementation, but the conversion still guards `null` since the column itself is
@@ -70,6 +91,8 @@ export async function createSale(
   if (existing) {
     return formatSale(existing);
   }
+
+  await assertTradingDayOpenIfProvided(tenantId, input.store_id, input.trading_day_id);
 
   const productIds = input.line_items.map((item) => item.product_id);
   const products = await repository.findProductsByIds(tenantId, productIds);
@@ -132,6 +155,7 @@ export async function createSale(
     tenantId,
     storeId: input.store_id,
     createdBy,
+    tradingDayId: input.trading_day_id,
     provisionalInvoiceNumber: input.provisional_invoice_number,
     subtotalMinorUnits: grandTotalMinorUnits,
     grandTotalMinorUnits,

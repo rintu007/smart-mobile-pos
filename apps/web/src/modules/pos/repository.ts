@@ -27,11 +27,16 @@ export function findProductsByIds(tenantId: string, ids: string[]) {
   });
 }
 
+export function findOpenTradingDayById(tenantId: string, storeId: string, id: string) {
+  return prisma.tradingDay.findFirst({ where: { id, tenantId, storeId, status: "open" } });
+}
+
 export interface CreateSaleInput {
   id: string;
   tenantId: string;
   storeId: string;
   createdBy: string;
+  tradingDayId?: string;
   provisionalInvoiceNumber: string;
   subtotalMinorUnits: bigint;
   grandTotalMinorUnits: bigint;
@@ -78,6 +83,7 @@ export function createSale(input: CreateSaleInput) {
         tenantId: input.tenantId,
         storeId: input.storeId,
         status: "completed",
+        tradingDayId: input.tradingDayId,
         provisionalInvoiceNumber: input.provisionalInvoiceNumber,
         canonicalInvoiceNumber,
         financialYear,
