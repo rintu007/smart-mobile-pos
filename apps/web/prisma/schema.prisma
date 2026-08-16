@@ -46,6 +46,7 @@ model Tenant {
   userStoreRoles   UserStoreRole[]
   invoiceSequences InvoiceSequence[]
   shopSettings     ShopSettings?
+  tradingDays      TradingDay[]
 
   @@map("tenants")
 }
@@ -72,6 +73,7 @@ model Store {
   stockMovements  StockMovement[]
   auditLogEntries AuditLog[]
   userStoreRoles  UserStoreRole[]
+  tradingDays     TradingDay[]
 
   @@index([tenantId])
   @@map("stores")
@@ -103,6 +105,8 @@ model User {
   unitsCreated          Unit[]
   roleAssignments       UserStoreRole[] @relation("UserStoreRoleUser")
   roleAssignmentsMade   UserStoreRole[] @relation("UserStoreRoleAssigner")
+  tradingDaysCreated    TradingDay[]    @relation("TradingDayCreator")
+  tradingDaysReopened   TradingDay[]    @relation("TradingDayReopener")
 
   @@index([tenantId])
   @@map("users")
@@ -172,14 +176,18 @@ model Product {
 }
 
 /// M0-minimal slice of docs/07-database/schema-server.md's `sales` table — cash-only, no
-/// discount/tax. `trading_day_id`/`device_id`/`customer_id`/`canonical_invoice_number`/
-/// `tax_registration_type_at_sale`/`tax_total_minor_units`/`discount_total_minor_units` are real
-/// columns in the full V1 design but are added once Trading Day/device-registration/Customers/
-/// tax-and-discount (M1/M2) exist, per docs/modules/pos/specification.md §1/§3.
+/// discount/tax. `device_id`/`customer_id`/`tax_registration_type_at_sale`/`tax_total_minor_units`/
+/// `discount_total_minor_units` are real columns in the full V1 design but are added once
+/// device-registration/Customers/tax-and-discount (M2) exist, per docs/modules/pos/specification.md §1/§3.
 model Sale {
   id                       String   @id @db.Uuid
   tenantId                 String   @map("tenant_id") @db.Uuid
   storeId                  String   @map("store_id") @db.Uuid
+  /// Added Sprint 26 (backlog.md M2 item 2) — nullable, linked when the client supplies it, but not
+  /// yet required: docs/modules/trading-day/specification.md §1's named, dated decision not to gate
+  /// POST /sales on an open trading day until the mobile till screen is updated to open one first,
+  /// to avoid regressing the one live, working end-to-end sale flow this project has (Sprint 16).
+  tradingDayId             String?  @map("trading_day_id") @db.Uuid
   /// Always 'completed' this sprint — draft/held/cancelled are real server states a future
   /// milestone's UI produces (hold/resume is M2 scope).
   status                   String
@@ -201,11 +209,12 @@ model Sale {
   createdAt                DateTime @default(now()) @map("created_at") @db.Timestamptz
   createdBy                String   @map("created_by") @db.Uuid
 
-  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  store     Store          @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  user      User           @relation(fields: [createdBy], references: [id], onDelete: Restrict)
-  lineItems SaleLineItem[]
-  payments  SalePayment[]
+  tenant     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  store      Store          @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  user       User           @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  tradingDay TradingDay?    @relation(fields: [tradingDayId], references: [id], onDelete: Restrict)
+  lineItems  SaleLineItem[]
+  payments   SalePayment[]
 
   // Sprint 24: provisional-number uniqueness closes a real, pre-existing gap (identifiers.md §2
   // already documented it as a business-meaningful identifier, but M0 never enforced it).
@@ -259,6 +268,41 @@ model ShopSettings {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@map("shop_settings")
+}
+
+/// docs/07-database/schema-server.md's `trading_days` (Context 5) minus `device_id` — Sprint 26
+/// (backlog.md M2 item 2) scopes "is there an open day" by (tenant_id, store_id) instead, a named,
+/// dated deviation: no `devices` table exists, and offline-workflows.md's own Finding 2 already
+/// frames per-device as a sidestep of the real "one physical drawer" model, not the more-correct
+/// one. See docs/modules/trading-day/specification.md §1 for the full reasoning. The one-open-day-
+/// per-store invariant is enforced by a hand-edited partial unique index in this migration
+/// (`trading_days_one_open_per_store`), not expressible in Prisma's schema DSL — a correctness
+/// guard against a real race (two concurrent `open` calls), not merely a query-speed optimisation.
+model TradingDay {
+  id                      String    @id @db.Uuid
+  tenantId                String    @map("tenant_id") @db.Uuid
+  storeId                 String    @map("store_id") @db.Uuid
+  /// 'open' | 'closed' — no CHECK constraint, matching Sale.status/ShopSettings.taxMode's own
+  /// precedent of relying on application code (Zod) for a small fixed-value set.
+  status                  String
+  startingFloatMinorUnits BigInt    @map("starting_float_minor_units")
+  countedCashMinorUnits   BigInt?   @map("counted_cash_minor_units")
+  expectedCashMinorUnits  BigInt?   @map("expected_cash_minor_units")
+  varianceMinorUnits      BigInt?   @map("variance_minor_units")
+  closedAt                DateTime? @map("closed_at") @db.Timestamptz
+  reopenedAt              DateTime? @map("reopened_at") @db.Timestamptz
+  reopenedBy              String?   @map("reopened_by") @db.Uuid
+  createdAt               DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  createdBy               String    @map("created_by") @db.Uuid
+
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  store    Store  @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  creator  User   @relation("TradingDayCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  reopener User?  @relation("TradingDayReopener", fields: [reopenedBy], references: [id], onDelete: SetNull)
+  sales    Sale[]
+
+  @@index([tenantId, storeId, status])
+  @@map("trading_days")
 }
 
 /// M0-minimal slice of docs/07-database/schema-server.md's `sale_line_items` — omits `variant_id`
