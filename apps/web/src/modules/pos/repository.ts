@@ -40,6 +40,8 @@ export interface CreateSaleInput {
   provisionalInvoiceNumber: string;
   subtotalMinorUnits: bigint;
   discountTotalMinorUnits: bigint;
+  taxTotalMinorUnits: bigint;
+  taxRegistrationTypeAtSale: string;
   grandTotalMinorUnits: bigint;
   lineItems: {
     id: string;
@@ -47,6 +49,8 @@ export interface CreateSaleInput {
     quantity: number;
     unitPriceMinorUnits: bigint;
     lineDiscountMinorUnits: bigint;
+    taxRateBasisPoints: number;
+    lineTaxMinorUnits: bigint;
     lineTotalMinorUnits: bigint;
   }[];
   payment: { id: string; method: string; amountMinorUnits: bigint };
@@ -91,6 +95,8 @@ export function createSale(input: CreateSaleInput) {
         financialYear,
         subtotalMinorUnits: input.subtotalMinorUnits,
         discountTotalMinorUnits: input.discountTotalMinorUnits,
+        taxTotalMinorUnits: input.taxTotalMinorUnits,
+        taxRegistrationTypeAtSale: input.taxRegistrationTypeAtSale,
         grandTotalMinorUnits: input.grandTotalMinorUnits,
         completedAt,
         createdBy: input.createdBy,
@@ -101,6 +107,8 @@ export function createSale(input: CreateSaleInput) {
             quantity: item.quantity,
             unitPriceMinorUnits: item.unitPriceMinorUnits,
             lineDiscountMinorUnits: item.lineDiscountMinorUnits,
+            taxRateBasisPoints: item.taxRateBasisPoints,
+            lineTaxMinorUnits: item.lineTaxMinorUnits,
             lineTotalMinorUnits: item.lineTotalMinorUnits,
           })),
         },
@@ -151,6 +159,7 @@ export function createSale(input: CreateSaleInput) {
           canonical_invoice_number: Number(canonicalInvoiceNumber),
           subtotal_minor_units: Number(input.subtotalMinorUnits),
           discount_total_minor_units: Number(input.discountTotalMinorUnits),
+          tax_total_minor_units: Number(input.taxTotalMinorUnits),
           grand_total_minor_units: Number(input.grandTotalMinorUnits),
           completed_at: completedAt.toISOString(),
         },

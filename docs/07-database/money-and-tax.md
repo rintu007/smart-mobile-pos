@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 07 — Database Design
-> **Version:** 0.2.0
+> **Version:** 0.3.0
 > **Last updated:** 2026-08-14
 > **Owner:** PostgreSQL Architect / CTO
 > **Approved by:** _pending_
@@ -110,6 +110,26 @@ the cost of the *effective* rate on the rounded taxable value being very slightl
 accepted, standard trade-off, stated explicitly here rather than left as an unexplained discrepancy
 if someone checks the arithmetic by hand later.
 
+## 4a. Inclusive pricing combined with a discount (correction, found 2026-08-14 building Tax computation)
+
+§3's worked example (exclusive pricing) includes a discount; §4's (inclusive pricing) doesn't — the
+combination was never specified. Resolved here as the natural composition of §1's rule ("a discount
+reduces the taxable value") with §4's rule ("tax is the residual of gross minus taxable"), not a new
+rule of its own:
+
+```
+line_gross_minor_units        = ROUND(unit_price_minor_units × quantity, rounding_rule)   (tax-inclusive)
+line_gross_after_discount     = line_gross_minor_units − line_discount_minor_units
+line_taxable_value            = ROUND(line_gross_after_discount × 10000 / (10000 + tax_rate_basis_points), rounding_rule)
+line_tax_minor_units          = line_gross_after_discount − line_taxable_value             (residual, per §4)
+line_total_minor_units        = line_gross_after_discount
+```
+
+The discount is subtracted from the tax-inclusive gross **before** the residual split runs — the
+same "discount reduces the taxable value" intent as the exclusive case, applied at the point in the
+calculation where a tax-inclusive price actually lives (the gross), not invented specially for this
+case.
+
 ## 5. What this document does not decide
 
 The **default** tax rates and rounding rule per business type, and the exact list of supported tax
@@ -123,3 +143,4 @@ GST-practitioner review before being treated as compliant, per
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial money/tax arithmetic specification with worked exclusive and inclusive examples. Discount-before-tax rule stated explicitly for the first time. |
 | 0.2.0 | 2026-08-14 | Correction found decomposing M2 (backlog.md): added §2a naming `tax_rate_basis_points`'s source — a single shop-wide flat rate in V1 (schema-server.md's `shop_settings.tax_rate_basis_points`), not the per-product/per-HSN rate this document's own worked example implies. §3's mixed-rate example is now flagged as the deferred V2+ target, not what V1 actually produces. |
+| 0.3.0 | 2026-08-14 | Correction found building Sprint 28's Tax computation (backlog.md M2 item 4): added §4a — inclusive pricing combined with a discount on the same line was never specified (§3's discount example is exclusive-only, §4's inclusive example has no discount). Resolved as the natural composition of §1's and §4's already-accepted rules, not a new one: the discount is subtracted from the tax-inclusive gross before the residual tax split runs. |

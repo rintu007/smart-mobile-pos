@@ -47,10 +47,23 @@ const createdSale = (overrides: Partial<Record<string, unknown>> = {}) => ({
   financialYear: "2026",
   subtotalMinorUnits: BigInt(5600),
   discountTotalMinorUnits: BigInt(0),
+  taxTotalMinorUnits: BigInt(0),
+  taxRegistrationTypeAtSale: "unregistered",
   grandTotalMinorUnits: BigInt(5600),
   completedAt: new Date("2026-08-01T00:00:00Z"),
   lineItems: [],
   payments: [],
+  ...overrides,
+});
+
+// Matches Sprint 25's own onboarding defaults (unregistered, 0 rate, exclusive) so every
+// pre-existing discount test's arithmetic is unaffected by tax's arrival.
+const moneySettings = (overrides: Partial<Record<string, unknown>> = {}) => ({
+  roundingRule: "round_half_up",
+  discountAutoApprovalThresholdMinorUnits: BigInt(50000),
+  taxMode: "unregistered",
+  taxRateBasisPoints: 0,
+  pricingMode: "exclusive",
   ...overrides,
 });
 
@@ -60,10 +73,7 @@ describe("createSale", () => {
     vi.mocked(identityService.resolveUserId).mockResolvedValue(userId);
     vi.mocked(repository.findSaleById).mockResolvedValue(null);
     vi.mocked(repository.findProductsByIds).mockResolvedValue([product] as never);
-    vi.mocked(settingsService.getMoneySettings).mockResolvedValue({
-      roundingRule: "round_half_up",
-      discountAutoApprovalThresholdMinorUnits: BigInt(50000),
-    });
+    vi.mocked(settingsService.getMoneySettings).mockResolvedValue(moneySettings());
     vi.mocked(rolesService.resolveActiveRole).mockResolvedValue("cashier");
   });
 
@@ -259,10 +269,9 @@ describe("createSale", () => {
     });
 
     it("applies an at-threshold discount with no approver needed", async () => {
-      vi.mocked(settingsService.getMoneySettings).mockResolvedValue({
-        roundingRule: "round_half_up",
-        discountAutoApprovalThresholdMinorUnits: BigInt(560),
-      });
+      vi.mocked(settingsService.getMoneySettings).mockResolvedValue(
+        moneySettings({ discountAutoApprovalThresholdMinorUnits: BigInt(560) }),
+      );
       const atThreshold = {
         ...input,
         line_items: [
@@ -284,10 +293,9 @@ describe("createSale", () => {
     });
 
     it("rejects an over-threshold discount from a Cashier with no discount_approved_by", async () => {
-      vi.mocked(settingsService.getMoneySettings).mockResolvedValue({
-        roundingRule: "round_half_up",
-        discountAutoApprovalThresholdMinorUnits: BigInt(100),
-      });
+      vi.mocked(settingsService.getMoneySettings).mockResolvedValue(
+        moneySettings({ discountAutoApprovalThresholdMinorUnits: BigInt(100) }),
+      );
       vi.mocked(rolesService.resolveActiveRole).mockResolvedValue("cashier");
       const overThreshold = {
         ...input,
@@ -309,10 +317,9 @@ describe("createSale", () => {
     });
 
     it("allows an over-threshold discount when the caller's own session is Manager/Owner", async () => {
-      vi.mocked(settingsService.getMoneySettings).mockResolvedValue({
-        roundingRule: "round_half_up",
-        discountAutoApprovalThresholdMinorUnits: BigInt(100),
-      });
+      vi.mocked(settingsService.getMoneySettings).mockResolvedValue(
+        moneySettings({ discountAutoApprovalThresholdMinorUnits: BigInt(100) }),
+      );
       vi.mocked(rolesService.resolveActiveRole).mockResolvedValue("manager");
       const overThreshold = {
         ...input,
@@ -334,10 +341,9 @@ describe("createSale", () => {
     });
 
     it("allows an over-threshold discount when discount_approved_by resolves to an active Manager/Owner", async () => {
-      vi.mocked(settingsService.getMoneySettings).mockResolvedValue({
-        roundingRule: "round_half_up",
-        discountAutoApprovalThresholdMinorUnits: BigInt(100),
-      });
+      vi.mocked(settingsService.getMoneySettings).mockResolvedValue(
+        moneySettings({ discountAutoApprovalThresholdMinorUnits: BigInt(100) }),
+      );
       vi.mocked(rolesService.resolveActiveRole).mockImplementation(async (_t, uid) =>
         uid === approverId ? "owner" : "cashier",
       );
@@ -362,10 +368,9 @@ describe("createSale", () => {
     });
 
     it("rejects an over-threshold discount when discount_approved_by resolves to an insufficient role", async () => {
-      vi.mocked(settingsService.getMoneySettings).mockResolvedValue({
-        roundingRule: "round_half_up",
-        discountAutoApprovalThresholdMinorUnits: BigInt(100),
-      });
+      vi.mocked(settingsService.getMoneySettings).mockResolvedValue(
+        moneySettings({ discountAutoApprovalThresholdMinorUnits: BigInt(100) }),
+      );
       vi.mocked(rolesService.resolveActiveRole).mockResolvedValue("cashier");
       const overThreshold = {
         ...input,
@@ -385,6 +390,87 @@ describe("createSale", () => {
         code: "DISCOUNT_REQUIRES_APPROVAL",
       });
       expect(repository.createSale).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("tax", () => {
+    it("computes exclusive-pricing tax on the post-discount taxable value", async () => {
+      // subtotal 5600, 10% discount (560) -> taxable 5040, 18% tax = ROUND(5040*0.18) = 907.2 -> 907
+      vi.mocked(settingsService.getMoneySettings).mockResolvedValue(
+        moneySettings({ taxMode: "standard", taxRateBasisPoints: 1800, pricingMode: "exclusive" }),
+      );
+      const discounted = {
+        ...input,
+        line_items: [
+          {
+            product_id: productId,
+            quantity: 2,
+            client_unit_price_minor_units: 2800,
+            discount_percent_basis_points: 1000,
+          },
+        ],
+        payments: [{ method: "cash" as const, amount_minor_units: 5947 }],
+      };
+      vi.mocked(repository.createSale).mockResolvedValue(createdSale() as never);
+
+      await createSale(authUserId, tenantId, discounted);
+
+      expect(repository.createSale).toHaveBeenCalledWith(
+        expect.objectContaining({
+          subtotalMinorUnits: BigInt(5040),
+          taxTotalMinorUnits: BigInt(907),
+          grandTotalMinorUnits: BigInt(5947),
+          taxRegistrationTypeAtSale: "standard",
+          lineItems: [
+            expect.objectContaining({
+              taxRateBasisPoints: 1800,
+              lineTaxMinorUnits: BigInt(907),
+              lineTotalMinorUnits: BigInt(5947),
+            }),
+          ],
+        }),
+      );
+    });
+
+    it("computes inclusive-pricing tax via the residual method, discount applied to the gross first", async () => {
+      // unit price 2800 (tax-inclusive) x2 = 5600 gross, no discount, 5% tax:
+      // taxable = ROUND(5600*10000/10500) = ROUND(5333.33) = 5333, tax = 5600-5333 = 267
+      vi.mocked(settingsService.getMoneySettings).mockResolvedValue(
+        moneySettings({ taxMode: "standard", taxRateBasisPoints: 500, pricingMode: "inclusive" }),
+      );
+      const withTax = { ...input, payments: [{ method: "cash" as const, amount_minor_units: 5600 }] };
+      vi.mocked(repository.createSale).mockResolvedValue(createdSale() as never);
+
+      await createSale(authUserId, tenantId, withTax);
+
+      expect(repository.createSale).toHaveBeenCalledWith(
+        expect.objectContaining({
+          subtotalMinorUnits: BigInt(5333),
+          taxTotalMinorUnits: BigInt(267),
+          grandTotalMinorUnits: BigInt(5600),
+          lineItems: [
+            expect.objectContaining({ lineTaxMinorUnits: BigInt(267), lineTotalMinorUnits: BigInt(5600) }),
+          ],
+        }),
+      );
+    });
+
+    it("computes zero tax under tax_mode unregistered even if a rate were somehow nonzero", async () => {
+      vi.mocked(settingsService.getMoneySettings).mockResolvedValue(
+        moneySettings({ taxMode: "unregistered", taxRateBasisPoints: 0, pricingMode: "exclusive" }),
+      );
+      vi.mocked(repository.createSale).mockResolvedValue(createdSale() as never);
+
+      await createSale(authUserId, tenantId, input);
+
+      expect(repository.createSale).toHaveBeenCalledWith(
+        expect.objectContaining({
+          taxTotalMinorUnits: BigInt(0),
+          taxRegistrationTypeAtSale: "unregistered",
+          subtotalMinorUnits: BigInt(5600),
+          grandTotalMinorUnits: BigInt(5600),
+        }),
+      );
     });
   });
 });

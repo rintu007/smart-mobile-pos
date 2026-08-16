@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 11 — API Design
-> **Version:** 0.4.0
+> **Version:** 0.5.0
 > **Last updated:** 2026-08-14
 > **Owner:** Principal Next.js Engineer
 > **Approved by:** _pending_
@@ -50,6 +50,23 @@ schema trigger in [schema-server.md](../../07-database/schema-server.md). A `dra
 is mutated only on the client until the moment it completes; a held/draft cart is not itself synced
 to the server as a partial row — see [sync-api.md](../sync-api.md) for exactly what crosses the
 wire and when.
+
+## Implementation note (Sprint 28, [pos/specification.md](../../modules/pos/specification.md))
+
+**Tax computation needs no new request field at all** — `tax_mode`/`tax_rate_basis_points`/
+`pricing_mode`/`rounding_rule` are read straight from `shop_settings`, never client-supplied, per
+[DR-008](../../03-functional-requirements/business-rules.md). Response gains
+`tax_total_minor_units`, `tax_registration_type_at_sale` (a snapshot of `shop_settings.tax_mode` at
+creation), and per line `tax_rate_basis_points`/`tax_minor_units`. Both `pricing_mode`s are live:
+exclusive computes tax by multiplying the post-discount taxable value by the rate; inclusive splits
+the tax-inclusive gross (after discount) into taxable/tax via the residual method
+([money-and-tax.md §4](../../07-database/money-and-tax.md#4-worked-example--inclusive-pricing-tax-already-in-the-displayed-price)).
+A real design gap found building this, resolved as a dated correction to money-and-tax.md §4a: the
+inclusive-pricing worked example never covered a line that also carries a discount — resolved as
+the natural composition of "discount reduces the taxable value" with "tax is the gross's residual,"
+not a new rule. `tax_mode: 'composition'`/`'unregistered'` produces zero tax by construction, since
+`PATCH /settings` already forces `tax_rate_basis_points` to `0` outside `'standard'` — this endpoint
+trusts that invariant rather than re-checking it.
 
 ## Implementation note (Sprint 27, [pos/specification.md](../../modules/pos/specification.md))
 
@@ -203,3 +220,4 @@ per [sync-api.md](../sync-api.md), rather than blocking the sale.
 | 0.2.0 | 2026-08-14 | Sprint 24 (backlog item 8): `GET /sales/{id}`, `GET /sales`, `GET /sales/lookup` built and live-verified (7/7); `POST /sales` now assigns `canonical_invoice_number`/`financial_year` atomically. Corrected: `canonical_invoice_number` is never actually `null` for a stored sale in this implementation (see the new implementation note). `GET /sales`'s "own device's trading day only" Cashier restriction adapted to "own sales they personally created," since neither `devices` nor `trading_days` exists in code. |
 | 0.3.0 | 2026-08-14 | Sprint 26 (backlog.md M2 item 2): `POST /trading-days/open`, `POST /trading-days/{id}/close`, `POST /trading-days/{id}/reopen` (new), `GET /trading-days/current` all built and live-verified (26/26). Trading Day re-scoped per-store, not per-device (a named, dated deviation — see the new implementation note). `POST /sales` gains an optional `trading_day_id`; the `TRADING_DAY_NOT_OPEN` hard gate is deliberately deferred to the sprint pairing this with the mobile till's own open-day flow. Added `TRADING_DAY_NOT_CLOSED`. |
 | 0.4.0 | 2026-08-14 | Sprint 27 (backlog.md M2 item 3): per-line Discount built and live-verified — `discount_percent_basis_points`/`discount_amount_minor_units` (DR-011), `discount_approved_by` (DR-012), `DISCOUNT_REQUIRES_APPROVAL`. Corrected `subtotal_minor_units` to money-and-tax.md's always-specified post-discount, pre-tax meaning. |
+| 0.5.0 | 2026-08-14 | Sprint 28 (backlog.md M2 item 4): Tax computation built and live-verified (20/20) — `tax_total_minor_units`/`tax_registration_type_at_sale`/per-line `tax_rate_basis_points`/`tax_minor_units`, both exclusive and inclusive pricing modes, entirely settings-derived (no new request field). Found and resolved a real gap in money-and-tax.md's own worked examples: inclusive pricing combined with a discount was never specified. |
