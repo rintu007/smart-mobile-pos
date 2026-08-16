@@ -11,6 +11,7 @@ import '../features/catalogue/presentation/screens/add_product_screen.dart';
 import '../features/catalogue/presentation/screens/categories_screen.dart';
 import '../features/catalogue/presentation/screens/units_screen.dart';
 import '../features/pos/presentation/screens/barcode_scan_screen.dart';
+import '../features/pos/presentation/screens/held_carts_screen.dart';
 import '../features/pos/presentation/screens/till_screen.dart';
 import '../features/sales_history/presentation/screens/sale_detail_screen.dart';
 import '../features/sales_history/presentation/screens/sales_history_screen.dart';
@@ -75,6 +76,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/pos/scan',
         builder: (context, state) => const BarcodeScanScreen(),
+      ),
+      GoRoute(
+        path: '/pos/hold',
+        builder: (context, state) => const HeldCartsScreen(),
       ),
       GoRoute(
         path: '/sales-history',

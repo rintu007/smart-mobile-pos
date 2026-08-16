@@ -44,12 +44,16 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   // The first schema change was Sprint 20 (schemaVersion 1 -> 2); Sprint 21
   // (backlog.md item 5) adds `sku`/`barcode` to `products` for the till's
-  // offline barcode-scan lookup. Same non-destructive-migration discipline —
-  // a real founder device already has real local data.
+  // offline barcode-scan lookup; Sprint 30 (M2 item 6, Hold/Resume) adds
+  // `sales.created_at` — see sales.dart's own comment for why. Same
+  // non-destructive-migration discipline — a real founder device already
+  // has real local data. Existing `'completed'` rows get `created_at`
+  // backfilled from `completed_at` (a reasonable historical approximation,
+  // not a precision claim) rather than left null.
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => m.createAll(),
@@ -63,6 +67,12 @@ class AppDatabase extends _$AppDatabase {
       if (from < 3) {
         await m.addColumn(products, products.sku);
         await m.addColumn(products, products.barcode);
+      }
+      if (from < 4) {
+        await m.addColumn(sales, sales.createdAt);
+        await customStatement(
+          'UPDATE sales SET created_at = completed_at WHERE created_at IS NULL AND completed_at IS NOT NULL',
+        );
       }
     },
   );

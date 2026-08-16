@@ -8,6 +8,7 @@ import 'package:mobile/features/catalogue/presentation/providers/category_provid
 import 'package:mobile/features/catalogue/presentation/providers/product_providers.dart';
 import 'package:mobile/features/pos/domain/entities/cart_line.dart';
 import 'package:mobile/features/pos/domain/entities/completed_sale.dart';
+import 'package:mobile/features/pos/domain/entities/held_sale.dart';
 import 'package:mobile/features/pos/domain/entities/sale_detail.dart';
 import 'package:mobile/features/pos/domain/repositories/sale_repository.dart';
 import 'package:mobile/features/pos/presentation/providers/pos_providers.dart';
@@ -65,6 +66,54 @@ class _FakeSaleRepository implements SaleRepository {
 
   @override
   Future<SaleDetail?> getSaleDetail(String id) async => null;
+
+  // Sprint 30 (Hold/Resume) — a real, small in-memory model, not just
+  // stubs, since `CartController` now exercises these on every tap.
+  final Map<String, List<CartLine>> _drafts = {};
+  final Set<String> _held = {};
+
+  @override
+  Future<void> saveDraft({
+    required String id,
+    required String storeId,
+    required List<CartLine> lines,
+  }) async {
+    _drafts[id] = lines;
+  }
+
+  @override
+  Future<void> deleteDraft(String id) async {
+    _drafts.remove(id);
+    _held.remove(id);
+  }
+
+  @override
+  Future<void> holdSale(String id) async {
+    _held.add(id);
+  }
+
+  @override
+  Future<List<CartLine>?> resumeSale(String id) async {
+    if (!_held.contains(id)) return null;
+    _held.remove(id);
+    return _drafts[id];
+  }
+
+  @override
+  Future<List<HeldSale>> listHeldSales() async {
+    return _held
+        .map(
+          (id) => HeldSale(
+            id: id,
+            provisionalInvoiceNumber: 'DEV001-2026-000001',
+            itemCount: _drafts[id]?.length ?? 0,
+            grandTotalMinorUnits:
+                _drafts[id]?.fold<int>(0, (sum, line) => sum + line.lineTotalMinorUnits) ?? 0,
+            createdAt: DateTime(2026, 8, 12),
+          ),
+        )
+        .toList();
+  }
 }
 
 const _coffee = Product(id: 'product-1', name: 'Filter coffee', priceMinorUnits: 1500);
@@ -203,5 +252,34 @@ void main() {
 
     expect(find.byKey(const Key('pos_scan_barcode_button')), findsOneWidget);
     expect(await repository.findByBarcode('8901234567890'), _coffee);
+  });
+
+  testWidgets('the hold button is disabled while the cart is empty', (tester) async {
+    await tester.pumpWidget(_wrap(saleRepository: _FakeSaleRepository()));
+    await tester.pumpAndSettle();
+
+    final button = tester.widget<OutlinedButton>(find.byKey(const Key('pos_hold_button')));
+    expect(button.onPressed, isNull);
+  });
+
+  testWidgets('holding a cart clears it and marks the draft held', (tester) async {
+    final repository = _FakeSaleRepository();
+    await tester.pumpWidget(_wrap(saleRepository: repository));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('pos_product_product-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('pos_hold_button')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('pos_cart_empty')), findsOneWidget);
+    expect(await repository.listHeldSales(), hasLength(1));
+  });
+
+  testWidgets('the held-carts icon is present in the app bar', (tester) async {
+    await tester.pumpWidget(_wrap(saleRepository: _FakeSaleRepository()));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('pos_held_carts_button')), findsOneWidget);
   });
 }

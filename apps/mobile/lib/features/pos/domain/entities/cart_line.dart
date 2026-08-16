@@ -1,7 +1,10 @@
-/// One product's quantity in the in-progress cart. Not synced or persisted
-/// on its own — a cart only becomes durable when `completeSale` writes it as
-/// a `sales`/`sale_line_items` pair; per pos/specification.md §2, M0 has no
-/// hold/resume, so an abandoned cart simply disappears with the screen.
+/// One product's quantity in the in-progress cart. Never synced directly —
+/// only a `completed` sale's line items ever cross the wire (sales.md's own
+/// note). Since Sprint 30 (Hold/Resume), the cart itself *is* continuously
+/// persisted locally as a `draft`/`held` `sales`/`sale_line_items` pair, kept
+/// in sync with `CartController`'s state on every mutation
+/// (pos/specification.md §1/§2, navigation-model.md §4) — it no longer
+/// simply disappears with the screen.
 class CartLine {
   const CartLine({
     required this.productId,
