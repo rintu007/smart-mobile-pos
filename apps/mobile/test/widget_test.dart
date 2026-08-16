@@ -47,6 +47,25 @@ void main() {
     expect(find.text('Not synced yet this session.'), findsOneWidget);
   });
 
+  // Sprint 38 (backlog.md M4 item 3) — unlike Reports, the Settings entry
+  // point is always visible (Pattern B, settings_screen.dart's own
+  // docstring): no probe to override here, since none gates it.
+  testWidgets('always shows the Settings entry point', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(AppDatabase(NativeDatabase.memory())),
+          storeContextProvider.overrideWith((ref) async => 'fake-store-id'),
+          autoSyncOnStartProvider.overrideWith((ref) async {}),
+        ],
+        child: const MaterialApp(home: HomeScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('go_to_settings_button')), findsOneWidget);
+  });
+
   testWidgets('tapping "Sync now" shows the resulting summary', (WidgetTester tester) async {
     final db = AppDatabase(NativeDatabase.memory());
     final fakeRepository = SyncRepository(

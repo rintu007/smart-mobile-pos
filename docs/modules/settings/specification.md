@@ -5,8 +5,8 @@
 > **Slice:** V1, minimal — `shop_settings` table, a default row written at onboarding, `GET`/`PATCH
 > /settings` with the role-shaped read scope [settings.md](../../11-api/endpoints/settings.md)
 > already specifies (§1)
-> **Version:** 0.1.1
-> **Last updated:** 2026-08-14
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-16
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
 
@@ -58,6 +58,41 @@ for the full reasoning.
   the endpoint (it already isn't, by construction — `PATCH /settings` is not wired into
   `sync/push`'s operation-type union at all).
 
+**Sprint 38 addition (backlog.md M4 item 3): the mobile `/settings` screen.** Server-complete since
+this sprint's own Sprint 25 build, `GET`/`PATCH /settings` had never had a mobile UI at all — §9
+below, previously a placeholder, now describes it. Two things found while writing this update, not
+by writing code first:
+
+- **A spec-currency gap, unrelated to this sprint's own scope.** [Sprint 37](../../17-sprints/sprint-37.md)
+  (M4 item 2, Reports) added `shop_settings.low_stock_threshold_quantity` and wired it through
+  `getSettings`/`updateSettings`/`updateSettingsRequestSchema`, but never bumped this file's own
+  Change Log — the schema/service code and this document had silently drifted apart for two days.
+  Folded into this version rather than left for a future sprint to trip over: §3–§5 below now name
+  the field explicitly, same as the service code already does.
+- **A real design decision, not previously faced by any screen in this codebase twice the same
+  way.** Reports (Sprint 37) hid its entry point entirely for a role without access (Pattern A, no
+  network call exists at report-view time to surface a `403`). Settings has the opposite shape —
+  `GET /settings` is itself the network call this screen must make, already role-shapes its response
+  (thresholds omitted for a Cashier), and `PATCH /settings` already `403`s a non-Owner — so hiding
+  the entry point would duplicate a check the server already performs, for no correctness benefit.
+  Resolved as **Pattern B**: reachable by every role, same as `return_approvals_screen.dart`'s own
+  established precedent and reasoning. Named here since it is the same choice `return_approvals_screen.dart`
+  made, framed the same way, rather than re-derived from nothing.
+- **A related, smaller decision:** no local Drift cache for any of this screen's fields, unlike
+  `ShopSettingsCache` (Sprint 37's Reports-only cache, `low_stock_threshold_quantity` +
+  `canViewReports`). That cache exists for data read on nearly every sync cycle, offline, by design
+  (Reports' own FR-071–074 "fully offline" requirement); this screen is reached rarely, requires
+  connectivity to write by this module's own §2 rule, and gains nothing from a cache it would then
+  have to keep in sync with `PATCH /settings`' own response. `mobile/lib/features/settings/domain/repositories/settings_repository.dart`'s
+  own doc comment states this explicitly.
+- **route-map.md correction, found the same day:** its `/settings` row already said "Offline: Yes,"
+  but this screen has no local cache to serve a read from while offline — the row overstated actual
+  behaviour, corrected there directly (0.1.5), same shape as `/catalogue/units`' own 0.1.3
+  correction. Its `/settings/tax`/`/settings/currency` sub-routes are not built as separate routes
+  this sprint — consolidated into the one `/settings` screen, since `PATCH /settings`'s own
+  whole-row optimistic concurrency (§2) has no natural per-field-group boundary to split routes
+  along.
+
 ## 2. Business rules
 
 - **One row per tenant, `tenant_id` as its own primary key** — [schema-server.md](../../07-database/schema-server.md)'s
@@ -96,8 +131,10 @@ New table: `shop_settings`, matching [schema-server.md](../../07-database/schema
 documented shape plus this sprint's `tax_rate_basis_points` correction: `tenant_id` (PK, FK
 `tenants(id)` `ON DELETE CASCADE`), `tax_mode`, `tax_rate_basis_points`, `pricing_mode`,
 `rounding_rule`, `currency_code`, `discount_auto_approval_threshold_minor_units`,
-`return_auto_approval_threshold_minor_units`, `printer_config` (nullable `JSONB`),
-`receipt_template_config` (nullable `JSONB`), plus the standard `created_at`/`updated_at`/`created_by`
+`return_auto_approval_threshold_minor_units`, `low_stock_threshold_quantity` (added
+[Sprint 37](../../17-sprints/sprint-37.md), default `5` — see §1's Sprint 38 note), `printer_config`
+(nullable `JSONB`), `receipt_template_config` (nullable `JSONB`), plus the standard
+`created_at`/`updated_at`/`created_by`
 columns every Tier 1 table gets ([schema-server.md](../../07-database/schema-server.md)'s stated
 convention). No `CHECK` constraints on `tax_mode`/`pricing_mode`/`rounding_rule` in the migration
 itself — matching `stock_movements.movement_type`/`sales.status`'s own established precedent of
@@ -162,10 +199,36 @@ queue draining unpredictably.
 
 ## 9. UI specification
 
-None this sprint — `PATCH /settings` is a back-office, Owner-only action with no mobile screen yet
-(a `/settings` route per a future [route-map.md](../../09-navigation/route-map.md) addition is not
-built). No existing screen changes behaviour this sprint either: nothing yet reads
-`tax_mode`/`pricing_mode`/discount thresholds, since Discount/Tax (M2 items 3/4) haven't been built.
+**Built Sprint 38** (backlog.md M4 item 3). `/settings`, per
+[route-map.md](../../09-navigation/route-map.md) — a single screen, reachable by every signed-in
+role (§1's Pattern B decision), with a home-screen entry point (`go_to_settings_button`) that is
+always visible, unlike Reports' role-gated one.
+
+- On load, `GET /settings` populates a form: `tax_mode` (dropdown), `tax_rate_basis_points`
+  (shown/entered as a percentage), `pricing_mode` (dropdown), `rounding_rule` (dropdown),
+  `currency_code` (text), `low_stock_threshold_quantity` (integer text). The two auto-approval
+  threshold fields render only when the response includes them (Manager/Owner) — a Cashier's
+  role-shaped response simply omits the keys, so the fields never appear; no separate client-side
+  role check duplicates what the server already decided.
+- A single **Save** button is always present and always enabled (once loading finishes) regardless
+  of role — tapping it as a non-Owner reaches the server's own `403 PERMISSION_DENIED`, surfaced as
+  "Only the Owner can change settings." (§1's Pattern B).
+- **Client-side mirror of DR-009** (§2): if the selected `tax_mode` is not `standard` and the
+  entered rate is nonzero, submission is blocked locally with the same message the server's
+  `TAX_RATE_REQUIRES_STANDARD_MODE` rule would otherwise 422 on — a deterministic, already-documented
+  rule, cheap to check without a round trip.
+- **Whole-row optimistic concurrency, surfaced honestly:** the form is initialized from one `GET
+  /settings` response's `updated_at`, sent back unchanged as `base_updated_at` on `PATCH`. A `409
+  SETTINGS_CONFLICT` is shown as "Someone else changed these settings. Refresh and try again." and
+  discards the in-progress edit by re-fetching — the same "caller re-fetches and re-applies, never a
+  partial write" policy [conflict-resolution.md §4](../../13-offline-sync/conflict-resolution.md#4-the-one-deliberate-exception--shop_settings-does-not-field-merge)
+  already fixes server-side, mirrored client-side rather than attempting a merge UI this table's own
+  design explicitly rejects.
+- No offline read: `GET /settings` is a live call with no local cache (§1's design decision) — a
+  cold, offline app-open of `/settings` shows the same generic error state `daily_sales_report_screen.dart`
+  et al. use for any other load failure, not a stale-but-usable cached value.
+- `printer_config`/`receipt_template_config` are not rendered — deferred to M4 item 4 (printer
+  pairing + receipt template), same scope line §1 already draws for the server.
 
 ## 10. Test plan
 
@@ -207,6 +270,17 @@ built). No existing screen changes behaviour this sprint either: nothing yet rea
   enforced. Found by checking `pg_class.relrowsecurity` directly rather than trusting the script's
   own success output; fixed by executing that statement directly and re-verifying `true`.
 
+**Sprint 38 addition — mobile, `flutter test` only (no server change this sprint, so no new live
+verification against the real database; §9's `GET`/`PATCH /settings` themselves were already
+covered by the 26/26 above).** `settings_screen_test.dart` (8 cases): loading and error states;
+both auto-approval thresholds render for an Owner/Manager response and are absent for a Cashier
+response; a successful save reaches the repository with the exact submitted values and shows no
+error; a `403` shows the Owner-only message; a `409` shows the conflict message; the client-side
+DR-009 mirror blocks submission (and never calls the repository) when `tax_mode` is non-`standard`
+with a nonzero rate. `widget_test.dart` gains one case confirming the home screen's Settings entry
+point is unconditionally present (no provider override needed, unlike Reports' three probe-state
+cases). Total 227 mobile tests (were 218 after Sprint 37).
+
 ## 11. Traceability
 
 | Requirement | Covered by | Status |
@@ -215,8 +289,8 @@ built). No existing screen changes behaviour this sprint either: nothing yet rea
 | [DR-009](../../03-functional-requirements/business-rules.md) (composition/unregistered → no tax breakup) | §2, §5, §6 | Met — `tax_rate_basis_points` cannot be nonzero outside `'standard'` |
 | [DR-012](../../03-functional-requirements/business-rules.md) (discount auto-approval threshold, config half) | §2, §3 | Met — the threshold now exists and is readable/writable; the *enforcement* half is M2 item 3 (Discount), not this sprint |
 | [DR-021](../../03-functional-requirements/business-rules.md) (Owner-only settings configuration) | §4, §6 | Met |
-| [permission-matrix.md — Settings](../../05-personas/permission-matrix.md#settings) | §4 | Met for tax/rate/rounding/currency/thresholds; printer pairing and receipt-template configuration remain unbuilt (§1) |
-| [conflict-resolution.md §4](../../13-offline-sync/conflict-resolution.md#4-the-one-deliberate-exception--shop_settings-does-not-field-merge) (whole-row reject, no field merge) | §2, §6, §10 | Met |
+| [permission-matrix.md — Settings](../../05-personas/permission-matrix.md#settings) | §4, §9 | Met for tax/rate/rounding/currency/thresholds, server- and mobile-side; printer pairing and receipt-template configuration remain unbuilt (§1, M4 item 4) |
+| [conflict-resolution.md §4](../../13-offline-sync/conflict-resolution.md#4-the-one-deliberate-exception--shop_settings-does-not-field-merge) (whole-row reject, no field merge) | §2, §6, §9, §10 | Met — mirrored client-side (discard-and-refetch on `409`), not just server-enforced |
 | [seed-data.md](../../07-database/seed-data.md) (safest-universal-default framing) | §2 | Met for `tax_mode`; business-type-based per-vertical seeding remains a named, deferred gap |
 
 ## Change Log
@@ -225,3 +299,4 @@ built). No existing screen changes behaviour this sprint either: nothing yet rea
 | --- | --- | --- |
 | 0.1.0 | 2026-08-14 | First version — written to drive Sprint 25's implementation of Settings (backlog.md M2 item 1): `shop_settings` table, a default row written at onboarding, `GET`/`PATCH /settings` with role-shaped reads and whole-row optimistic concurrency. Two real gaps found and closed in the same pass: no `shop_settings` row was ever created anywhere in code (dependency-graph.md's "sensible defaults" assumption didn't hold), and neither `shop_settings` nor `products` ever named where DR-008's tax rate actually comes from (resolved as a dated correction to schema-server.md/money-and-tax.md — a single shop-wide flat rate, not a per-product table). |
 | 0.1.1 | 2026-08-14 | §10 corrected after implementation and live verification (26/26): two real bugs found and fixed — onboarding's response crashed serializing the new row's `BIGINT` columns (fixed by keeping the onboarding response shape unchanged, not adding formatting for a field it never returned), and the RLS-enable statement was silently dropped by the verification script's own naive comment-splitting logic (found by checking `pg_class.relrowsecurity` directly, not by trusting the script's own output). |
+| 0.2.0 | 2026-08-16 | Sprint 38 (backlog.md M4 item 3): built the mobile `/settings` screen — §9 filled in (was a placeholder), §1/§3 updated. Two things found while writing this update: this file had silently drifted from the service code since Sprint 37 added `low_stock_threshold_quantity` without a version bump here (now named in §1/§3); and Reports' hide-entirely role-gating pattern doesn't fit Settings (which already has a real, role-shaping network call and a real `403`) — resolved as Pattern B, reusing `return_approvals_screen.dart`'s own established reasoning rather than re-deriving it. `route-map.md` corrected in the same pass (0.1.5): `/settings`'s "Offline: Yes" overstated a cache this screen deliberately doesn't have, and `/settings/tax`/`/settings/currency` are consolidated into the one screen rather than built as separate routes. No server change this sprint; 227 mobile tests (were 218). |

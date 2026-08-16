@@ -116,6 +116,17 @@ class HomeScreen extends ConsumerWidget {
                       : const SizedBox.shrink(),
                   orElse: () => const SizedBox.shrink(),
                 ),
+            // Sprint 38 (backlog.md M4 item 3) — always visible (Pattern B,
+            // not Reports' Pattern A): a Cashier/Manager reaching this
+            // screen sees the same role-shaped `GET /settings` response and
+            // the same honest `403` on `PATCH` as everyone else, per
+            // settings_screen.dart's own docstring.
+            const SizedBox(height: 8),
+            OutlinedButton(
+              key: const Key('go_to_settings_button'),
+              onPressed: () => context.push('/settings'),
+              child: const Text('Settings'),
+            ),
           ],
         ),
       ),
