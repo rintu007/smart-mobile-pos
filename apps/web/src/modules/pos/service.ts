@@ -74,6 +74,33 @@ function computeLineDiscount(
   return BigInt(0);
 }
 
+// docs/07-database/money-and-tax.md §1 (exclusive) / §4+§4a (inclusive, extended to the discount
+// case — docs/modules/pos/specification.md §1's Sprint 28 dated correction). `amountMinorUnits` is
+// the post-discount line value: for exclusive pricing that's already the taxable value (tax not
+// yet added); for inclusive pricing it's the tax-inclusive gross after discount, split via the
+// residual method so `taxableValue + tax === amountMinorUnits` holds exactly regardless of mode.
+function computeLineTaxSplit(
+  amountMinorUnits: bigint,
+  taxRateBasisPoints: number,
+  pricingMode: string,
+  roundingRule: string,
+): { taxableValue: bigint; tax: bigint } {
+  if (pricingMode === "inclusive") {
+    const taxableValue = roundFraction(
+      amountMinorUnits * BigInt(10000),
+      BigInt(10000 + taxRateBasisPoints),
+      roundingRule,
+    );
+    return { taxableValue, tax: amountMinorUnits - taxableValue };
+  }
+  const tax = roundFraction(
+    amountMinorUnits * BigInt(taxRateBasisPoints),
+    BigInt(10000),
+    roundingRule,
+  );
+  return { taxableValue: amountMinorUnits, tax };
+}
+
 // Business rules live here, not in the Route Handler — docs/08-folder-structure/backend-structure.md §2.
 
 // Exported for reuse by sales-invoices/service.ts (GET /sales/{id}, GET /sales/lookup) — the
@@ -89,6 +116,8 @@ export function formatSale(sale: {
   financialYear: string | null;
   subtotalMinorUnits: bigint;
   discountTotalMinorUnits: bigint;
+  taxTotalMinorUnits: bigint;
+  taxRegistrationTypeAtSale: string | null;
   grandTotalMinorUnits: bigint;
   completedAt: Date | null;
   lineItems: {
@@ -96,6 +125,8 @@ export function formatSale(sale: {
     quantity: number;
     unitPriceMinorUnits: bigint;
     lineDiscountMinorUnits: bigint;
+    taxRateBasisPoints: number;
+    lineTaxMinorUnits: bigint;
     lineTotalMinorUnits: bigint;
   }[];
   payments: { method: string; amountMinorUnits: bigint }[];
@@ -114,12 +145,16 @@ export function formatSale(sale: {
     // Sprint 27 correction: post-discount, pre-tax — docs/modules/pos/specification.md §1/§2.
     subtotal_minor_units: Number(sale.subtotalMinorUnits),
     discount_total_minor_units: Number(sale.discountTotalMinorUnits),
+    tax_total_minor_units: Number(sale.taxTotalMinorUnits),
+    tax_registration_type_at_sale: sale.taxRegistrationTypeAtSale,
     grand_total_minor_units: Number(sale.grandTotalMinorUnits),
     line_items: sale.lineItems.map((item) => ({
       product_id: item.productId,
       quantity: item.quantity,
       unit_price_minor_units: Number(item.unitPriceMinorUnits),
       discount_minor_units: Number(item.lineDiscountMinorUnits),
+      tax_rate_basis_points: item.taxRateBasisPoints,
+      tax_minor_units: Number(item.lineTaxMinorUnits),
       line_total_minor_units: Number(item.lineTotalMinorUnits),
     })),
     payments: sale.payments.map((payment) => ({
@@ -172,7 +207,7 @@ export async function createSale(
     }
   }
 
-  const { roundingRule, discountAutoApprovalThresholdMinorUnits } =
+  const { roundingRule, discountAutoApprovalThresholdMinorUnits, taxMode, taxRateBasisPoints, pricingMode } =
     await settingsService.getMoneySettings(tenantId);
 
   const lineItems = input.line_items.map((item) => {
@@ -184,14 +219,24 @@ export async function createSale(
       item.discount_amount_minor_units,
       roundingRule,
     );
+    // Sprint 28 (DR-008): exclusive pricing's post-discount amount already *is* the taxable value;
+    // inclusive pricing's is the tax-inclusive gross after discount, split via the residual method
+    // (money-and-tax.md §4a). `lineTotalMinorUnits` is always `taxableValue + tax` either way.
+    const { taxableValue, tax } = computeLineTaxSplit(
+      lineSubtotalMinorUnits - lineDiscountMinorUnits,
+      taxRateBasisPoints,
+      pricingMode,
+      roundingRule,
+    );
     return {
       id: randomUUID(),
       productId: item.product_id,
       quantity: item.quantity,
       unitPriceMinorUnits: product.priceMinorUnits,
       lineDiscountMinorUnits,
-      // No tax yet (M2 item 4) — a line's total is its post-discount, pre-tax value.
-      lineTotalMinorUnits: lineSubtotalMinorUnits - lineDiscountMinorUnits,
+      taxRateBasisPoints,
+      lineTaxMinorUnits: tax,
+      lineTotalMinorUnits: taxableValue + tax,
     };
   });
 
@@ -199,13 +244,17 @@ export async function createSale(
     (sum, item) => sum + item.lineDiscountMinorUnits,
     BigInt(0),
   );
-  // Sprint 27 correction: subtotal is post-discount, pre-tax (money-and-tax.md's fixed formula) —
-  // grand_total equals it exactly until Tax computation (M2 item 4) adds a tax_total on top.
-  const subtotalMinorUnits = lineItems.reduce(
-    (sum, item) => sum + item.lineTotalMinorUnits,
+  const taxTotalMinorUnits = lineItems.reduce(
+    (sum, item) => sum + item.lineTaxMinorUnits,
     BigInt(0),
   );
-  const grandTotalMinorUnits = subtotalMinorUnits;
+  // money-and-tax.md §1: subtotal is post-discount, pre-tax — Σ taxable value, i.e. each line's
+  // total minus its own tax (taxableValue = lineTotal - tax, by construction above).
+  const subtotalMinorUnits = lineItems.reduce(
+    (sum, item) => sum + (item.lineTotalMinorUnits - item.lineTaxMinorUnits),
+    BigInt(0),
+  );
+  const grandTotalMinorUnits = subtotalMinorUnits + taxTotalMinorUnits;
 
   const createdBy = await identityService.resolveUserId(authUserId);
 
@@ -258,6 +307,8 @@ export async function createSale(
     provisionalInvoiceNumber: input.provisional_invoice_number,
     subtotalMinorUnits,
     discountTotalMinorUnits,
+    taxTotalMinorUnits,
+    taxRegistrationTypeAtSale: taxMode,
     grandTotalMinorUnits,
     lineItems,
     payment: {

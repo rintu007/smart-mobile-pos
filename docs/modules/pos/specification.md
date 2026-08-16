@@ -3,7 +3,7 @@
 > **Status:** 🟢 Approved
 > **Module:** POS
 > **Slice:** V1 — this document scopes only M0's minimal first cut, not the full V1 shape (§1)
-> **Version:** 0.6.0
+> **Version:** 0.7.0
 > **Last updated:** 2026-08-14
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
@@ -53,6 +53,24 @@ implementation's `subtotal_minor_units` silently meant "pre-discount raw sum" un
 only because no discount existed yet to make the two values diverge. Corrected in the same PR, not
 carried forward as a latent bug for Tax computation (M2 item 4) to trip over.
 
+**Closed, Sprint 28 (backlog.md M2 item 4):** Tax computation, wiring
+`shop_settings.tax_mode`/`tax_rate_basis_points`/`pricing_mode`/`rounding_rule` into `POST /sales`
+per [money-and-tax.md](../../07-database/money-and-tax.md)'s already-fixed discount-before-tax
+formulas. **A real design gap found writing this section, not covered by either of
+money-and-tax.md's own worked examples**: §3's worked example is exclusive-pricing-with-discount;
+§4's is inclusive-pricing-with-*no* discount — the combination of inclusive pricing *and* a discount
+on the same line was never specified. Resolved as a dated correction to money-and-tax.md §4a: for
+inclusive pricing, the discount is subtracted from the tax-inclusive gross **before** the
+tax-as-residual split runs, the natural composition of "discount reduces taxable value" (§1) with
+"tax is the residual of gross minus taxable" (§4) — not a new rule, an explicit statement of what
+the two already-accepted rules imply together. `tax_registration_type_at_sale` is snapshotted from
+`shop_settings.tax_mode` at sale creation ([DR-009](../../03-functional-requirements/business-rules.md)
+via Settings' own already-enforced "rate is 0 outside `standard`" guarantee, not re-validated here).
+**Explicitly still deferred**: FR-055/FR-056's actual invoice-document rendering (GSTIN, per-line
+HSN/SAC breakup, Bill-of-Supply vs. Tax-Invoice document type/layout) — this sprint computes the
+correct numbers; no GSTIN field exists anywhere yet (`shop_settings` has none), and receipt/invoice
+document rendering is Receipt & Printing's own scope, not POS's.
+
 ## 2. Business rules
 
 - A sale belongs to exactly one tenant and store; the server, never the client, computes
@@ -93,11 +111,29 @@ carried forward as a latent bug for Tax computation (M2 item 4) to trip over.
   "rejected, sale continues undiscounted" framing (in this synchronous, single-request design, that
   means the whole `POST /sales` call fails, not a partial/undiscounted fallback — the client is
   expected to remove the discount and retry if it can't clear approval).
-- **Correction, this sprint**: `sales.subtotal_minor_units` now means what
+- **Correction, Sprint 27**: `sales.subtotal_minor_units` now means what
   [money-and-tax.md](../../07-database/money-and-tax.md) always specified —
-  **post-discount, pre-tax** (`Σ (line_subtotal − line_discount)`) — not the pre-discount raw sum
-  this implementation silently computed before any discount existed to expose the difference.
-  `grand_total_minor_units = subtotal_minor_units` this sprint (tax is still M2 item 4, not built).
+  **post-discount, pre-tax** (`Σ line_taxable_value`) — not the pre-discount raw sum this
+  implementation silently computed before any discount existed to expose the difference.
+  [DR-008](../../03-functional-requirements/business-rules.md): tax is server-computed per line
+  from `shop_settings`' own already-validated fields (never client-supplied), per
+  [money-and-tax.md §1](../../07-database/money-and-tax.md#1-the-rule-restated-precisely):
+  **exclusive pricing** — `line_tax_minor_units = ROUND(line_taxable_value × tax_rate_basis_points
+  / 10000, rounding_rule)`, `line_total_minor_units = line_taxable_value + line_tax_minor_units`.
+  **Inclusive pricing** (per §4's residual method, extended to the discount case by this sprint's
+  own dated correction, §1 above) — the pre-discount `unit_price × quantity` is already
+  tax-inclusive; the discount is subtracted from that gross first, then
+  `line_taxable_value = ROUND(gross_after_discount × 10000 / (10000 + tax_rate_basis_points),
+  rounding_rule)`, `line_tax_minor_units = gross_after_discount − line_taxable_value` (residual, per
+  §4's own stated reasoning for why re-multiplying the rounded taxable value doesn't sum back
+  exactly), `line_total_minor_units = gross_after_discount`. `sales.tax_total_minor_units = Σ
+  line_tax_minor_units` (never independently rounded — DR-008's own explicit rule).
+  `grand_total_minor_units = subtotal_minor_units + tax_total_minor_units`.
+- `sales.tax_registration_type_at_sale` snapshots `shop_settings.tax_mode` at creation time — a
+  point-in-time copy, per schema-server.md's own stated reasoning ("a shop's tax status can change
+  after old sales exist"), not a live join. Since `PATCH /settings` already forces
+  `tax_rate_basis_points` to `0` outside `tax_mode: 'standard'` ([DR-009](../../03-functional-requirements/business-rules.md),
+  settings/specification.md §2), this module trusts that invariant rather than re-checking it.
 
 ## 3. Database tables and relationships
 
@@ -107,15 +143,16 @@ this sprint implements only a subset of each table's full column list.
 
 `sales`: `id`, `tenant_id`, `store_id`, `trading_day_id` (optional, Sprint 26),
 `canonical_invoice_number`/`financial_year` (Sprint 24), `status` (always `'completed'` this
-sprint), `provisional_invoice_number`, `subtotal_minor_units`, `discount_total_minor_units` (new,
-Sprint 27), `grand_total_minor_units`, `completed_at`, `created_at`, `created_by`. **Not yet
-built:** `device_id`, `customer_id`, `tax_registration_type_at_sale`, `tax_total_minor_units` —
-added once device-registration/Customers/tax (M2 item 4) exist.
+sprint), `provisional_invoice_number`, `subtotal_minor_units`, `discount_total_minor_units`
+(Sprint 27), `tax_total_minor_units`/`tax_registration_type_at_sale` (new, Sprint 28),
+`grand_total_minor_units`, `completed_at`, `created_at`, `created_by`. **Not yet built:**
+`device_id`, `customer_id` — added once device-registration/Customers exist.
 
 `sale_line_items`: `id`, `sale_id`, `product_id`, `quantity`, `unit_price_minor_units`,
-`line_discount_minor_units` (new, Sprint 27, `DEFAULT 0`), `line_total_minor_units`. **Not yet
-built:** `variant_id`, `hsn_sac_code_at_sale`, `tax_rate_basis_points`, `line_tax_minor_units` —
-M2 item 4.
+`line_discount_minor_units` (Sprint 27), `line_tax_minor_units`/`tax_rate_basis_points` (new,
+Sprint 28, both `DEFAULT 0`), `line_total_minor_units`. **Not yet built:** `variant_id` (V2+ stub),
+`hsn_sac_code_at_sale` (informational only per RR-003, not needed for the tax computation itself —
+deferred alongside FR-055/056's document-rendering scope, §1).
 
 `sale_payments`: `id`, `sale_id`, `method` (constrained to `'cash'` this sprint —
 [schema-server.md](../../07-database/schema-server.md)'s full `CHECK` also allows `card`/`other`,
@@ -143,7 +180,7 @@ RLS: tenant-scoped, same template as `stores`/`products`
 
 | Method & path | Status |
 | --- | --- |
-| `POST /api/v1/sales` | **Implemented Sprint 05, extended since.** Request now also accepts an optional `trading_day_id` (Sprint 26), and per-line `discount_percent_basis_points`/`discount_amount_minor_units` plus a top-level `discount_approved_by` (Sprint 27). Still not the full shape [sales.md](../../11-api/endpoints/sales.md) documents — tax/device/customer fields remain unbuilt. Requires any role (`requirePermission`, Sprint 23). |
+| `POST /api/v1/sales` | **Implemented Sprint 05, extended since.** Request now also accepts an optional `trading_day_id` (Sprint 26), and per-line `discount_percent_basis_points`/`discount_amount_minor_units` plus a top-level `discount_approved_by` (Sprint 27). **Tax (Sprint 28) needs no new request field at all** — `tax_rate_basis_points`/`tax_mode`/`pricing_mode` are read straight from `shop_settings`, never client-supplied, per DR-008. Still not the full shape [sales.md](../../11-api/endpoints/sales.md) documents — device/customer fields remain unbuilt. Requires any role (`requirePermission`, Sprint 23). |
 | `GET /sales/{id}`, `GET /sales`, `GET /sales/lookup` | **Already documented**, not yet implemented — deferred past this sprint. |
 
 **Mobile till screen (`apps/mobile/lib/features/pos/`) — built Sprint 09.** Sprint 05 deferred it
@@ -283,8 +320,22 @@ scanning yet — backlog.md item 6), hold/resume, and a bottom-nav shell are all
 - **Live verification, real database, throwaway tenant (deleted after)** — see
   [sprint-27.md](../../17-sprints/sprint-27.md) for the exact checks and results.
 
-**Explicitly deferred:** tax (M2 item 4), split payment (M2 item 5), hold/resume (M2 item 6), any
-mobile UI for applying a discount or entering a Manager-approval override.
+**Sprint 28 scope (Tax computation):**
+- Unit tests (`pos/service.test.ts`): exclusive pricing computes `line_tax_minor_units` correctly
+  from `tax_rate_basis_points` and rolls up into `tax_total_minor_units`; inclusive pricing computes
+  the same via the residual method; a discount combined with inclusive pricing subtracts from the
+  gross before the residual split runs (§1/§2's dated correction); `tax_mode: 'unregistered'`/
+  `'composition'` produces zero tax (trusting Settings' own already-enforced invariant, not
+  re-validated here); `tax_registration_type_at_sale` snapshots the shop's `tax_mode` at creation;
+  `grand_total_minor_units = subtotal_minor_units + tax_total_minor_units` holds exactly across a
+  multi-line, mixed-discount sale (the same summation-consistency property money-and-tax.md §3's
+  own worked example verifies by hand).
+- **Live verification, real database, throwaway tenant (deleted after)** — see
+  [sprint-28.md](../../17-sprints/sprint-28.md) for the exact checks and results.
+
+**Explicitly deferred:** split payment (M2 item 5), hold/resume (M2 item 6), any mobile UI for
+applying a discount, viewing a tax breakdown, or entering a Manager-approval override, FR-055/056's
+invoice-document rendering (§1).
 
 ## 11. Traceability
 
@@ -298,6 +349,10 @@ mobile UI for applying a discount or entering a Manager-approval override.
 | [DR-011](../../03-functional-requirements/business-rules.md) (discount: percent or fixed, never both) | §2, §5 | Met |
 | [DR-012](../../03-functional-requirements/business-rules.md) (over-threshold discount needs Manager+ approval) | §2, §6, §10 | Met |
 | [WF-003](../../06-workflows/sales-workflows.md#wf-003--complete-a-sale-with-a-discount) (discount workflow) | §1, §2 | Met for the backend contract; no mobile UI yet (§9 unchanged this sprint) |
+| [DR-008](../../03-functional-requirements/business-rules.md) (tax formula, discount-before-tax) | §1, §2 | Met, both pricing modes |
+| [DR-009](../../03-functional-requirements/business-rules.md) (composition/unregistered → zero tax) | §2 | Met — trusts Settings' own already-enforced invariant |
+| [money-and-tax.md](../../07-database/money-and-tax.md) (rounding, inclusive residual method) | §1, §2 | Met, incl. this sprint's own dated extension to the discount+inclusive combination |
+| [FR-055](../../03-functional-requirements/functional-requirements.md)/[FR-056](../../03-functional-requirements/functional-requirements.md) (GST invoice document rendering) | — | **Not met** — this module computes the numbers; document rendering is Receipt & Printing's own scope, named deferred (§1) |
 
 ## Change Log
 
@@ -309,3 +364,4 @@ mobile UI for applying a discount or entering a Manager-approval override.
 | 0.4.0 | 2026-08-13 | Sprint 12: closed the audit-log gap (DR-025, backlog.md item 8) — `POST /api/v1/sales` now also writes one `sale.completed` audit-log entry in the same transaction, per [audit-log/specification.md](../audit-log/specification.md). |
 | 0.5.0 | 2026-08-14 | Sprint 23: permission enforcement applied — `POST /sales` now requires any active role (Cashier, Manager, or Owner). |
 | 0.6.0 | 2026-08-14 | Sprint 27 (backlog.md M2 item 3): per-line Discount built, per WF-003 (already fully designed in Phase 06). `discount_percent_basis_points`/`discount_amount_minor_units` (mutually exclusive, DR-011), server-computed `line_discount_minor_units`/`discount_total_minor_units`, `DISCOUNT_REQUIRES_APPROVAL` (DR-012) satisfied by the caller's own Manager/Owner role or an optional `discount_approved_by`. Corrected `subtotal_minor_units` to the post-discount, pre-tax meaning money-and-tax.md always specified — invisible until discount existed to make it diverge from the pre-discount sum. |
+| 0.7.0 | 2026-08-14 | Sprint 28 (backlog.md M2 item 4): Tax computation built — `tax_total_minor_units`/`line_tax_minor_units`/`tax_rate_basis_points`/`tax_registration_type_at_sale`, wired entirely from `shop_settings` (DR-008), both exclusive and inclusive pricing modes. Found and resolved a real gap money-and-tax.md's own two worked examples never jointly covered: inclusive pricing combined with a discount on the same line — resolved as a dated correction (discount subtracted from the tax-inclusive gross before the residual tax split runs), the natural composition of two already-accepted rules, not a new one. FR-055/056's invoice-document rendering remains explicitly deferred to Receipt & Printing. |

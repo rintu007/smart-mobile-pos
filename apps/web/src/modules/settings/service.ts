@@ -6,16 +6,9 @@ import type { Role } from "@/modules/roles/schema";
 // Business rules live here, not in the Route Handler — docs/08-folder-structure/backend-structure.md §2.
 
 /**
- * docs/modules/settings/specification.md §4 — GET /api/v1/settings.
- *
- * Role-shaped, per settings.md's "Field-level read scope": both auto-approval thresholds are
- * present for Manager/Owner, omitted entirely (not merely zeroed) for a Cashier — a Cashier should
- * not be able to infer the exact figure that would trigger a Manager-approval requirement.
- */
-/**
- * docs/modules/pos/specification.md §2 (Sprint 27) — the raw money-arithmetic fields other
- * modules' server-side computations need (Discount, and Tax computation next), not the role-shaped
- * HTTP response `getSettings` builds. Sanctioned cross-module service-to-service path
+ * docs/modules/pos/specification.md §2 (Sprint 27/28) — the raw money-arithmetic fields other
+ * modules' server-side computations need (Discount, Tax computation), not the role-shaped HTTP
+ * response `getSettings` builds. Sanctioned cross-module service-to-service path
  * (docs/08-folder-structure/layering-rules.md §2), reused as-is by future callers rather than each
  * one re-deriving its own subset of `shop_settings`.
  */
@@ -29,9 +22,19 @@ export async function getMoneySettings(tenantId: string) {
   return {
     roundingRule: settings.roundingRule,
     discountAutoApprovalThresholdMinorUnits: settings.discountAutoApprovalThresholdMinorUnits,
+    taxMode: settings.taxMode,
+    taxRateBasisPoints: settings.taxRateBasisPoints,
+    pricingMode: settings.pricingMode,
   };
 }
 
+/**
+ * docs/modules/settings/specification.md §4 — GET /api/v1/settings.
+ *
+ * Role-shaped, per settings.md's "Field-level read scope": both auto-approval thresholds are
+ * present for Manager/Owner, omitted entirely (not merely zeroed) for a Cashier — a Cashier should
+ * not be able to infer the exact figure that would trigger a Manager-approval requirement.
+ */
 export async function getSettings(tenantId: string, role: Role) {
   const settings = await repository.findSettings(tenantId);
 
