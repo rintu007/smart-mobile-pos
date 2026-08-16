@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import * as productsService from "@/modules/products/service";
 import * as posService from "@/modules/pos/service";
 import * as customersService from "@/modules/customers/service";
+import * as returnsService from "@/modules/returns/service";
 import { ApiError } from "@/core/errors/api-error";
 import * as repository from "./repository";
 import { pushOperations, pullProducts } from "./service";
@@ -10,6 +11,7 @@ import type { SyncPushRequest } from "./schema";
 vi.mock("@/modules/products/service");
 vi.mock("@/modules/pos/service");
 vi.mock("@/modules/customers/service");
+vi.mock("@/modules/returns/service");
 vi.mock("./repository");
 
 const authUserId = "11111111-1111-4111-8111-111111111111";
@@ -20,6 +22,11 @@ const opProduct = "55555555-5555-4555-8555-555555555555";
 const opSale = "66666666-6666-4666-8666-666666666666";
 const opCustomer = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const customerId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const opReturnCreate = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+const opReturnApprove = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+const opReturnReject = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+const returnId = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+const originalSaleLineItemId = "12121212-1212-4212-8212-121212121212";
 
 describe("pushOperations", () => {
   beforeEach(() => {
@@ -181,6 +188,151 @@ describe("pushOperations", () => {
     await pushOperations(authUserId, tenantId, input);
 
     expect(callOrder).toEqual(["customer.create", "sale.create"]);
+  });
+
+  it("dispatches return.create to returnsService.createReturn", async () => {
+    vi.mocked(returnsService.createReturn).mockResolvedValue({ id: returnId } as never);
+
+    const input: SyncPushRequest = {
+      operations: [
+        {
+          type: "return.create",
+          client_operation_id: opReturnCreate,
+          payload: {
+            id: returnId,
+            original_sale_id: saleId,
+            line_items: [{ original_sale_line_item_id: originalSaleLineItemId, quantity: 1 }],
+          },
+        },
+      ],
+    };
+
+    const result = await pushOperations(authUserId, tenantId, input);
+
+    expect(returnsService.createReturn).toHaveBeenCalledWith(authUserId, tenantId, {
+      id: returnId,
+      original_sale_id: saleId,
+      line_items: [{ original_sale_line_item_id: originalSaleLineItemId, quantity: 1 }],
+    });
+    expect(result.results[0]).toMatchObject({ status: "accepted", entity_id: returnId });
+  });
+
+  it("processes return.create after sale.create", async () => {
+    const callOrder: string[] = [];
+    vi.mocked(posService.createSale).mockImplementation(async () => {
+      callOrder.push("sale.create");
+      return { id: saleId } as never;
+    });
+    vi.mocked(returnsService.createReturn).mockImplementation(async () => {
+      callOrder.push("return.create");
+      return { id: returnId } as never;
+    });
+
+    const input: SyncPushRequest = {
+      operations: [
+        {
+          type: "return.create",
+          client_operation_id: opReturnCreate,
+          payload: {
+            id: returnId,
+            original_sale_id: saleId,
+            line_items: [{ original_sale_line_item_id: originalSaleLineItemId, quantity: 1 }],
+          },
+        },
+        {
+          type: "sale.create",
+          client_operation_id: opSale,
+          payload: {
+            id: saleId,
+            store_id: "77777777-7777-4777-8777-777777777777",
+            provisional_invoice_number: "DEV-2026-000001",
+            line_items: [{ product_id: productId, quantity: 1, client_unit_price_minor_units: 100 }],
+            payments: [{ method: "cash", amount_minor_units: 100 }],
+          },
+        },
+      ],
+    };
+
+    await pushOperations(authUserId, tenantId, input);
+
+    expect(callOrder).toEqual(["sale.create", "return.create"]);
+  });
+
+  it("dispatches return.approve to returnsService.approveReturn", async () => {
+    vi.mocked(returnsService.approveReturn).mockResolvedValue({ id: returnId } as never);
+
+    const input: SyncPushRequest = {
+      operations: [
+        { type: "return.approve", client_operation_id: opReturnApprove, payload: { id: returnId } },
+      ],
+    };
+
+    const result = await pushOperations(authUserId, tenantId, input);
+
+    expect(returnsService.approveReturn).toHaveBeenCalledWith(authUserId, tenantId, returnId);
+    expect(result.results[0]).toMatchObject({ status: "accepted", entity_id: returnId });
+  });
+
+  it("dispatches return.reject to returnsService.rejectReturn, carrying the reason", async () => {
+    vi.mocked(returnsService.rejectReturn).mockResolvedValue({ id: returnId } as never);
+
+    const input: SyncPushRequest = {
+      operations: [
+        {
+          type: "return.reject",
+          client_operation_id: opReturnReject,
+          payload: { id: returnId, reason: "Customer changed mind" },
+        },
+      ],
+    };
+
+    const result = await pushOperations(authUserId, tenantId, input);
+
+    expect(returnsService.rejectReturn).toHaveBeenCalledWith(
+      authUserId,
+      tenantId,
+      returnId,
+      "Customer changed mind",
+    );
+    expect(result.results[0]).toMatchObject({ status: "accepted", entity_id: returnId });
+  });
+
+  it("remaps a return.create's ORIGINAL_SALE_NOT_FOUND to DEPENDENCY_NOT_FOUND", async () => {
+    vi.mocked(returnsService.createReturn).mockRejectedValue(
+      new ApiError(404, "ORIGINAL_SALE_NOT_FOUND", "Sale not found."),
+    );
+
+    const input: SyncPushRequest = {
+      operations: [
+        {
+          type: "return.create",
+          client_operation_id: opReturnCreate,
+          payload: {
+            id: returnId,
+            original_sale_id: saleId,
+            line_items: [{ original_sale_line_item_id: originalSaleLineItemId, quantity: 1 }],
+          },
+        },
+      ],
+    };
+
+    const result = await pushOperations(authUserId, tenantId, input);
+
+    expect(result.results[0]).toMatchObject({
+      status: "rejected",
+      error: { code: "DEPENDENCY_NOT_FOUND" },
+    });
+  });
+
+  it("rejects a return.approve payload missing id with VALIDATION_FAILED", async () => {
+    const input: SyncPushRequest = {
+      operations: [{ type: "return.approve", client_operation_id: opReturnApprove, payload: {} }],
+    };
+
+    const result = await pushOperations(authUserId, tenantId, input);
+
+    expect(result.results[0]).toMatchObject({ status: "rejected", error: { code: "VALIDATION_FAILED" } });
+    expect(returnsService.approveReturn).not.toHaveBeenCalled();
   });
 
   it("does not let one operation's rejection stop the rest from running", async () => {

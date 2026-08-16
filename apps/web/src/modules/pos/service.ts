@@ -40,7 +40,10 @@ async function assertCustomerExistsIfProvided(tenantId: string, customerId: stri
 // docs/07-database/money-and-tax.md §1/§2 — ROUND(numerator/denominator, rounding_rule), computed
 // over BigInt to stay exact (ADR-0006: money is never floating-point). Both inputs are always
 // non-negative in every caller this sprint (a discount can't be negative).
-function roundFraction(numerator: bigint, denominator: bigint, roundingRule: string): bigint {
+// Exported for reuse by returns/service.ts's own proportional-refund rounding (docs/modules/
+// returns/specification.md §2, DR-014) — the same sanctioned service-to-service reuse formatSale
+// already established, not a copy-pasted second implementation.
+export function roundFraction(numerator: bigint, denominator: bigint, roundingRule: string): bigint {
   const quotient = numerator / denominator;
   const remainder = numerator % denominator;
   const twiceRemainder = remainder * BigInt(2);
@@ -177,6 +180,22 @@ export function formatSale(sale: {
     })),
     completed_at: sale.completedAt?.toISOString() ?? null,
   };
+}
+
+/**
+ * docs/modules/returns/specification.md §1 — the sanctioned cross-module read `returnsService`
+ * uses to locate an original sale (service-to-service, docs/08-folder-structure/layering-rules.md
+ * §2), not a direct `returns/repository.ts` query against `sales`/`sale_line_items`. Only a
+ * `completed` sale under the caller's own tenant is ever returned — a draft/held or foreign-tenant
+ * sale is treated as not found by the caller, matching `ORIGINAL_SALE_NOT_FOUND`'s own documented
+ * scope (returns.md).
+ */
+export async function getCompletedSaleForReturn(tenantId: string, saleId: string) {
+  const sale = await repository.findSaleById(saleId);
+  if (!sale || sale.tenantId !== tenantId || sale.status !== "completed") {
+    return null;
+  }
+  return sale;
 }
 
 /**

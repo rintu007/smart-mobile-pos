@@ -1,9 +1,15 @@
 import * as productsService from "@/modules/products/service";
 import * as posService from "@/modules/pos/service";
 import * as customersService from "@/modules/customers/service";
+import * as returnsService from "@/modules/returns/service";
 import { createProductRequestSchema } from "@/modules/products/schema";
 import { createSaleRequestSchema } from "@/modules/pos/schema";
 import { createCustomerRequestSchema } from "@/modules/customers/schema";
+import {
+  createReturnRequestSchema,
+  syncApproveReturnPayloadSchema,
+  syncRejectReturnPayloadSchema,
+} from "@/modules/returns/schema";
 import { ApiError } from "@/core/errors/api-error";
 import * as repository from "./repository";
 import type { ProductCursor } from "./repository";
@@ -22,7 +28,18 @@ interface OperationResult {
 // operation types have a client-facing write path at all — docs/modules/sync-engine/specification.md §1).
 // `customer.create` (Sprint 32) is ordered alongside `product.create`, both before `sale.create` —
 // a sale referencing a customer created in the same batch needs that customer to exist first.
-const TYPE_ORDER: SyncPushOperation["type"][] = ["product.create", "customer.create", "sale.create"];
+// `return.create` (Sprint 33) is ordered after `sale.create` — a return references a sale that may
+// have arrived in the same batch — and `return.approve`/`return.reject` after `return.create`, in
+// case a same-batch approve/reject targets a return also created in that batch (unlikely in
+// practice, but ordered correctly regardless — docs/modules/returns/specification.md §7).
+const TYPE_ORDER: SyncPushOperation["type"][] = [
+  "product.create",
+  "customer.create",
+  "sale.create",
+  "return.create",
+  "return.approve",
+  "return.reject",
+];
 
 /**
  * docs/modules/sync-engine/specification.md#4-api-contract.
@@ -80,19 +97,54 @@ async function runOperation(
       return { client_operation_id: operation.client_operation_id, status: "accepted", entity_id: customer.id };
     }
 
-    // operation.type === "sale.create" — the schema's own enum guarantees no other value reaches here.
-    const parsed = createSaleRequestSchema.safeParse(operation.payload);
-    if (!parsed.success) {
-      return rejected(operation.client_operation_id, "VALIDATION_FAILED", "Sale payload failed validation.");
+    if (operation.type === "sale.create") {
+      const parsed = createSaleRequestSchema.safeParse(operation.payload);
+      if (!parsed.success) {
+        return rejected(operation.client_operation_id, "VALIDATION_FAILED", "Sale payload failed validation.");
+      }
+      const sale = await posService.createSale(authUserId, tenantId, parsed.data);
+      return { client_operation_id: operation.client_operation_id, status: "accepted", entity_id: sale.id };
     }
-    const sale = await posService.createSale(authUserId, tenantId, parsed.data);
-    return { client_operation_id: operation.client_operation_id, status: "accepted", entity_id: sale.id };
+
+    if (operation.type === "return.create") {
+      const parsed = createReturnRequestSchema.safeParse(operation.payload);
+      if (!parsed.success) {
+        return rejected(operation.client_operation_id, "VALIDATION_FAILED", "Return payload failed validation.");
+      }
+      const returnRecord = await returnsService.createReturn(authUserId, tenantId, parsed.data);
+      return { client_operation_id: operation.client_operation_id, status: "accepted", entity_id: returnRecord.id };
+    }
+
+    if (operation.type === "return.approve") {
+      const parsed = syncApproveReturnPayloadSchema.safeParse(operation.payload);
+      if (!parsed.success) {
+        return rejected(operation.client_operation_id, "VALIDATION_FAILED", "Return approve payload failed validation.");
+      }
+      const returnRecord = await returnsService.approveReturn(authUserId, tenantId, parsed.data.id);
+      return { client_operation_id: operation.client_operation_id, status: "accepted", entity_id: returnRecord.id };
+    }
+
+    // operation.type === "return.reject" — the schema's own enum guarantees no other value reaches here.
+    const parsed = syncRejectReturnPayloadSchema.safeParse(operation.payload);
+    if (!parsed.success) {
+      return rejected(operation.client_operation_id, "VALIDATION_FAILED", "Return reject payload failed validation.");
+    }
+    const returnRecord = await returnsService.rejectReturn(
+      authUserId,
+      tenantId,
+      parsed.data.id,
+      parsed.data.reason,
+    );
+    return { client_operation_id: operation.client_operation_id, status: "accepted", entity_id: returnRecord.id };
   } catch (error) {
     if (error instanceof ApiError) {
-      // sync-api.md §4: a sale referencing a product not yet synced from another device is a
-      // retryable "not synced yet", not a permanent NOT_FOUND — remapped only in this context.
+      // sync-api.md §4: a sale referencing a product not yet synced from another device, or a
+      // return referencing a sale not yet synced, is a retryable "not synced yet", not a permanent
+      // NOT_FOUND/ORIGINAL_SALE_NOT_FOUND — remapped only in this context (returns.md's own
+      // documented ORIGINAL_SALE_NOT_FOUND note, docs/modules/returns/specification.md §6).
       const code =
-        operation.type === "sale.create" && error.code === "NOT_FOUND"
+        (operation.type === "sale.create" && error.code === "NOT_FOUND") ||
+        (operation.type === "return.create" && error.code === "ORIGINAL_SALE_NOT_FOUND")
           ? "DEPENDENCY_NOT_FOUND"
           : error.code;
       return rejected(operation.client_operation_id, code, error.message);

@@ -22,6 +22,9 @@ export async function getMoneySettings(tenantId: string) {
   return {
     roundingRule: settings.roundingRule,
     discountAutoApprovalThresholdMinorUnits: settings.discountAutoApprovalThresholdMinorUnits,
+    // Added Sprint 33 (backlog.md M3 item 3) — Returns' own auto-approval check (DR-015) reuses this
+    // same cross-module money-settings bundle, the same way Discount's own threshold already does.
+    returnAutoApprovalThresholdMinorUnits: settings.returnAutoApprovalThresholdMinorUnits,
     taxMode: settings.taxMode,
     taxRateBasisPoints: settings.taxRateBasisPoints,
     pricingMode: settings.pricingMode,

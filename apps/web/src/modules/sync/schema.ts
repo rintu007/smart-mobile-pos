@@ -6,8 +6,16 @@ import { z } from "zod";
 // same schema its direct endpoint already uses (service.ts does that, not this file).
 export const syncPushOperationSchema = z.object({
   // `customer.create` added Sprint 32 (backlog.md M3 item 2) —
-  // docs/modules/customers/specification.md §1a.
-  type: z.enum(["product.create", "sale.create", "customer.create"]),
+  // docs/modules/customers/specification.md §1a. `return.create`/`return.approve`/`return.reject`
+  // added Sprint 33 (backlog.md M3 item 3) — docs/modules/returns/specification.md §7.
+  type: z.enum([
+    "product.create",
+    "sale.create",
+    "customer.create",
+    "return.create",
+    "return.approve",
+    "return.reject",
+  ]),
   client_operation_id: z.string().uuid(),
   payload: z.record(z.string(), z.unknown()),
 });
