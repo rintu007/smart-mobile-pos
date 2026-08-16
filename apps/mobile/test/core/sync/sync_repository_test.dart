@@ -237,4 +237,185 @@ void main() {
     expect(product.sku, 'AML-500');
     expect(product.barcode, '8901234567890');
   });
+
+  group('stock_movements pull (Sprint 36, backlog.md M4 item 1)', () {
+    test('pulls stock movements across multiple pages and upserts them locally', () async {
+      var callCount = 0;
+      final repo = SyncRepository(
+        db,
+        (operations) async => const SyncPushResponse([]),
+        ({cursor}) async => const SyncPullPage(products: [], nextCursor: null),
+        ({cursor}) async {
+          callCount++;
+          if (cursor == null) {
+            return StockMovementPullPage(
+              movements: [
+                PulledStockMovement(
+                  id: 'm1',
+                  productId: 'p1',
+                  quantityDelta: -2,
+                  movementType: 'sale',
+                  createdAt: DateTime.utc(2026, 8, 1),
+                ),
+              ],
+              nextCursor: 'cursor-1',
+              hasMore: true,
+            );
+          }
+          return StockMovementPullPage(
+            movements: [
+              PulledStockMovement(
+                id: 'm2',
+                productId: 'p1',
+                quantityDelta: 10,
+                movementType: 'adjustment',
+                createdAt: DateTime.utc(2026, 8, 2),
+              ),
+            ],
+            nextCursor: 'cursor-2',
+            hasMore: false,
+          );
+        },
+      );
+
+      final summary = await repo.syncNow();
+
+      expect(callCount, 2);
+      expect(summary.stockMovementsPulled, 2);
+      final movements = await db.select(db.stockMovements).get();
+      expect(movements.map((m) => m.id), containsAll(['m1', 'm2']));
+    });
+
+    test('persists the last cursor seen and resumes from it on the next sync', () async {
+      var receivedCursors = <String?>[];
+      final repo = SyncRepository(
+        db,
+        (operations) async => const SyncPushResponse([]),
+        ({cursor}) async => const SyncPullPage(products: [], nextCursor: null),
+        ({cursor}) async {
+          receivedCursors.add(cursor);
+          return const StockMovementPullPage(
+            movements: [],
+            nextCursor: 'resume-here',
+            hasMore: false,
+          );
+        },
+      );
+
+      await repo.syncNow();
+      await repo.syncNow();
+
+      // First call has no persisted cursor yet; the second call resumes from
+      // what the first call's own final page reported.
+      expect(receivedCursors, [null, 'resume-here']);
+    });
+
+    test('pulling an already-cached movement updates it rather than duplicating it', () async {
+      final repo = SyncRepository(
+        db,
+        (operations) async => const SyncPushResponse([]),
+        ({cursor}) async => const SyncPullPage(products: [], nextCursor: null),
+        ({cursor}) async => StockMovementPullPage(
+          movements: [
+            PulledStockMovement(
+              id: 'm1',
+              productId: 'p1',
+              quantityDelta: -2,
+              movementType: 'sale',
+              createdAt: DateTime.utc(2026, 8, 1),
+            ),
+          ],
+          nextCursor: null,
+          hasMore: false,
+        ),
+      );
+
+      await repo.syncNow();
+      await repo.syncNow();
+
+      final movements = await db.select(db.stockMovements).get();
+      expect(movements, hasLength(1));
+    });
+  });
+
+  group('sales pull (Sprint 36, backlog.md M4 item 1)', () {
+    test('pulls a sale together with its line items', () async {
+      final repo = SyncRepository(
+        db,
+        (operations) async => const SyncPushResponse([]),
+        ({cursor}) async => const SyncPullPage(products: [], nextCursor: null),
+        null,
+        ({cursor}) async => SalePullPage(
+          sales: [
+            PulledSale(
+              id: 's1',
+              status: 'completed',
+              provisionalInvoiceNumber: 'DEV-2026-000001',
+              subtotalMinorUnits: 1500,
+              grandTotalMinorUnits: 1500,
+              completedAt: DateTime.utc(2026, 8, 1),
+              createdAt: DateTime.utc(2026, 8, 1),
+              customerId: null,
+              lineItems: const [
+                PulledSaleLineItem(
+                  id: 'li1',
+                  productId: 'p1',
+                  quantity: 2,
+                  unitPriceMinorUnits: 750,
+                  lineTotalMinorUnits: 1500,
+                ),
+              ],
+            ),
+          ],
+          nextCursor: null,
+          hasMore: false,
+        ),
+      );
+
+      final summary = await repo.syncNow();
+
+      expect(summary.salesPulled, 1);
+      final sale = await (db.select(db.sales)..where((t) => t.id.equals('s1'))).getSingle();
+      expect(sale.grandTotalMinorUnits, 1500);
+      final lineItems = await (db.select(
+        db.saleLineItems,
+      )..where((t) => t.saleId.equals('s1'))).get();
+      expect(lineItems, hasLength(1));
+      expect(lineItems.single.productId, 'p1');
+    });
+
+    test('pulling an already-cached sale updates it rather than duplicating it', () async {
+      Future<SalePullPage> page({String? cursor}) async => SalePullPage(
+        sales: [
+          PulledSale(
+            id: 's1',
+            status: 'completed',
+            provisionalInvoiceNumber: 'DEV-2026-000001',
+            subtotalMinorUnits: 1500,
+            grandTotalMinorUnits: 1500,
+            completedAt: DateTime.utc(2026, 8, 1),
+            createdAt: DateTime.utc(2026, 8, 1),
+            customerId: null,
+            lineItems: const [],
+          ),
+        ],
+        nextCursor: null,
+        hasMore: false,
+      );
+
+      final repo = SyncRepository(
+        db,
+        (operations) async => const SyncPushResponse([]),
+        ({cursor}) async => const SyncPullPage(products: [], nextCursor: null),
+        null,
+        page,
+      );
+
+      await repo.syncNow();
+      await repo.syncNow();
+
+      final sales = await db.select(db.sales).get();
+      expect(sales, hasLength(1));
+    });
+  });
 }

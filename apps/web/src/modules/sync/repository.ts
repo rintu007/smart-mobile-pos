@@ -33,3 +33,36 @@ export function listProductsForSync(tenantId: string, cursor: ProductCursor | nu
     take: limit + 1,
   });
 }
+
+// Added Sprint 36 (backlog.md M4 item 1) — sync-api.md §6's "reporting parity" pull, `sales` half.
+// (completed_at, id) cursor, matching sales-invoices/repository.ts's own `SaleCursor` precedent —
+// every synced sale is `status: 'completed'` (a draft/held row is never synced, docs/modules/pos/
+// specification.md), so completedAt is as reliable a monotonic key as createdAt would be here.
+// A dedicated query rather than reusing sales-invoices/repository.ts's own `listSales`: that query
+// deliberately excludes line items (its own GET /sales list is a summary), and this pull needs them
+// for Reports' top-products ranking (M4 item 2) — matches pullProducts' own precedent of owning its
+// dedicated repository query rather than the direct endpoint's.
+export interface SaleCursor {
+  completedAt: Date;
+  id: string;
+}
+
+export function listSalesForSync(tenantId: string, cursor: SaleCursor | null, limit: number) {
+  return prisma.sale.findMany({
+    where: {
+      tenantId,
+      status: "completed",
+      ...(cursor
+        ? {
+            OR: [
+              { completedAt: { gt: cursor.completedAt } },
+              { completedAt: cursor.completedAt, id: { gt: cursor.id } },
+            ],
+          }
+        : {}),
+    },
+    orderBy: [{ completedAt: "asc" }, { id: "asc" }],
+    take: limit + 1,
+    include: { lineItems: true, payments: true },
+  });
+}

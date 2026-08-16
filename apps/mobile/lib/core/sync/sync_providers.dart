@@ -16,6 +16,8 @@ final syncRepositoryProvider = Provider<SyncRepository>((ref) {
     ref.watch(appDatabaseProvider),
     (operations) => api.pushSyncOperations(dio, operations),
     ({cursor}) => api.pullProductsPage(dio, cursor: cursor),
+    ({cursor}) => api.pullStockMovementsPage(dio, cursor: cursor),
+    ({cursor}) => api.pullSalesPage(dio, cursor: cursor),
   );
 });
 

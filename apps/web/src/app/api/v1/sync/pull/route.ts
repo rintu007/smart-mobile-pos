@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/core/auth/session";
 import { ApiError } from "@/core/errors/api-error";
-import { pullProducts } from "@/modules/sync/service";
+import { pullProducts, pullStockMovements, pullSales } from "@/modules/sync/service";
 import { syncPullQuerySchema } from "@/modules/sync/schema";
 
 // docs/modules/sync-engine/specification.md#4-api-contract. Route Handlers are thin: parse,
@@ -24,10 +24,21 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // entity_type's own Zod enum currently only allows 'products' — this switch is here so a
-    // future entity type added to the schema doesn't fall through silently to a wrong handler.
+    // entity_type's own Zod enum lists exactly the types below — this switch is here so a future
+    // entity type added to the schema doesn't fall through silently to a wrong handler.
     if (parsed.data.entity_type === "products") {
       const result = await pullProducts(tenantId, parsed.data.cursor, parsed.data.limit);
+      return NextResponse.json(result);
+    }
+
+    // stock_movements/sales added Sprint 36 (backlog.md M4 item 1).
+    if (parsed.data.entity_type === "stock_movements") {
+      const result = await pullStockMovements(tenantId, parsed.data.cursor, parsed.data.limit);
+      return NextResponse.json(result);
+    }
+
+    if (parsed.data.entity_type === "sales") {
+      const result = await pullSales(tenantId, parsed.data.cursor, parsed.data.limit);
       return NextResponse.json(result);
     }
 
