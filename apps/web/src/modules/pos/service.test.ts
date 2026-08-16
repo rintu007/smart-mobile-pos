@@ -473,4 +473,73 @@ describe("createSale", () => {
       );
     });
   });
+
+  describe("split payment", () => {
+    it("accepts two payment entries (cash + card) summing exactly to the grand total", async () => {
+      const split = {
+        ...input,
+        payments: [
+          { method: "cash" as const, amount_minor_units: 3600 },
+          { method: "card" as const, amount_minor_units: 2000 },
+        ],
+      };
+      vi.mocked(repository.createSale).mockResolvedValue(createdSale() as never);
+
+      await createSale(authUserId, tenantId, split);
+
+      expect(repository.createSale).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payments: [
+            expect.objectContaining({ method: "cash", amountMinorUnits: BigInt(3600) }),
+            expect.objectContaining({ method: "card", amountMinorUnits: BigInt(2000) }),
+          ],
+        }),
+      );
+    });
+
+    it("accepts a three-way split (cash + card + other)", async () => {
+      const split = {
+        ...input,
+        payments: [
+          { method: "cash" as const, amount_minor_units: 2000 },
+          { method: "card" as const, amount_minor_units: 2000 },
+          { method: "other" as const, amount_minor_units: 1600 },
+        ],
+      };
+      vi.mocked(repository.createSale).mockResolvedValue(createdSale() as never);
+
+      await createSale(authUserId, tenantId, split);
+
+      expect(repository.createSale).toHaveBeenCalled();
+    });
+
+    it("accepts a single card-only payment -- cash is not assumed present", async () => {
+      const cardOnly = { ...input, payments: [{ method: "card" as const, amount_minor_units: 5600 }] };
+      vi.mocked(repository.createSale).mockResolvedValue(createdSale() as never);
+
+      await createSale(authUserId, tenantId, cardOnly);
+
+      expect(repository.createSale).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payments: [expect.objectContaining({ method: "card", amountMinorUnits: BigInt(5600) })],
+        }),
+      );
+    });
+
+    it("rejects a split whose entries don't sum to the grand total", async () => {
+      const shortSplit = {
+        ...input,
+        payments: [
+          { method: "cash" as const, amount_minor_units: 3000 },
+          { method: "card" as const, amount_minor_units: 2000 },
+        ],
+      };
+
+      await expect(createSale(authUserId, tenantId, shortSplit)).rejects.toMatchObject({
+        status: 409,
+        code: "PAYMENT_AMOUNT_MISMATCH",
+      });
+      expect(repository.createSale).not.toHaveBeenCalled();
+    });
+  });
 });

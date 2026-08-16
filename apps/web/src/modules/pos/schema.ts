@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 // docs/modules/pos/specification.md §5 — request body for POST /api/v1/sales. M0-minimal:
-// cash-only, no tax/device (see sales.md's own dated correction note).
+// no device (see sales.md's own dated correction note).
 // `trading_day_id` added Sprint 26 (backlog.md M2 item 2) — optional, linked when supplied, but
 // not yet required: docs/modules/trading-day/specification.md §1's named, dated deferral of the
 // TRADING_DAY_NOT_OPEN gate until the mobile till screen opens a day first.
@@ -28,14 +28,17 @@ export const createSaleRequestSchema = z.object({
   trading_day_id: z.string().uuid().optional(),
   provisional_invoice_number: z.string().trim().min(1).max(100),
   line_items: z.array(lineItemSchema).min(1),
+  // Loosened Sprint 29 (backlog.md M2 item 5, FR-028) from exactly one "cash" entry to one-or-more
+  // across cash/card/other — docs/modules/pos/specification.md §2/§5. No live payment-network
+  // authorisation exists in V1 (WF-004); card/other are manually recorded amounts.
   payments: z
     .array(
       z.object({
-        method: z.literal("cash"),
+        method: z.enum(["cash", "card", "other"]),
         amount_minor_units: z.number().int().nonnegative(),
       }),
     )
-    .length(1),
+    .min(1),
   discount_approved_by: z.string().uuid().optional(),
 });
 
