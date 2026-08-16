@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 16 — Milestones
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-31
+> **Version:** 0.1.1
+> **Last updated:** 2026-08-16
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
 
@@ -60,10 +60,19 @@ first sale, not retrofitted), and Bluetooth receipt printing.
 
 | | |
 | --- | --- |
-| **Scope** | The four reports (daily sales, top products, stock value, low stock), Settings (tax, currency, printer, receipt), and closing out every remaining Phase 10–14 gap that blocked full release readiness (physical printer/device testing, the 10× load test, the full offline adversarial suite green in CI). |
+| **Scope** | The four reports (daily sales, top products, stock value, low stock), Settings (tax, currency, printer, receipt), and closing out every remaining Phase 10–14 gap that blocked full release readiness (physical printer/device testing, the full offline adversarial suite green in CI). |
 | **Entry criteria** | M3 demonstrated. |
-| **Exit criteria** | The **pilot-ready** half of [release-checklist.md](../14-testing/release-checklist.md) is fully satisfied — every box, not most of them. |
+| **Exit criteria** | The **pilot-ready** half of [release-checklist.md §2](../14-testing/release-checklist.md#2-pilot-ready-checklist) is fully satisfied — every box, not most of them. |
 | **Demonstrable outcome** | A full simulated trading day, on real hardware, with a real printer ([MTS-03](../14-testing/manual-test-scripts.md#mts-03--a-full-simulated-trading-day-on-real-hardware-with-a-real-printer)), executed and evidenced. |
+
+**Correction, found 2026-08-16 decomposing this milestone in [backlog.md §5](../17-sprints/backlog.md#5-m4--fully-decomposed-2026-08-16-now-that-m3-has-reached-this-point):**
+this row's own Scope line originally named "the 10× load test" as M4 content, but the Exit criteria
+row already restricts M4 to [release-checklist.md](../14-testing/release-checklist.md)'s
+**pilot-ready** tier (§2) — the 10× connection-pool load test is a **commercial-launch-ready** gate
+(§3), a separate, later tier this milestone's own exit criterion deliberately excludes. Removed from
+Scope rather than left as a standing inconsistency between this table's two rows; the load test
+remains real, tracked scope for whenever commercial launch is actually approached (M5 or a future
+milestone), not silently dropped.
 
 ## M5 — First Real Shop
 
@@ -90,3 +99,4 @@ from real usage before building further.
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-31 | Six outcome-based V1 milestones (M0–M5) defined with entry/exit criteria and a demonstrable-to-a-shop-owner outcome each; no calendar dates, per this document's deliberate scope. |
+| 0.1.1 | 2026-08-16 | M4's Scope row corrected: removed "the 10× load test," which belongs to release-checklist.md's commercial-launch tier (§3), not the pilot-ready tier (§2) M4's own Exit criteria row already restricts to — found decomposing M4 to item grain in backlog.md §5. |

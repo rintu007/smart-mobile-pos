@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.32.0
+> **Version:** 0.33.0
 > **Last updated:** 2026-08-16
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
@@ -177,13 +177,80 @@ item (Sprint 26) already set precedent for with `TRADING_DAY_NOT_OPEN`.
 
 **Total: 13.5 person-days. M3 — Customers & Returns is now fully closed, all 5 items done.**
 
-## 4a. M4 — module grain only, decomposed when reached
+## 5. M4 — fully decomposed 2026-08-16, now that M3 has reached this point
 
-| Milestone | Modules (decomposition pending) |
-| --- | --- |
-| M4 | Reports (4), release-readiness closeout (printer/device testing, load test, adversarial suite in CI) |
+Per this document's own stated practice (§ intro), M4 is decomposed to item grain only now that
+planning has actually reached it. Unlike M1–M3, M4's scope is not a chain of interdependent features
+— [dependency-graph.md §2](../16-milestones/dependency-graph.md#2-the-critical-path-named-explicitly)
+already places Reports as a branch off Sales & Inventory with no further downstream dependents, and
+Settings' remaining scope and release-readiness closeout are independent of both Reports and each
+other. Items below are grouped by theme, not chained end-to-end; the `Depends on` column reflects the
+real, narrower dependencies that exist, not an artificial sequencing.
 
-## 5. Ordering rule, restated
+**A real, previously-undocumented-as-built gap found while decomposing (not by writing code first):**
+[sync-api.md §6](../11-api/sync-api.md#6-pull--get-syncpull) has, since Phase 11, already named
+`stock_movements` and `sales` from *other* devices as pull targets "for reporting parity across
+devices in a future multi-device store" — but `sync/schema.ts`'s `entity_type` enum has only ever
+implemented `products` (Sprint 13). Per [FR-071](../03-functional-requirements/functional-requirements.md#group-j--reports-core-four)'s
+own offline-behaviour column ("computed from locally synced data; may be incomplete for a
+multi-device shop until fully synced"), the Reports module is specified to read local data only — no
+`reports.md` endpoint document exists anywhere in [11-api/endpoints/](../11-api/endpoints/), and none
+is needed. That means Reports is silently load-bearing on a pull capability that was named on paper
+in Phase 11 and never built. Item 1 below closes that gap first, the same "found while planning, not
+silently absorbed" practice item 1 set for M2 (`shop_settings`) and item 5 set for M3 (`.update` sync
+operations).
+
+**A second real point, named rather than silently accepted:** because Reports has no server endpoint
+of its own (per the gap above, it reads only already-synced local data), [permission-matrix.md —
+Reports](../05-personas/permission-matrix.md#reports)'s Manager/Owner-only restriction has no server
+call to enforce it against — the underlying sales/stock data is, by design, already resident on
+every synced device regardless of the signed-in user's role, once item 1 lands. Item 2's own
+Manager/Owner gate is therefore necessarily a client-side presentation control, not a data-access
+boundary — a deliberate, accepted exception to this project's otherwise-consistent "never merely
+hidden in the UI" stance (stated for every other permission row to date), justified narrowly because
+there is no cross-tenant or cross-role data exposure at stake (every role's device already holds the
+same shop-wide operational data it needs to keep selling offline) — only a business-sensitivity
+preference about who sees aggregated figures, which a client-side gate does satisfy honestly.
+
+**A third real gap, a documentation inconsistency rather than a missing capability:** see
+[milestones.md](../16-milestones/milestones.md)'s own dated correction — M4's Scope line named "the
+10× load test" as milestone content, but M4's Exit criteria row already restricts the milestone to
+[release-checklist.md](../14-testing/release-checklist.md)'s **pilot-ready** tier (§2), and the load
+test is a **commercial-launch-ready** gate (§3). No load-test item appears below as a result; it
+remains real, tracked scope for whenever commercial launch is actually approached.
+
+**A fourth real gap, found by checking the actual repository rather than trusting phase documents:**
+[ci-pipeline.md §3](../14-testing/ci-pipeline.md#3-nightly-pipeline) and
+[offline-test-suite.md](../14-testing/offline-test-suite.md) both already specify a nightly pipeline
+and a toxiproxy-based adversarial sync harness in full detail — neither exists. `.github/workflows/`
+contains only `pr.yml`; no cross-tenant isolation suite, no idempotent-replay/concurrent-composition
+integration tests, and no failure-scenario harness exist anywhere in the repository today, despite
+[security-test-plan.md §1](../12-security/security-test-plan.md#1-cross-tenant-isolation) and
+[13-offline-sync/test-plan.md](../13-offline-sync/test-plan.md) having fully specified both since
+Phase 12/13. Every table built across M0–M3 (22 of them) has RLS applied per-table at the point it
+was created, but the **independent, automated, CI-enforced proof** [tenant-isolation.md](../12-security/tenant-isolation.md)
+requires has never been written as its own suite. Items 5–7 below build this — genuinely new
+engineering, not wiring onto existing infrastructure, the same shape M3's item 5 (`.update` sync
+operations) turned out to be.
+
+| # | Item | Depends on | Estimate (person-days) |
+| --- | --- | --- | --- |
+| 1 | Sync pull, reporting parity: `GET /sync/pull` gains `stock_movements` and `sales` entity types (this device's own local `sale_line_items` included in each pulled sale's payload, matching `GET /sales/{id}`'s existing shape), pulled from every device in the tenant/store, not just the calling device's own; mobile upsert-by-id into the existing local `stock_movements`/`sales` tables, deduplicated against rows the device itself already wrote locally (same id, no-op) — the real gap named above | — | 2.5 |
+| 2 | Reports (mobile, local aggregation only, Manager/Owner client-side gate): daily sales total + trailing 7 days (FR-071), stock value = Σ(derived balance × price basis) (FR-072), products ranked by qty/value over a selected date range (FR-073), low-stock list sorted by distance below threshold (FR-074) — four screens computed entirely from the local Drift DB now populated by item 1, no new server endpoint (§ above) | 1 | 3 |
+| 3 | Settings, mobile UI: `/settings` route (Owner-edit, Manager/Cashier read-only per the already-built role-shaped `GET /settings` response) surfacing tax mode/rate/pricing mode/rounding rule/currency — the first mobile screen to actually read or write any of these fields, which have been server-complete since Sprint 25 but never had a UI | — | 1.5 |
+| 4 | Settings, printer pairing + receipt template (FR-077/FR-078): `PATCH /settings` stops rejecting `printer_config`/`receipt_template_config` outright, `RECEIPT_TEMPLATE_MISSING_MANDATORY_FIELD` becomes live-reachable for the first time (a mandatory-field list fixed in code, per [receipt-design.md](../10-design-system/receipt-design.md)); mobile pairing + test-print flow reusing Sprint 15's existing Bluetooth ESC/POS transport, and a receipt-template editor for non-mandatory fields only | 3 | 2.5 |
+| 5 | Cross-tenant isolation suite, CI-enforced: automated negative tests against a real authenticated connection (not API-code inspection) for all 22 tables per [tenant-isolation.md §2](../12-security/tenant-isolation.md#2-what-every-table-means-precisely-restated-as-a-checklist)'s four categories, plus the Realtime-channel extension (§4) — wired into `pr.yml` as a blocking stage per [ci-pipeline.md §2](../14-testing/ci-pipeline.md#2-pipeline-stages--every-pull-request) | — | 3 |
+| 6 | Offline adversarial suite in CI: toxiproxy (or equivalent) fault-injecting harness per [offline-test-suite.md §2](../14-testing/offline-test-suite.md#2-harness); idempotent-replay + 2-device composition as a fast `pr.yml`-blocking stage; N-device fuzzed composition (100 runs) and all 10 named failure scenarios ([failure-scenarios.md](../13-offline-sync/failure-scenarios.md)) as the slower, nightly-gated subset | — | 4 |
+| 7 | Nightly CI pipeline: new `.github/workflows/nightly.yml` wiring items 5/6's slow subsets, plus Dependabot-based dependency audit ([ci-pipeline.md §3](../14-testing/ci-pipeline.md#3-nightly-pipeline)) — release-candidate-blocking, not same-day-merge-blocking, per that document's own rule | 5, 6 | 1 |
+| 8 | OWASP checklist review against the actual release build: walk [owasp-checklist.md](../12-security/owasp-checklist.md)'s already-complete design-time traceability table against the real, running M0–M4 codebase (not the design docs it cites), confirming each mitigation is actually present in code, not just specified on paper | 1–7 | 1 |
+| 9 | MTS-01/02/03 executed and evidenced: scripts already fully written in [manual-test-scripts.md](../14-testing/manual-test-scripts.md); execution itself is a founder action blocked on physical printer hardware (MTS-01) and the reference low-end device (MTS-03) per [device-matrix.md §3](../14-testing/device-matrix.md#3-this-is-a-founder-action-not-an-engineering-one--stated-plainly) — the same named, non-blocking-until-it-blocks shape M0's own item 11 established for exactly this kind of gap | 1–8 | 1 |
+
+**Total: 19.5 person-days.** Items 5, 6, and 9 are the ones most likely to reveal further real gaps
+once actually attempted — no CI-enforced isolation or adversarial-sync suite has ever been run
+against this codebase before, and item 9 remains genuinely blocked on hardware the founder does not
+yet own, tracked the same way M0's own physical-print step was.
+
+## 6. Ordering rule, restated
 
 Every dependency column above traces directly to
 [dependency-graph.md](../16-milestones/dependency-graph.md)'s critical path — item order in this
@@ -226,3 +293,4 @@ specifically.
 | 0.30.0 | 2026-08-16 | Item 3 (Returns & Refund, server) done — [Sprint 33](sprint-33.md): `returns`/`return_line_items` tables, `POST`/`GET /returns`/`GET /returns/{id}`/`GET /returns/approvals`/`POST /returns/{id}/approve`/`reject`, and `return.create`/`return.approve`/`return.reject` sync-push types all built and live-verified (22/22). Found and corrected two real schema gaps while writing the spec (`created_by`/`created_at` missing from schema-server.md's `returns` table; a redundant `client_operation_id` column dropped in favour of `id` alone). DR-014's per-unit-price rounding ambiguity resolved: exact-remaining-amount for a full-remaining-quantity return, proportional rounding only for a genuine partial. M3 now has items 4–5 remaining. |
 | 0.31.0 | 2026-08-16 | Item 4 (Returns & Refund, mobile) done — [Sprint 34](sprint-34.md): `/returns/new`/`/returns/:id`/`/returns/approvals`, local `Returns`/`ReturnLineItems` tables, `return.create`/`return.approve`/`return.reject` written to `outbound_queue`, built and verified (176 mobile tests, 4/4 live server checks). Found and fixed a real, blocking gap before writing mobile code: `formatSale` never exposed a sale line item's own `id`, which `POST /returns` needs. Resolved the approvals-queue badge placement and WF-013's interrupt/queue split as dated decisions, both left open by Sprint 33's own text. M3 now has item 5 remaining. |
 | 0.32.0 | 2026-08-16 | Item 5 (conflict-resolution field-merge) done — [Sprint 35](sprint-35.md): `customer.update` sync-push type, `PATCH /customers/{id}` upgraded to the merge-aware shape, `customer_field_conflicts`, `GET /customers/conflicts`/`POST /customers/conflicts/{id}/resolve`, mobile `CustomerEditScreen`/`ConflictsScreen`, all built and live-verified (18/18) — the exact worked-example scenario (two staff editing the same customer's phone number) provoked for real, end to end. Found and resolved a real gap while writing the spec: `base_updated_at` alone can't support a field-level 3-way merge (no server-side field history exists), resolved by having the client send each field's own base value too. **M3 — Customers & Returns is now fully closed, all 5 items done.** |
+| 0.33.0 | 2026-08-16 | M4 fully decomposed (9 items, 19.5 person-days) — Sync pull reporting-parity extension, Reports (4 screens, local-only), Settings mobile UI, printer pairing + receipt template, cross-tenant isolation suite in CI, offline adversarial suite in CI, nightly pipeline, OWASP review against the real build, MTS-01/02/03 execution. Four real gaps found while decomposing, not by writing code first: (1) sync-api.md has named `stock_movements`/`sales` reporting-parity pull targets since Phase 11 with zero implementation — Reports is silently load-bearing on a capability that was never built (item 1); (2) Reports' Manager/Owner gate has no server call to enforce it against once item 1 lands, since the underlying data is already synced to every device regardless of role — named as a deliberate, narrow client-side-only exception to this project's usual server-enforcement stance, not an oversight; (3) milestones.md's M4 Scope line named the 10× load test, contradicting its own Exit criteria row's pilot-ready-only restriction — corrected there, no load-test item appears here; (4) checked the actual repository rather than trusting phase docs: `.github/workflows/` contains only `pr.yml` — no nightly pipeline, cross-tenant isolation suite, or offline adversarial harness exists anywhere despite full specification since Phase 12/13 (items 5–7). |
