@@ -245,7 +245,7 @@ class DriftSaleRepository implements SaleRepository {
         provisionalInvoiceNumber: provisionalInvoiceNumber,
         canonicalInvoiceNumber: canonicalInvoiceNumber,
       );
-      if (remote != null) return _withLocalProductNames(remote);
+      if (remote != null) return await _withLocalProductNames(remote);
     } catch (_) {
       // Deliberately swallowed — falls through to the local fallback below,
       // per the docstring on `SaleRepository.lookupSale`.
