@@ -53,7 +53,10 @@ export interface CreateSaleInput {
     lineTaxMinorUnits: bigint;
     lineTotalMinorUnits: bigint;
   }[];
-  payment: { id: string; method: string; amountMinorUnits: bigint };
+  // Sprint 29 (backlog.md M2 item 5) — was a single `payment` field; loosened to a to-many array,
+  // matching `sale_payments`' own always-to-many relation (§1's own note that no schema change was
+  // needed, only this repository's own single-object-vs-array shape).
+  payments: { id: string; method: string; amountMinorUnits: bigint }[];
 }
 
 export function createSale(input: CreateSaleInput) {
@@ -113,11 +116,11 @@ export function createSale(input: CreateSaleInput) {
           })),
         },
         payments: {
-          create: {
-            id: input.payment.id,
-            method: input.payment.method,
-            amountMinorUnits: input.payment.amountMinorUnits,
-          },
+          create: input.payments.map((payment) => ({
+            id: payment.id,
+            method: payment.method,
+            amountMinorUnits: payment.amountMinorUnits,
+          })),
         },
       },
       include: { lineItems: true, payments: true },

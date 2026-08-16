@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 11 — API Design
-> **Version:** 0.5.0
+> **Version:** 0.6.0
 > **Last updated:** 2026-08-14
 > **Owner:** Principal Next.js Engineer
 > **Approved by:** _pending_
@@ -50,6 +50,18 @@ schema trigger in [schema-server.md](../../07-database/schema-server.md). A `dra
 is mutated only on the client until the moment it completes; a held/draft cart is not itself synced
 to the server as a partial row — see [sync-api.md](../sync-api.md) for exactly what crosses the
 wire and when.
+
+## Implementation note (Sprint 29, [pos/specification.md](../../modules/pos/specification.md))
+
+**`payments` accepts one or more entries** across `cash`/`card`/`other` (FR-028), loosened from
+M0's exactly-one-`cash`-entry shape. The sum across every entry must equal the server-recomputed
+`grand_total_minor_units` exactly — `PAYMENT_AMOUNT_MISMATCH` (already reserved) now checks a sum
+rather than a single value, the same code, a stricter check. No schema change was needed:
+`sale_payments` was already a to-many relation; `card`/`other` were already accepted by
+`schema-server.md`'s own `CHECK`, just never written by any caller until now. Trading Day's
+`expected_cash_minor_units` (Sprint 26) needed no change either — its aggregation already sums
+every matching `cash` `sale_payments` row per trading day, correctly excluding a split sale's
+`card`/`other` portions without any new logic.
 
 ## Implementation note (Sprint 28, [pos/specification.md](../../modules/pos/specification.md))
 
@@ -207,7 +219,7 @@ per [sync-api.md](../sync-api.md), rather than blocking the sale.
 | `TRADING_DAY_ALREADY_OPEN` | 409 | `POST /trading-days/open` (or `/reopen`) attempted while one is already open at this store. Built Sprint 26. |
 | `TRADING_DAY_NOT_CLOSED` | 409 | **New, Sprint 26.** `POST /trading-days/{id}/reopen` targets a day that is neither open nor closed — unreachable given only two statuses exist, named defensively. |
 | `PRICE_MISMATCH` | 409 | See above — connected-device case only; the offline case does not produce this error at all. |
-| `PAYMENT_AMOUNT_MISMATCH` | 409 | A submitted payment's total does not equal the server-recomputed `grand_total_minor_units` — added in M0's minimal implementation (Sprint 05), which has no discount/tax yet so this simplifies to "payment must equal the sum of line totals." |
+| `PAYMENT_AMOUNT_MISMATCH` | 409 | The sum of every `payments[].amount_minor_units` does not equal the server-recomputed `grand_total_minor_units` — added in M0's minimal implementation (Sprint 05) as a single-payment equality check, restated for the multi-entry case by Split Payment (Sprint 29). |
 | `SALE_IMMUTABLE` | 409 | Any write attempt against a `completed` sale. |
 | `DISCOUNT_REQUIRES_APPROVAL` | 409 | **New, Sprint 27.** `discount_total_minor_units` exceeds `shop_settings.discount_auto_approval_threshold_minor_units` and neither the caller nor `discount_approved_by` resolves to an active Manager/Owner at this store. |
 
@@ -221,3 +233,4 @@ per [sync-api.md](../sync-api.md), rather than blocking the sale.
 | 0.3.0 | 2026-08-14 | Sprint 26 (backlog.md M2 item 2): `POST /trading-days/open`, `POST /trading-days/{id}/close`, `POST /trading-days/{id}/reopen` (new), `GET /trading-days/current` all built and live-verified (26/26). Trading Day re-scoped per-store, not per-device (a named, dated deviation — see the new implementation note). `POST /sales` gains an optional `trading_day_id`; the `TRADING_DAY_NOT_OPEN` hard gate is deliberately deferred to the sprint pairing this with the mobile till's own open-day flow. Added `TRADING_DAY_NOT_CLOSED`. |
 | 0.4.0 | 2026-08-14 | Sprint 27 (backlog.md M2 item 3): per-line Discount built and live-verified — `discount_percent_basis_points`/`discount_amount_minor_units` (DR-011), `discount_approved_by` (DR-012), `DISCOUNT_REQUIRES_APPROVAL`. Corrected `subtotal_minor_units` to money-and-tax.md's always-specified post-discount, pre-tax meaning. |
 | 0.5.0 | 2026-08-14 | Sprint 28 (backlog.md M2 item 4): Tax computation built and live-verified (20/20) — `tax_total_minor_units`/`tax_registration_type_at_sale`/per-line `tax_rate_basis_points`/`tax_minor_units`, both exclusive and inclusive pricing modes, entirely settings-derived (no new request field). Found and resolved a real gap in money-and-tax.md's own worked examples: inclusive pricing combined with a discount was never specified. |
+| 0.6.0 | 2026-08-14 | Sprint 29 (backlog.md M2 item 5): Split Payment built and live-verified (14/14) — `payments` loosened to one-or-more entries across `cash`/`card`/`other` (FR-028), `PAYMENT_AMOUNT_MISMATCH` restated for the multi-entry sum. No schema change; Trading Day's `expected_cash_minor_units` aggregation needed no change either, confirmed live to correctly exclude a split sale's card/other portions. |

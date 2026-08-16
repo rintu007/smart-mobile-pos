@@ -283,17 +283,17 @@ export async function createSale(
     }
   }
 
-  // Zod's `.length(1)` guarantees exactly one element at runtime but doesn't narrow the array's
-  // static type to a tuple, hence the explicit check TypeScript needs here.
-  const [payment] = input.payments;
-  if (!payment) {
-    throw new ApiError(422, "VALIDATION_FAILED", "Exactly one payment is required.");
-  }
-  if (BigInt(payment.amount_minor_units) !== grandTotalMinorUnits) {
+  // Sprint 29 (FR-028, WF-004): one or more payments, summed against the computed grand total —
+  // Zod's `.min(1)` already guarantees at least one element.
+  const paymentsTotalMinorUnits = input.payments.reduce(
+    (sum, payment) => sum + BigInt(payment.amount_minor_units),
+    BigInt(0),
+  );
+  if (paymentsTotalMinorUnits !== grandTotalMinorUnits) {
     throw new ApiError(
       409,
       "PAYMENT_AMOUNT_MISMATCH",
-      "Payment amount does not equal the computed grand total.",
+      "The sum of all payments does not equal the computed grand total.",
       { grand_total_minor_units: Number(grandTotalMinorUnits) },
     );
   }
@@ -311,11 +311,11 @@ export async function createSale(
     taxRegistrationTypeAtSale: taxMode,
     grandTotalMinorUnits,
     lineItems,
-    payment: {
+    payments: input.payments.map((payment) => ({
       id: randomUUID(),
       method: payment.method,
       amountMinorUnits: BigInt(payment.amount_minor_units),
-    },
+    })),
   });
 
   return formatSale(sale);

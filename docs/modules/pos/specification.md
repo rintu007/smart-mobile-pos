@@ -3,7 +3,7 @@
 > **Status:** 🟢 Approved
 > **Module:** POS
 > **Slice:** V1 — this document scopes only M0's minimal first cut, not the full V1 shape (§1)
-> **Version:** 0.7.0
+> **Version:** 0.8.0
 > **Last updated:** 2026-08-14
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
@@ -71,6 +71,22 @@ HSN/SAC breakup, Bill-of-Supply vs. Tax-Invoice document type/layout) — this s
 correct numbers; no GSTIN field exists anywhere yet (`shop_settings` has none), and receipt/invoice
 document rendering is Receipt & Printing's own scope, not POS's.
 
+**Closed, Sprint 29 (backlog.md M2 item 5):** Split Payment, per
+[WF-004](../../06-workflows/sales-workflows.md#wf-004--complete-a-sale-with-split-payment) —
+`POST /sales.payments` loosened from exactly one `cash` entry to one-or-more entries across
+`cash`/`card`/`other` ([FR-028](../../03-functional-requirements/functional-requirements.md)),
+validated by summing every entry against the server-recomputed `grand_total_minor_units`
+(`PAYMENT_AMOUNT_MISMATCH`, restated for the multi-entry case — the same code, a stricter check).
+No schema change: `sale_payments` was already a to-many relation (M0's own single-row usage was a
+scope choice, not a structural limit), and `shop_settings`'s CHECK-free `method` column already
+allowed `card`/`other` values that simply had no live writer until now. **WF-004's own diagram
+shows exactly two portions** (cash + one other) as the V1 till UI's target shape — this
+implementation accepts any number ≥ 1, the natural generalisation of "sum to the total," not a
+narrower one; nothing about the till UI needing exactly two changes what the API itself must
+validate. Trading Day's `expected_cash_minor_units` computation (Sprint 26) already aggregates
+every matching `cash` `sale_payments` row per trading day, not "the sale's one payment" — it needed
+no change at all to correctly sum multiple cash portions from the same sale.
+
 ## 2. Business rules
 
 - A sale belongs to exactly one tenant and store; the server, never the client, computes
@@ -134,6 +150,13 @@ document rendering is Receipt & Printing's own scope, not POS's.
   after old sales exist"), not a live join. Since `PATCH /settings` already forces
   `tax_rate_basis_points` to `0` outside `tax_mode: 'standard'` ([DR-009](../../03-functional-requirements/business-rules.md),
   settings/specification.md §2), this module trusts that invariant rather than re-checking it.
+- [FR-028](../../03-functional-requirements/functional-requirements.md): `POST /sales.payments`
+  accepts one or more entries, each `{ method: 'cash'|'card'|'other', amount_minor_units }` — the
+  sum across every entry must equal the server-recomputed `grand_total_minor_units` exactly
+  (`PAYMENT_AMOUNT_MISMATCH` otherwise, the same code M0 already reserved, now checking a sum
+  instead of a single value). No live payment-network authorisation exists in V1 — `card`/`other`
+  are manually recorded amounts, per [WF-004](../../06-workflows/sales-workflows.md#wf-004--complete-a-sale-with-split-payment)'s
+  own explicit "not a processed transaction" framing.
 
 ## 3. Database tables and relationships
 
@@ -154,10 +177,12 @@ Sprint 28, both `DEFAULT 0`), `line_total_minor_units`. **Not yet built:** `vari
 `hsn_sac_code_at_sale` (informational only per RR-003, not needed for the tax computation itself —
 deferred alongside FR-055/056's document-rendering scope, §1).
 
-`sale_payments`: `id`, `sale_id`, `method` (constrained to `'cash'` this sprint —
-[schema-server.md](../../07-database/schema-server.md)'s full `CHECK` also allows `card`/`other`,
-kept in the constraint for forward-compatibility per [Products' precedent](../products/specification.md#3-database-tables-and-relationships)
-of matching the eventual enum even before every value is reachable), `amount_minor_units`.
+`sale_payments`: `id`, `sale_id`, `method` (`'cash'`/`'card'`/`'other'` all live as of Sprint 29 —
+[schema-server.md](../../07-database/schema-server.md)'s full enum was already accepted by the Zod
+schema since M0 for forward-compatibility, per [Products' precedent](../products/specification.md#3-database-tables-and-relationships);
+this sprint is simply the first with a caller that can actually send `card`/`other`), `amount_minor_units`.
+**No schema change this sprint** — `sale_payments` was already a to-many relation (§1's own note);
+Split Payment is a Zod-validation and business-rule change only.
 
 `provisional_invoice_number` was accepted as a plain client-supplied non-empty string in Sprint 05
 — the server never generates or validates it against
@@ -180,7 +205,7 @@ RLS: tenant-scoped, same template as `stores`/`products`
 
 | Method & path | Status |
 | --- | --- |
-| `POST /api/v1/sales` | **Implemented Sprint 05, extended since.** Request now also accepts an optional `trading_day_id` (Sprint 26), and per-line `discount_percent_basis_points`/`discount_amount_minor_units` plus a top-level `discount_approved_by` (Sprint 27). **Tax (Sprint 28) needs no new request field at all** — `tax_rate_basis_points`/`tax_mode`/`pricing_mode` are read straight from `shop_settings`, never client-supplied, per DR-008. Still not the full shape [sales.md](../../11-api/endpoints/sales.md) documents — device/customer fields remain unbuilt. Requires any role (`requirePermission`, Sprint 23). |
+| `POST /api/v1/sales` | **Implemented Sprint 05, extended since.** Request now also accepts an optional `trading_day_id` (Sprint 26), and per-line `discount_percent_basis_points`/`discount_amount_minor_units` plus a top-level `discount_approved_by` (Sprint 27). **Tax (Sprint 28) needs no new request field at all** — `tax_rate_basis_points`/`tax_mode`/`pricing_mode` are read straight from `shop_settings`, never client-supplied, per DR-008. **`payments` (Sprint 29) loosened from exactly one `cash` entry to one-or-more across `cash`/`card`/`other`**, summed against `grand_total_minor_units`. Still not the full shape [sales.md](../../11-api/endpoints/sales.md) documents — device/customer fields remain unbuilt. Requires any role (`requirePermission`, Sprint 23). |
 | `GET /sales/{id}`, `GET /sales`, `GET /sales/lookup` | **Already documented**, not yet implemented — deferred past this sprint. |
 
 **Mobile till screen (`apps/mobile/lib/features/pos/`) — built Sprint 09.** Sprint 05 deferred it
@@ -206,8 +231,8 @@ Request body for `POST /api/v1/sales` (Zod schema, server-side):
 | `line_items[].product_id` | UUIDv4, required |
 | `line_items[].quantity` | Positive integer, required (no fractional quantities — §2) |
 | `line_items[].client_unit_price_minor_units` | Non-negative integer, required |
-| `payments` | Array, exactly length 1, required |
-| `payments[].method` | Literal `"cash"`, required |
+| `payments` | Array, **min length 1** (loosened from exactly 1, Sprint 29), required |
+| `payments[].method` | `.enum(["cash", "card", "other"])` (loosened from a `"cash"` literal, Sprint 29), required |
 | `payments[].amount_minor_units` | Non-negative integer, required |
 | `trading_day_id` (Sprint 26) | UUIDv4, optional |
 | `line_items[].discount_percent_basis_points` (Sprint 27) | `.int().min(0).max(10000)`, optional, mutually exclusive with the field below |
@@ -221,8 +246,9 @@ product in the caller's tenant (`NOT_FOUND` otherwise); each line's
 pre-discount subtotal (`VALIDATION_FAILED` otherwise); if the resulting
 `discount_total_minor_units` exceeds `shop_settings.discount_auto_approval_threshold_minor_units`,
 either the caller's own resolved role or `discount_approved_by`'s resolved role must be
-Manager/Owner (`DISCOUNT_REQUIRES_APPROVAL` otherwise); `payments[0].amount_minor_units` must equal
-the computed `grand_total_minor_units` exactly (`PAYMENT_AMOUNT_MISMATCH` otherwise).
+Manager/Owner (`DISCOUNT_REQUIRES_APPROVAL` otherwise); **the sum of every `payments[].amount_minor_units`**
+(Sprint 29 — was a single value's own equality check before Split Payment) must equal the computed
+`grand_total_minor_units` exactly (`PAYMENT_AMOUNT_MISMATCH` otherwise).
 
 ## 6. Error handling and user-facing messages
 
@@ -333,8 +359,22 @@ scanning yet — backlog.md item 6), hold/resume, and a bottom-nav shell are all
 - **Live verification, real database, throwaway tenant (deleted after)** — see
   [sprint-28.md](../../17-sprints/sprint-28.md) for the exact checks and results.
 
-**Explicitly deferred:** split payment (M2 item 5), hold/resume (M2 item 6), any mobile UI for
-applying a discount, viewing a tax breakdown, or entering a Manager-approval override, FR-055/056's
+**Sprint 29 scope (Split Payment):**
+- Unit tests (`pos/service.test.ts`): two `payments` entries (`cash` + `card`) summing exactly to
+  `grand_total_minor_units` succeed, each recorded individually; a three-entry split (`cash` +
+  `card` + `other`) also succeeds; entries summing to anything other than the grand total are
+  rejected with `PAYMENT_AMOUNT_MISMATCH`; a single `card`-only payment (no cash at all) succeeds,
+  confirming the loosened schema doesn't silently assume cash is always present.
+- An empty `payments` array is rejected with `VALIDATION_FAILED` at the Zod layer (schema's own
+  `min(1)`, enforced in the Route Handler before `createSale` is ever called) — a live-verification
+  check, not a `pos/service.test.ts` unit test, matching how `line_items`' own `min(1)` is verified.
+- **Live verification, real database, throwaway tenant (deleted after)** — see
+  [sprint-29.md](../../17-sprints/sprint-29.md) for the exact checks and results, including that a
+  split sale's cash portion (not its card/other portions) is exactly what Trading Day's
+  `expected_cash_minor_units` sums, unchanged from Sprint 26's own aggregation query.
+
+**Explicitly deferred:** hold/resume (M2 item 6), any mobile UI for applying a discount, viewing a
+tax breakdown, entering a Manager-approval override, or choosing split payment, FR-055/056's
 invoice-document rendering (§1).
 
 ## 11. Traceability
@@ -353,6 +393,8 @@ invoice-document rendering (§1).
 | [DR-009](../../03-functional-requirements/business-rules.md) (composition/unregistered → zero tax) | §2 | Met — trusts Settings' own already-enforced invariant |
 | [money-and-tax.md](../../07-database/money-and-tax.md) (rounding, inclusive residual method) | §1, §2 | Met, incl. this sprint's own dated extension to the discount+inclusive combination |
 | [FR-055](../../03-functional-requirements/functional-requirements.md)/[FR-056](../../03-functional-requirements/functional-requirements.md) (GST invoice document rendering) | — | **Not met** — this module computes the numbers; document rendering is Receipt & Printing's own scope, named deferred (§1) |
+| [FR-028](../../03-functional-requirements/functional-requirements.md) (split payment across two or more methods) | §2, §4, §5 | Met for the backend contract; no mobile UI yet |
+| [WF-004](../../06-workflows/sales-workflows.md#wf-004--complete-a-sale-with-split-payment) (split payment workflow) | §1, §2 | Met — API generalises WF-004's two-portion UI target to N ≥ 1 entries, per §1's own reasoning |
 
 ## Change Log
 
@@ -365,3 +407,4 @@ invoice-document rendering (§1).
 | 0.5.0 | 2026-08-14 | Sprint 23: permission enforcement applied — `POST /sales` now requires any active role (Cashier, Manager, or Owner). |
 | 0.6.0 | 2026-08-14 | Sprint 27 (backlog.md M2 item 3): per-line Discount built, per WF-003 (already fully designed in Phase 06). `discount_percent_basis_points`/`discount_amount_minor_units` (mutually exclusive, DR-011), server-computed `line_discount_minor_units`/`discount_total_minor_units`, `DISCOUNT_REQUIRES_APPROVAL` (DR-012) satisfied by the caller's own Manager/Owner role or an optional `discount_approved_by`. Corrected `subtotal_minor_units` to the post-discount, pre-tax meaning money-and-tax.md always specified — invisible until discount existed to make it diverge from the pre-discount sum. |
 | 0.7.0 | 2026-08-14 | Sprint 28 (backlog.md M2 item 4): Tax computation built — `tax_total_minor_units`/`line_tax_minor_units`/`tax_rate_basis_points`/`tax_registration_type_at_sale`, wired entirely from `shop_settings` (DR-008), both exclusive and inclusive pricing modes. Found and resolved a real gap money-and-tax.md's own two worked examples never jointly covered: inclusive pricing combined with a discount on the same line — resolved as a dated correction (discount subtracted from the tax-inclusive gross before the residual tax split runs), the natural composition of two already-accepted rules, not a new one. FR-055/056's invoice-document rendering remains explicitly deferred to Receipt & Printing. |
+| 0.8.0 | 2026-08-14 | Sprint 29 (backlog.md M2 item 5): Split Payment built, per WF-004. `payments` loosened from exactly one `cash` entry to one-or-more across `cash`/`card`/`other` (FR-028), summed against `grand_total_minor_units` (`PAYMENT_AMOUNT_MISMATCH` restated for the multi-entry case). No schema change — `sale_payments` was already a to-many relation; Trading Day's `expected_cash_minor_units` aggregation (Sprint 26) needed no change either, since it already sums every matching cash row regardless of how many belong to one sale. |
