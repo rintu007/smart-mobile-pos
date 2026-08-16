@@ -27,6 +27,7 @@ import '../features/returns/presentation/screens/return_approvals_screen.dart';
 import '../features/returns/presentation/screens/return_detail_screen.dart';
 import '../features/sales_history/presentation/screens/sale_detail_screen.dart';
 import '../features/sales_history/presentation/screens/sales_history_screen.dart';
+import '../features/settings/presentation/screens/settings_screen.dart';
 import 'home_screen.dart';
 
 /// Bridges Supabase's auth-state stream to `GoRouter`'s `refreshListenable`,
@@ -152,6 +153,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/reports/low-stock',
         builder: (context, state) => const LowStockReportScreen(),
+      ),
+      GoRoute(
+        path: '/settings',
+        builder: (context, state) => const SettingsScreen(),
       ),
     ],
   );
