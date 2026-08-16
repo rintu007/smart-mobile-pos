@@ -64,6 +64,7 @@ const createdSale = (overrides: Partial<Record<string, unknown>> = {}) => ({
 const moneySettings = (overrides: Partial<Record<string, unknown>> = {}) => ({
   roundingRule: "round_half_up",
   discountAutoApprovalThresholdMinorUnits: BigInt(50000),
+  returnAutoApprovalThresholdMinorUnits: BigInt(50000),
   taxMode: "unregistered",
   taxRateBasisPoints: 0,
   pricingMode: "exclusive",

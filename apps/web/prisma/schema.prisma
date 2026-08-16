@@ -48,6 +48,7 @@ model Tenant {
   shopSettings     ShopSettings?
   tradingDays      TradingDay[]
   customers        Customer[]
+  returns          Return[]
 
   @@map("tenants")
 }
@@ -75,6 +76,7 @@ model Store {
   auditLogEntries AuditLog[]
   userStoreRoles  UserStoreRole[]
   tradingDays     TradingDay[]
+  returns         Return[]
 
   @@index([tenantId])
   @@map("stores")
@@ -109,6 +111,8 @@ model User {
   tradingDaysCreated    TradingDay[]    @relation("TradingDayCreator")
   tradingDaysReopened   TradingDay[]    @relation("TradingDayReopener")
   customersCreated      Customer[]
+  returnsCreated        Return[]        @relation("ReturnCreator")
+  returnsApproved       Return[]        @relation("ReturnApprover")
 
   @@index([tenantId])
   @@map("users")
@@ -235,6 +239,7 @@ model Sale {
   customer   Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
   lineItems  SaleLineItem[]
   payments   SalePayment[]
+  returns    Return[]
 
   // Sprint 24: provisional-number uniqueness closes a real, pre-existing gap (identifiers.md §2
   // already documented it as a business-meaningful identifier, but M0 never enforced it).
@@ -345,8 +350,9 @@ model SaleLineItem {
   lineTaxMinorUnits      BigInt @default(0) @map("line_tax_minor_units")
   lineTotalMinorUnits    BigInt @map("line_total_minor_units")
 
-  sale    Sale    @relation(fields: [saleId], references: [id], onDelete: Restrict)
-  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  sale            Sale             @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  product         Product          @relation(fields: [productId], references: [id], onDelete: Restrict)
+  returnLineItems ReturnLineItem[]
 
   @@index([saleId])
   @@map("sale_line_items")
@@ -500,4 +506,64 @@ model Customer {
 
   @@index([tenantId])
   @@map("customers")
+}
+
+/// Sprint 33 (backlog.md M3 item 3) — docs/07-database/schema-server.md's `returns` table
+/// (Context 6), adjusted per two dated corrections in docs/modules/returns/specification.md §1:
+/// (1) gains `createdAt`/`createdBy` — the documented column list never named them, but
+/// `GET /returns`' own Cashier "own device only" scope (returns.md) is unimplementable without a
+/// column recording who filed the return, the same `created_by`-as-device-substitute adaptation
+/// `sales-invoices/specification.md` already made; (2) the documented separate
+/// `client_operation_id UNIQUE` column is dropped — `id` alone is this table's idempotency key,
+/// matching every other client-generated-id table's actual working mechanism (`sales`,
+/// `trading_days`, `customers`), not a second, redundant uniqueness constraint with no precedent
+/// elsewhere in this schema. `status` keeps the full five-value CHECK vocabulary for forward
+/// compatibility even though only `pending_approval`/`completed`/`rejected` are ever written this
+/// sprint (`initiated`/`approved` are documented-but-unreachable, the same shape
+/// `movement_type: 'opening'` already established, Sprint 22).
+model Return {
+  id                    String    @id @db.Uuid
+  tenantId              String    @map("tenant_id") @db.Uuid
+  storeId               String    @map("store_id") @db.Uuid
+  originalSaleId        String    @map("original_sale_id") @db.Uuid
+  /// 'pending_approval' | 'completed' | 'rejected' reachable this sprint — no CHECK added here,
+  /// matching Sale.status/TradingDay.status's own precedent of relying on application code (Zod)
+  /// for a small fixed-value set.
+  status                String
+  refundTotalMinorUnits BigInt    @map("refund_total_minor_units")
+  approvedBy            String?   @map("approved_by") @db.Uuid
+  completedAt           DateTime? @map("completed_at") @db.Timestamptz
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  createdBy             String    @map("created_by") @db.Uuid
+
+  tenant       Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  store        Store            @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  originalSale Sale             @relation(fields: [originalSaleId], references: [id], onDelete: Restrict)
+  approver     User?            @relation("ReturnApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
+  creator      User             @relation("ReturnCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  lineItems    ReturnLineItem[]
+
+  @@index([originalSaleId])
+  @@index([tenantId, storeId, status])
+  @@index([tenantId, createdAt])
+  @@map("returns")
+}
+
+/// docs/07-database/schema-server.md's `return_line_items` table (Context 6). `quantity` is `Int`,
+/// not `NUMERIC(14,3)` — matches `SaleLineItem.quantity`'s own already-established M0 simplification
+/// (no fractional-quantity field exists anywhere in this schema yet). `id` is server-generated
+/// (`randomUUID()`), unlike `returns.id` — a line item has no client-facing idempotency need of its
+/// own, it's only ever identified through its parent return.
+model ReturnLineItem {
+  id                     String @id @db.Uuid
+  returnId               String @map("return_id") @db.Uuid
+  originalSaleLineItemId String @map("original_sale_line_item_id") @db.Uuid
+  quantity               Int
+  refundAmountMinorUnits BigInt @map("refund_amount_minor_units")
+
+  return               Return       @relation(fields: [returnId], references: [id], onDelete: Restrict)
+  originalSaleLineItem SaleLineItem @relation(fields: [originalSaleLineItemId], references: [id], onDelete: Restrict)
+
+  @@index([originalSaleLineItemId])
+  @@map("return_line_items")
 }
