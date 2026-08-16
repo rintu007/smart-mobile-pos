@@ -41,7 +41,7 @@ class TillScreen extends ConsumerWidget {
     final products = ref.watch(filteredProductListProvider);
     final categories = ref.watch(categoriesListProvider);
     final selectedCategoryId = ref.watch(posCategoryFilterProvider);
-    final cartLines = ref.watch(cartControllerProvider);
+    final cartLines = ref.watch(cartControllerProvider).lines;
     final grandTotal = ref.watch(cartGrandTotalProvider);
     final completeSaleState = ref.watch(completeSaleControllerProvider);
     final colorScheme = Theme.of(context).colorScheme;
@@ -68,6 +68,16 @@ class TillScreen extends ConsumerWidget {
             icon: const Icon(Icons.qr_code_scanner),
             tooltip: 'Scan barcode',
             onPressed: () => _scanBarcode(context, ref),
+          ),
+          // navigation-model.md §2's "Hold" icon — WF-005 step 3 (resume).
+          // Always navigates to /pos/hold; that screen itself auto-resumes
+          // and pops immediately when exactly one cart is held, per
+          // tap-count-audit.md's own 1-tap budget for that case.
+          IconButton(
+            key: const Key('pos_held_carts_button'),
+            icon: const Icon(Icons.pause_circle_outline),
+            tooltip: 'Held carts',
+            onPressed: () => context.push('/pos/hold'),
           ),
           IconButton(
             key: const Key('pos_sales_history_button'),
@@ -201,25 +211,43 @@ class TillScreen extends ConsumerWidget {
               ),
             ),
           Padding(
-            padding: const EdgeInsets.all(16),
-            child: SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                key: const Key('pos_complete_sale_button'),
-                onPressed: cartLines.isEmpty || completeSaleState.isLoading
-                    ? null
-                    : () => ref
-                        .read(completeSaleControllerProvider.notifier)
-                        .completeSale(),
-                child: completeSaleState.isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Complete sale (cash)'),
-              ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                // WF-005 step 1 — hold the active cart, ≤1 tap
+                // (tap-count-audit.md).
+                Expanded(
+                  child: OutlinedButton(
+                    key: const Key('pos_hold_button'),
+                    onPressed: cartLines.isEmpty
+                        ? null
+                        : () => ref.read(cartControllerProvider.notifier).hold(),
+                    child: const Text('Hold'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
+                  child: SizedBox(
+                    height: 48,
+                    child: ElevatedButton(
+                      key: const Key('pos_complete_sale_button'),
+                      onPressed: cartLines.isEmpty || completeSaleState.isLoading
+                          ? null
+                          : () => ref
+                              .read(completeSaleControllerProvider.notifier)
+                              .completeSale(),
+                      child: completeSaleState.isLoading
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Complete sale (cash)'),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],

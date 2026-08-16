@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/features/pos/domain/entities/cart_line.dart';
 import 'package:mobile/features/pos/domain/entities/completed_sale.dart';
+import 'package:mobile/features/pos/domain/entities/held_sale.dart';
 import 'package:mobile/features/pos/domain/entities/sale_detail.dart';
 import 'package:mobile/features/pos/domain/repositories/sale_repository.dart';
 import 'package:mobile/features/pos/presentation/providers/pos_providers.dart';
@@ -25,6 +26,25 @@ class _FakeSaleRepository implements SaleRepository {
 
   @override
   Future<SaleDetail?> getSaleDetail(String id) async => detail;
+
+  @override
+  Future<void> saveDraft({
+    required String id,
+    required String storeId,
+    required List<CartLine> lines,
+  }) => throw UnimplementedError();
+
+  @override
+  Future<void> deleteDraft(String id) => throw UnimplementedError();
+
+  @override
+  Future<void> holdSale(String id) => throw UnimplementedError();
+
+  @override
+  Future<List<CartLine>?> resumeSale(String id) => throw UnimplementedError();
+
+  @override
+  Future<List<HeldSale>> listHeldSales() => throw UnimplementedError();
 }
 
 Widget _wrap(SaleDetail? detail, {String saleId = 'sale-1'}) {

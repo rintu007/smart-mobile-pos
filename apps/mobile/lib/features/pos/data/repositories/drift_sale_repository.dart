@@ -7,6 +7,7 @@ import '../../../../core/database/database.dart';
 import '../../../../core/invoicing/invoice_number_generator.dart';
 import '../../domain/entities/cart_line.dart';
 import '../../domain/entities/completed_sale.dart';
+import '../../domain/entities/held_sale.dart';
 import '../../domain/entities/sale_detail.dart';
 import '../../domain/repositories/sale_repository.dart';
 
@@ -33,7 +34,7 @@ class DriftSaleRepository implements SaleRepository {
       final existing = await (_db.select(
         _db.sales,
       )..where((t) => t.id.equals(id))).getSingleOrNull();
-      if (existing != null) {
+      if (existing != null && existing.status == 'completed') {
         return CompletedSale(
           id: existing.id,
           provisionalInvoiceNumber: existing.provisionalInvoiceNumber,
@@ -46,12 +47,19 @@ class DriftSaleRepository implements SaleRepository {
         0,
         (sum, line) => sum + line.lineTotalMinorUnits,
       );
-      final provisionalInvoiceNumber = await _invoiceNumbers.next();
       final completedAt = DateTime.now();
+      // Sprint 30: an existing draft/held row (the normal case — the cart
+      // was auto-persisted from its first item onward) already carries the
+      // one provisional invoice number assigned at its own creation; reused
+      // here, never regenerated. Only the no-existing-row fallback (a direct
+      // call bypassing the draft flow, e.g. a test) mints a fresh one.
+      final provisionalInvoiceNumber =
+          existing?.provisionalInvoiceNumber ?? await _invoiceNumbers.next();
+      final createdAt = existing?.createdAt ?? completedAt;
 
       await _db
           .into(_db.sales)
-          .insert(
+          .insertOnConflictUpdate(
             SalesCompanion.insert(
               id: id,
               status: 'completed',
@@ -59,8 +67,13 @@ class DriftSaleRepository implements SaleRepository {
               subtotalMinorUnits: grandTotalMinorUnits,
               grandTotalMinorUnits: grandTotalMinorUnits,
               completedAt: Value(completedAt),
+              createdAt: Value(createdAt),
             ),
           );
+
+      await (_db.delete(
+        _db.saleLineItems,
+      )..where((t) => t.saleId.equals(id))).go();
 
       // Payload matches POST /api/v1/sales' own request shape exactly —
       // sync-api.md §1 — mirroring DriftProductRepository's precedent.
@@ -85,6 +98,9 @@ class DriftSaleRepository implements SaleRepository {
         });
       }
 
+      await (_db.delete(
+        _db.salePayments,
+      )..where((t) => t.saleId.equals(id))).go();
       await _db
           .into(_db.salePayments)
           .insert(
@@ -105,6 +121,12 @@ class DriftSaleRepository implements SaleRepository {
           {'method': 'cash', 'amount_minor_units': grandTotalMinorUnits},
         ],
       });
+      // Plain `.insert()`, not `insertOnConflictUpdate` — this point is only
+      // ever reached once per genuinely new completion (the idempotent-
+      // replay check above returns early for an already-`completed` id), so
+      // a conflict here is a real bug elsewhere, not a case to silently
+      // paper over. Also preserves the existing atomicity test's own
+      // premise (a pre-seeded conflicting row must throw, not be updated).
       await _db
           .into(_db.outboundQueue)
           .insert(
@@ -180,5 +202,151 @@ class DriftSaleRepository implements SaleRepository {
       grandTotalMinorUnits: sale.grandTotalMinorUnits,
       lines: lines,
     );
+  }
+
+  @override
+  Future<void> saveDraft({
+    required String id,
+    required String storeId,
+    required List<CartLine> lines,
+  }) {
+    if (lines.isEmpty) {
+      throw ArgumentError(
+        'An empty cart has nothing to persist — call deleteDraft instead.',
+      );
+    }
+
+    return _db.transaction(() async {
+      final existing = await (_db.select(
+        _db.sales,
+      )..where((t) => t.id.equals(id))).getSingleOrNull();
+
+      final grandTotalMinorUnits = lines.fold<int>(
+        0,
+        (sum, line) => sum + line.lineTotalMinorUnits,
+      );
+      final now = DateTime.now();
+      // Sprint 30 (pos/specification.md §1's third design decision): the
+      // provisional invoice number is assigned once, at the cart's own
+      // creation (its first `saveDraft` call), and never reassigned —
+      // whether or not this particular cart ever reaches completion.
+      final provisionalInvoiceNumber =
+          existing?.provisionalInvoiceNumber ?? await _invoiceNumbers.next();
+
+      await _db
+          .into(_db.sales)
+          .insertOnConflictUpdate(
+            SalesCompanion.insert(
+              id: id,
+              status: 'draft',
+              provisionalInvoiceNumber: provisionalInvoiceNumber,
+              subtotalMinorUnits: grandTotalMinorUnits,
+              grandTotalMinorUnits: grandTotalMinorUnits,
+              createdAt: Value(existing?.createdAt ?? now),
+            ),
+          );
+
+      await (_db.delete(
+        _db.saleLineItems,
+      )..where((t) => t.saleId.equals(id))).go();
+      for (final line in lines) {
+        await _db
+            .into(_db.saleLineItems)
+            .insert(
+              SaleLineItemsCompanion.insert(
+                id: const Uuid().v4(),
+                saleId: id,
+                productId: line.productId,
+                quantity: line.quantity.toDouble(),
+                unitPriceMinorUnits: line.unitPriceMinorUnits,
+                lineTotalMinorUnits: line.lineTotalMinorUnits,
+              ),
+            );
+      }
+    });
+  }
+
+  @override
+  Future<void> deleteDraft(String id) {
+    return _db.transaction(() async {
+      await (_db.delete(
+        _db.saleLineItems,
+      )..where((t) => t.saleId.equals(id))).go();
+      await (_db.delete(_db.sales)..where((t) => t.id.equals(id))).go();
+    });
+  }
+
+  @override
+  Future<void> holdSale(String id) async {
+    await (_db.update(_db.sales)..where(
+          (t) => t.id.equals(id) & t.status.equals('draft'),
+        ))
+        .write(const SalesCompanion(status: Value('held')));
+  }
+
+  @override
+  Future<List<CartLine>?> resumeSale(String id) {
+    return _db.transaction(() async {
+      final updated =
+          await (_db.update(_db.sales)..where(
+                (t) => t.id.equals(id) & t.status.equals('held'),
+              ))
+              .writeReturning(const SalesCompanion(status: Value('draft')));
+      if (updated.isEmpty) return null;
+
+      final lineItemRows = await (_db.select(
+        _db.saleLineItems,
+      )..where((t) => t.saleId.equals(id))).get();
+
+      final lines = <CartLine>[];
+      for (final lineItem in lineItemRows) {
+        final product = await (_db.select(
+          _db.products,
+        )..where((t) => t.id.equals(lineItem.productId))).getSingleOrNull();
+        lines.add(
+          CartLine(
+            productId: lineItem.productId,
+            productName: product?.name ?? 'Unknown product',
+            unitPriceMinorUnits: lineItem.unitPriceMinorUnits,
+            quantity: lineItem.quantity.round(),
+          ),
+        );
+      }
+      return lines;
+    });
+  }
+
+  @override
+  Future<List<HeldSale>> listHeldSales() async {
+    final rows =
+        await (_db.select(_db.sales)
+              ..where((t) => t.status.equals('held'))
+              ..orderBy([
+                (t) => OrderingTerm(
+                  expression: t.createdAt,
+                  mode: OrderingMode.desc,
+                ),
+              ]))
+            .get();
+
+    final result = <HeldSale>[];
+    for (final row in rows) {
+      final itemCount =
+          await (_db.selectOnly(_db.saleLineItems)
+                ..addColumns([_db.saleLineItems.id.count()])
+                ..where(_db.saleLineItems.saleId.equals(row.id)))
+              .map((r) => r.read(_db.saleLineItems.id.count()) ?? 0)
+              .getSingle();
+      result.add(
+        HeldSale(
+          id: row.id,
+          provisionalInvoiceNumber: row.provisionalInvoiceNumber,
+          itemCount: itemCount,
+          grandTotalMinorUnits: row.grandTotalMinorUnits,
+          createdAt: row.createdAt,
+        ),
+      );
+    }
+    return result;
   }
 }

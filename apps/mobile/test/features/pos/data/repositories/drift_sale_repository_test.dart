@@ -232,4 +232,179 @@ void main() {
       expect(sugarLine.lineTotalMinorUnits, 500);
     });
   });
+
+  // Sprint 30 (backlog.md M2 item 6, Hold/Resume) — pos/specification.md §1/§2.
+  group('saveDraft', () {
+    test('creates a draft row with a real provisional invoice number', () async {
+      await repository.saveDraft(id: 'sale-1', storeId: 'store-1', lines: lines);
+
+      final row = await (db.select(
+        db.sales,
+      )..where((t) => t.id.equals('sale-1'))).getSingle();
+      expect(row.status, 'draft');
+      expect(row.provisionalInvoiceNumber, isNotEmpty);
+      expect(row.grandTotalMinorUnits, 3500);
+      expect(row.completedAt, isNull);
+      expect(row.createdAt, isNotNull);
+    });
+
+    test(
+      'a second call updates the same row in place, never inserting a second row',
+      () async {
+        await repository.saveDraft(id: 'sale-1', storeId: 'store-1', lines: lines);
+        final first = await (db.select(
+          db.sales,
+        )..where((t) => t.id.equals('sale-1'))).getSingle();
+
+        await repository.saveDraft(
+          id: 'sale-1',
+          storeId: 'store-1',
+          lines: const [
+            CartLine(
+              productId: 'product-1',
+              productName: 'Filter coffee',
+              unitPriceMinorUnits: 1500,
+              quantity: 3,
+            ),
+          ],
+        );
+
+        final rows = await db.select(db.sales).get();
+        expect(rows, hasLength(1));
+        expect(rows.single.provisionalInvoiceNumber, first.provisionalInvoiceNumber);
+        expect(rows.single.grandTotalMinorUnits, 4500);
+
+        final lineItemRows = await (db.select(
+          db.saleLineItems,
+        )..where((t) => t.saleId.equals('sale-1'))).get();
+        expect(lineItemRows, hasLength(1));
+        expect(lineItemRows.single.quantity, 3);
+      },
+    );
+
+    test('rejects an empty cart', () async {
+      expect(
+        () => repository.saveDraft(id: 'sale-1', storeId: 'store-1', lines: const []),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+  });
+
+  group('deleteDraft', () {
+    test('removes the draft row and its line items', () async {
+      await repository.saveDraft(id: 'sale-1', storeId: 'store-1', lines: lines);
+
+      await repository.deleteDraft('sale-1');
+
+      expect(await db.select(db.sales).get(), isEmpty);
+      expect(await db.select(db.saleLineItems).get(), isEmpty);
+    });
+
+    test('is a no-op for an id that does not exist', () async {
+      await repository.deleteDraft('missing');
+      expect(await db.select(db.sales).get(), isEmpty);
+    });
+  });
+
+  group('holdSale / resumeSale / listHeldSales', () {
+    test('holdSale transitions draft -> held', () async {
+      await repository.saveDraft(id: 'sale-1', storeId: 'store-1', lines: lines);
+
+      await repository.holdSale('sale-1');
+
+      final row = await (db.select(
+        db.sales,
+      )..where((t) => t.id.equals('sale-1'))).getSingle();
+      expect(row.status, 'held');
+    });
+
+    test('resumeSale transitions held -> draft and returns the cart lines', () async {
+      await repository.saveDraft(id: 'sale-1', storeId: 'store-1', lines: lines);
+      await repository.holdSale('sale-1');
+
+      final resumed = await repository.resumeSale('sale-1');
+
+      expect(resumed, isNotNull);
+      expect(resumed, hasLength(2));
+      expect(
+        resumed!.map((l) => l.productId).toSet(),
+        {'product-1', 'product-2'},
+      );
+      final row = await (db.select(
+        db.sales,
+      )..where((t) => t.id.equals('sale-1'))).getSingle();
+      expect(row.status, 'draft');
+    });
+
+    test('resumeSale returns null for an id that is not currently held', () async {
+      await repository.saveDraft(id: 'sale-1', storeId: 'store-1', lines: lines);
+      // Still 'draft', never held.
+      expect(await repository.resumeSale('sale-1'), isNull);
+      expect(await repository.resumeSale('missing'), isNull);
+    });
+
+    test('listHeldSales returns only held rows, most-recently-held first', () async {
+      await repository.saveDraft(id: 'sale-1', storeId: 'store-1', lines: lines);
+      await repository.holdSale('sale-1');
+      await (db.update(db.sales)..where((t) => t.id.equals('sale-1'))).write(
+        SalesCompanion(createdAt: Value(DateTime(2026, 1, 1))),
+      );
+
+      await repository.saveDraft(id: 'sale-2', storeId: 'store-1', lines: lines);
+      await repository.holdSale('sale-2');
+      await (db.update(db.sales)..where((t) => t.id.equals('sale-2'))).write(
+        SalesCompanion(createdAt: Value(DateTime(2026, 1, 2))),
+      );
+
+      // A third, still-active draft must not appear in the held list.
+      await repository.saveDraft(id: 'sale-3', storeId: 'store-1', lines: lines);
+
+      final held = await repository.listHeldSales();
+
+      expect(held.map((s) => s.id).toList(), ['sale-2', 'sale-1']);
+      expect(held.first.itemCount, 2);
+      expect(held.first.grandTotalMinorUnits, 3500);
+    });
+  });
+
+  group('completeSale on an existing draft/held row', () {
+    test(
+      'transitions the existing row in place -- same id, same provisional number',
+      () async {
+        await repository.saveDraft(id: 'sale-1', storeId: 'store-1', lines: lines);
+        final draft = await (db.select(
+          db.sales,
+        )..where((t) => t.id.equals('sale-1'))).getSingle();
+
+        final completed = await repository.completeSale(
+          id: 'sale-1',
+          storeId: 'store-1',
+          lines: lines,
+        );
+
+        expect(completed.provisionalInvoiceNumber, draft.provisionalInvoiceNumber);
+        final rows = await db.select(db.sales).get();
+        expect(rows, hasLength(1));
+        expect(rows.single.status, 'completed');
+        expect(rows.single.completedAt, isNotNull);
+      },
+    );
+
+    test('completing a held cart works the same way', () async {
+      await repository.saveDraft(id: 'sale-1', storeId: 'store-1', lines: lines);
+      await repository.holdSale('sale-1');
+
+      final completed = await repository.completeSale(
+        id: 'sale-1',
+        storeId: 'store-1',
+        lines: lines,
+      );
+
+      expect(completed.grandTotalMinorUnits, 3500);
+      final row = await (db.select(
+        db.sales,
+      )..where((t) => t.id.equals('sale-1'))).getSingle();
+      expect(row.status, 'completed');
+    });
+  });
 }

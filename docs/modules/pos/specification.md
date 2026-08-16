@@ -3,7 +3,7 @@
 > **Status:** 🟢 Approved
 > **Module:** POS
 > **Slice:** V1 — this document scopes only M0's minimal first cut, not the full V1 shape (§1)
-> **Version:** 0.8.0
+> **Version:** 0.9.0
 > **Last updated:** 2026-08-14
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
@@ -87,6 +87,59 @@ validate. Trading Day's `expected_cash_minor_units` computation (Sprint 26) alre
 every matching `cash` `sale_payments` row per trading day, not "the sale's one payment" — it needed
 no change at all to correctly sum multiple cash portions from the same sale.
 
+**Closed, Sprint 30 (backlog.md M2 item 6 — M2's last item):** Hold/Resume, per
+[WF-005](../../06-workflows/sales-workflows.md#wf-005--hold-and-resume-a-sale) and the
+[Sale state machine](../../06-workflows/state-machines.md#sale) (both already fully designed in
+Phase 06, not invented this sprint) — **mobile-only work**, the first M2 sprint that isn't a
+backend change at all: `POST /api/v1/sales` needs no change whatsoever, per this document's own
+already-established note that "a held/draft cart is not itself synced to the server as a partial
+row" ([sales.md](../../11-api/endpoints/sales.md)).
+
+**A real requirement found while writing this section, broader than the backlog item's own one-line
+description:** [navigation-model.md §4](../../09-navigation/navigation-model.md#4-mid-sale-interruption)
+already states the active (not-yet-explicitly-held) cart must be "continuously auto-persisted
+locally from the moment the first item is added — not only at the moment the Cashier taps 'Hold'...
+Durability is unconditional from the first item onward." A literal reading of "Hold/Resume" as "an
+explicit Hold button plus a way to get a held cart back" would satisfy WF-005's own four steps but
+would silently leave an in-progress (not-yet-held) cart still vulnerable to an app kill —
+contradicting a requirement this project's own Phase 09 documentation already fixed. Built to the
+fuller, already-documented requirement: every cart mutation (`addProduct`/`decrementProduct`) writes
+through to the local `sales`/`sale_line_items` rows immediately, not only an explicit "Hold" tap.
+
+**A second real design gap, found in the same pass**: [schema-local.md](../../07-database/schema-local.md)'s
+"Immutable event" classification for `sales`/`sale_line_items`/`sale_payments` — "created locally...
+never edited after creation" — cannot be literally true once a cart is auto-persisted while still
+`draft`/`held`; the row is genuinely mutated (line items replaced, totals recomputed) on every cart
+change, right up until it becomes `completed`. Resolved as a dated correction to schema-local.md:
+these three tables are immutable **only from the moment `status` first becomes `'completed'`**,
+mirroring `schema-server.md`'s own trigger ("no `UPDATE`/`DELETE` once `status = 'completed'`")
+exactly — this was already the server's own rule; the local classification simply hadn't been
+checked against it since it predates any code that could expose the gap (no draft/held row was ever
+written locally before this sprint).
+
+**A third resolved design decision**: the provisional invoice number ([ADR-0008](../../adr/ADR-0008-offline-invoice-numbering.md))
+is assigned **once, at the moment a cart's first item is added** (i.e. at `Draft` creation) and
+never reassigned — not deferred to the moment of payment. This means a cart that's started and then
+abandoned or explicitly cancelled "burns" a provisional number, leaving a gap in the local
+provisional sequence. Accepted deliberately: ADR-0008's own gapless guarantee applies to the
+**canonical** (server-assigned) sequence only, never claimed for the provisional one; real-world
+receipt-numbering schemes routinely have gaps from voided/abandoned transactions, and the
+alternative (deferring assignment to payment time) would mean a cart's own visible reference number
+changes identity partway through its life, which ADR-0008's "shown on the receipt immediately... and
+is permanent" framing is clearly written to rule out. The practical effect: `completeSale` now
+**updates the existing draft/held row in place** (same `id`, same provisional number) rather than
+inserting a fresh row at the moment of payment — the single most consequential implementation change
+this sprint makes to the existing M0 write path.
+
+**Explicitly still deferred**: WF-006 (cancel/discard an in-progress or held cart) — a distinct,
+separately-numbered Phase 06 workflow with its own FR, not part of backlog item 6's "Hold/Resume"
+wording. A held cart can accumulate in the Held Carts list with no way to remove it until this
+lands; named as a real, continuing gap, not silently absorbed into this sprint's scope. Also
+deferred: `stock_movements`/audit-log writes from the mobile write path (a pre-existing gap found
+while reading `DriftSaleRepository`, unrelated to hold/resume — the local repository has never
+written either, matching the server path's own behaviour only for `stock_movements`, since the
+mobile side has no local audit-log table at all yet).
+
 ## 2. Business rules
 
 - A sale belongs to exactly one tenant and store; the server, never the client, computes
@@ -157,6 +210,25 @@ no change at all to correctly sum multiple cash portions from the same sale.
   instead of a single value). No live payment-network authorisation exists in V1 — `card`/`other`
   are manually recorded amounts, per [WF-004](../../06-workflows/sales-workflows.md#wf-004--complete-a-sale-with-split-payment)'s
   own explicit "not a processed transaction" framing.
+- **Mobile-only, Sprint 30** — the [Sale state machine](../../06-workflows/state-machines.md#sale):
+  `Draft → Held` (hold), `Held → Draft` (resume), `Draft → Completed` (payment confirmed),
+  `Draft → Cancelled`/`Held → Cancelled` (cancel — **not built this sprint**, §1). **Held cannot go
+  directly to Completed** — a held cart is always resumed back to `Draft` first, never paid directly
+  from the held list; the resume action itself performs this transition, there is no separate "pay
+  from list" shortcut.
+- The active cart's local `sales`/`sale_line_items` rows are kept continuously in sync with
+  `CartController`'s in-memory state on every mutation — [FR-026](../../03-functional-requirements/functional-requirements.md).
+  If the last line item is removed (decremented to zero), the draft row is deleted entirely, not
+  left behind as an empty row — an empty cart has nothing to hold.
+- Resuming a different held cart while the active cart already has items **implicitly holds the
+  active cart first** — nothing is silently discarded; the previously-active cart becomes another
+  entry in the held list rather than being lost. Not specified explicitly by WF-005 (which only
+  describes a single cart's own lifecycle), resolved here as the only option that satisfies FR-026's
+  durability guarantee for *both* carts simultaneously.
+- [FR-026](../../03-functional-requirements/functional-requirements.md): a held cart survives an
+  app kill/restart intact — trivially true once the active-cart auto-persistence above holds, since
+  a held cart is simply a `status = 'held'` row like any other, read back from the same local table
+  on next launch, not a separate in-memory-only mechanism that could be lost.
 
 ## 3. Database tables and relationships
 
@@ -201,12 +273,31 @@ RLS: tenant-scoped, same template as `stores`/`products`
 [schema-server.md](../../07-database/schema-server.md)'s own stated design — access is via
 `sale_id`, never queried directly across tenants.
 
+### Local (Drift) schema — Sprint 30
+
+`apps/mobile/lib/core/database/tables/sales.dart` gains one column: `created_at` (nullable
+`DateTime`, schema v3→v4, `m.addColumn`) — the local `Sales` table never had one at all before this
+sprint (a real, pre-existing gap: every server Tier 1/2 table has `created_at` by convention, per
+schema-server.md's own header note; the local M0-minimal slice simply omitted it since nothing
+locally needed to distinguish "when was this row first written" from "when did it complete" until
+now). Existing `'completed'` rows are backfilled (`created_at = completed_at`) in the same migration
+step — a reasonable historical approximation, not a claim of precision, matching this codebase's
+own "a real founder device already has real local data" migration discipline. Used to order the
+Held Carts list, most-recently-held first (matching `listCompletedSales`' own existing
+most-recent-first convention).
+
+**No other local schema change.** `provisional_invoice_number` stays `NOT NULL` (§1's third design
+decision — assigned once, at `Draft` creation, never deferred); `status` already accepted
+`'draft'`/`'held'`/`'cancelled'` values in the column's own documented intent, simply never written
+by any code path before this sprint.
+
 ## 4. API contract
 
 | Method & path | Status |
 | --- | --- |
 | `POST /api/v1/sales` | **Implemented Sprint 05, extended since.** Request now also accepts an optional `trading_day_id` (Sprint 26), and per-line `discount_percent_basis_points`/`discount_amount_minor_units` plus a top-level `discount_approved_by` (Sprint 27). **Tax (Sprint 28) needs no new request field at all** — `tax_rate_basis_points`/`tax_mode`/`pricing_mode` are read straight from `shop_settings`, never client-supplied, per DR-008. **`payments` (Sprint 29) loosened from exactly one `cash` entry to one-or-more across `cash`/`card`/`other`**, summed against `grand_total_minor_units`. Still not the full shape [sales.md](../../11-api/endpoints/sales.md) documents — device/customer fields remain unbuilt. Requires any role (`requirePermission`, Sprint 23). |
-| `GET /sales/{id}`, `GET /sales`, `GET /sales/lookup` | **Already documented**, not yet implemented — deferred past this sprint. |
+| `GET /sales/{id}`, `GET /sales`, `GET /sales/lookup` | **Built Sprint 24** (M1 item 8, `sales-invoices` module) — this row was stale (still said "not yet implemented") until corrected here; see [sales-invoices/specification.md](../sales-invoices/specification.md). |
+| **Hold/Resume (Sprint 30)** | **No server endpoint at all, by design** — §1's own already-established note. A held/draft cart never crosses the wire; only the eventual `POST /sales` completion call does, exactly as today. |
 
 **Mobile till screen (`apps/mobile/lib/features/pos/`) — built Sprint 09.** Sprint 05 deferred it
 ("prove the server contract live, defer the mobile UI," a now-three-sprints-running pattern its own
@@ -296,6 +387,28 @@ claim that `/pos` is the shell's home route yet; the bottom-nav shell in
 [navigation-model.md](../../09-navigation/navigation-model.md) isn't built. Barcode scan (no
 scanning yet — backlog.md item 6), hold/resume, and a bottom-nav shell are all out of scope.
 
+**Sprint 30 additions:**
+
+- `TillScreen` gains a `pos_hold_button` next to `pos_complete_sale_button` — enabled only when the
+  cart has at least one line (WF-005 step 1, ≤1 tap per
+  [tap-count-audit.md](../../09-navigation/tap-count-audit.md)). Holding clears the active on-screen
+  cart (the row itself stays in local storage as `status = 'held'`).
+- `TillScreen`'s app bar gains a `pos_held_carts_button` icon, per
+  [navigation-model.md §2](../../09-navigation/navigation-model.md#2-the-persistent-elements)'s
+  already-specified "Hold" icon — always navigates to `/pos/hold` (new route,
+  [route-map.md](../../09-navigation/route-map.md) already reserved it).
+- `/pos/hold` (`HeldCartsScreen`, new): on build, resolves the held-cart list.
+  **Zero held** → an empty-state message. **Exactly one held** → auto-resumes it and pops
+  immediately, no list frame shown — the tap-count-audit's own documented 1-tap budget for this
+  case. **Two or more held** → shows the list (invoice number, item count, total, "held" relative
+  time from the new `created_at` column); tapping an entry resumes it and pops —
+  tap-count-audit.md's own **documented, accepted exception**: 2 taps in the multi-held case,
+  1 over budget, because "resuming the wrong cart in under a tap would be a worse outcome than one
+  extra tap to pick the right one."
+- Resuming an entry loads its line items back into the active cart and pops back to `/pos` — per
+  §2's own resolved design decision, implicitly holding whatever cart was already active first if
+  it had items.
+
 ## 10. Test plan
 
 **Sprint 05 scope:**
@@ -377,6 +490,28 @@ scanning yet — backlog.md item 6), hold/resume, and a bottom-nav shell are all
 tax breakdown, entering a Manager-approval override, or choosing split payment, FR-055/056's
 invoice-document rendering (§1).
 
+**Sprint 30 scope (Hold/Resume, mobile-only):**
+- Repository tests (`drift_sale_repository_test.dart`, real in-memory Drift DB): adding the first
+  cart line creates a `status = 'draft'` row with a real provisional invoice number; subsequent
+  mutations update the same row's line items/totals in place, never inserting a second row;
+  removing the last line deletes the draft row entirely; `holdSale` transitions `draft → held`;
+  `resumeSale` transitions `held → draft` and returns the correct line items; `listHeldSales`
+  returns only `held` rows, most-recently-held first; `completeSale` on an existing draft/held row
+  updates it in place (same `id`, same provisional number) rather than inserting a new row;
+  `completeSale` replayed on an already-`completed` `id` is idempotent (unchanged from M0).
+- Provider tests (`pos_providers_test.dart`, `ProviderContainer`): `CartController` persists a draft
+  on every mutation; `hold()` clears the active state and leaves the row `held`; resuming a held
+  cart while a different cart is already active implicitly holds the active one first (§2's own
+  resolved decision), verified by asserting both rows' end states.
+- Widget tests (`till_screen_test.dart`, `held_carts_screen_test.dart`, using this codebase's
+  existing hand-rolled Fake-repository convention): the Hold button is disabled on an empty cart;
+  tapping it clears the visible cart; the Held Carts screen auto-resumes and pops with exactly one
+  held cart; shows a picker list with two or more; tapping a list entry resumes and pops.
+- **No live-verification step** — this sprint has no server-side change at all (§1), so there is no
+  analog to the backend sprints' real-HTTP-request proof; `flutter analyze`/`flutter test` passing
+  against the real (in-memory) Drift engine is this sprint's equivalent rigor, per this project's
+  own established mobile-sprint precedent (Sprint 09/20/21).
+
 ## 11. Traceability
 
 | Requirement | Covered by | Status |
@@ -395,6 +530,12 @@ invoice-document rendering (§1).
 | [FR-055](../../03-functional-requirements/functional-requirements.md)/[FR-056](../../03-functional-requirements/functional-requirements.md) (GST invoice document rendering) | — | **Not met** — this module computes the numbers; document rendering is Receipt & Printing's own scope, named deferred (§1) |
 | [FR-028](../../03-functional-requirements/functional-requirements.md) (split payment across two or more methods) | §2, §4, §5 | Met for the backend contract; no mobile UI yet |
 | [WF-004](../../06-workflows/sales-workflows.md#wf-004--complete-a-sale-with-split-payment) (split payment workflow) | §1, §2 | Met — API generalises WF-004's two-portion UI target to N ≥ 1 entries, per §1's own reasoning |
+| [FR-026](../../03-functional-requirements/functional-requirements.md) (a held cart survives an app kill/restart) | §2, §3 | Met |
+| [FR-027](../../03-functional-requirements/functional-requirements.md) (holding a cart records no stock movement) | §2 | Met — a draft/held row is never a `stock_movements` trigger, only `completeSale` is (and only once fully hooked up — §1's own named pre-existing gap) |
+| [WF-005](../../06-workflows/sales-workflows.md#wf-005--hold-and-resume-a-sale) (hold/resume workflow) | §1, §2, §9 | Met |
+| [Sale state machine](../../06-workflows/state-machines.md#sale) | §2 | Met for `Draft`/`Held`/`Completed`; `Cancelled` reachable in the schema but no UI reaches it yet (WF-006, named deferred, §1) |
+| [navigation-model.md §4](../../09-navigation/navigation-model.md#4-mid-sale-interruption) (continuous auto-persistence from the first item) | §1, §2 | Met |
+| [tap-count-audit.md](../../09-navigation/tap-count-audit.md) (hold/resume tap budgets) | §9 | Met, including the documented, accepted 2-tap exception for 2+ held carts |
 
 ## Change Log
 
@@ -408,3 +549,4 @@ invoice-document rendering (§1).
 | 0.6.0 | 2026-08-14 | Sprint 27 (backlog.md M2 item 3): per-line Discount built, per WF-003 (already fully designed in Phase 06). `discount_percent_basis_points`/`discount_amount_minor_units` (mutually exclusive, DR-011), server-computed `line_discount_minor_units`/`discount_total_minor_units`, `DISCOUNT_REQUIRES_APPROVAL` (DR-012) satisfied by the caller's own Manager/Owner role or an optional `discount_approved_by`. Corrected `subtotal_minor_units` to the post-discount, pre-tax meaning money-and-tax.md always specified — invisible until discount existed to make it diverge from the pre-discount sum. |
 | 0.7.0 | 2026-08-14 | Sprint 28 (backlog.md M2 item 4): Tax computation built — `tax_total_minor_units`/`line_tax_minor_units`/`tax_rate_basis_points`/`tax_registration_type_at_sale`, wired entirely from `shop_settings` (DR-008), both exclusive and inclusive pricing modes. Found and resolved a real gap money-and-tax.md's own two worked examples never jointly covered: inclusive pricing combined with a discount on the same line — resolved as a dated correction (discount subtracted from the tax-inclusive gross before the residual tax split runs), the natural composition of two already-accepted rules, not a new one. FR-055/056's invoice-document rendering remains explicitly deferred to Receipt & Printing. |
 | 0.8.0 | 2026-08-14 | Sprint 29 (backlog.md M2 item 5): Split Payment built, per WF-004. `payments` loosened from exactly one `cash` entry to one-or-more across `cash`/`card`/`other` (FR-028), summed against `grand_total_minor_units` (`PAYMENT_AMOUNT_MISMATCH` restated for the multi-entry case). No schema change — `sale_payments` was already a to-many relation; Trading Day's `expected_cash_minor_units` aggregation (Sprint 26) needed no change either, since it already sums every matching cash row regardless of how many belong to one sale. |
+| 0.9.0 | 2026-08-14 | Sprint 30 (backlog.md M2 item 6, **M2's last item**): Hold/Resume built — mobile-only, no server change at all. Per WF-005/the Sale state machine (both already fully designed in Phase 06). Built to a fuller requirement than the backlog item's own one-line description: navigation-model.md §4 already required the active (not-yet-held) cart to be continuously auto-persisted from the first item added, not only at an explicit "Hold" tap — satisfied by making `completeSale` update the existing draft/held row in place (same id, same provisional invoice number) rather than inserting a fresh row at payment time. Corrected schema-local.md's "Immutable event" classification for `sales`/`sale_line_items`/`sale_payments`, which cannot be literally true once a draft/held row is genuinely mutated pre-completion — now immutable only once `status` first becomes `'completed'`, mirroring schema-server.md's own trigger exactly. Resolved that the provisional invoice number is assigned once, at Draft creation, accepting gaps in the local provisional sequence from abandoned carts as a deliberate, named consequence, distinct from the canonical sequence's own stronger gapless guarantee. WF-006 (cancel) explicitly deferred, not part of this item's scope. |
