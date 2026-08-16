@@ -6,6 +6,7 @@ import 'package:mobile/core/database/database.dart' hide Product;
 import 'package:mobile/core/store_context/store_context_providers.dart';
 import 'package:mobile/features/catalogue/domain/entities/product.dart';
 import 'package:mobile/features/pos/domain/entities/cart_line.dart';
+import 'package:mobile/features/pos/domain/entities/resumed_cart.dart';
 import 'package:mobile/features/pos/presentation/providers/pos_providers.dart';
 
 // Sprint 30 (backlog.md M2 item 6, Hold/Resume): `CartController` now
@@ -163,14 +164,19 @@ void main() {
         await controller.addProduct(coffee);
         final activeDraftId = container.read(cartControllerProvider).draftId!;
 
-        await controller.loadResumed('held-sale-1', const [
-          CartLine(
-            productId: 'product-2',
-            productName: 'Sugar',
-            unitPriceMinorUnits: 500,
-            quantity: 1,
+        await controller.loadResumed(
+          'held-sale-1',
+          const ResumedCart(
+            lines: [
+              CartLine(
+                productId: 'product-2',
+                productName: 'Sugar',
+                unitPriceMinorUnits: 500,
+                quantity: 1,
+              ),
+            ],
           ),
-        ]);
+        );
 
         expect(container.read(cartControllerProvider).draftId, 'held-sale-1');
         expect(container.read(cartControllerProvider).lines.single.productId, 'product-2');
@@ -189,17 +195,88 @@ void main() {
       final container = makeContainer();
       addTearDown(container.dispose);
 
-      await container.read(cartControllerProvider.notifier).loadResumed('held-sale-1', const [
-        CartLine(
-          productId: 'product-2',
-          productName: 'Sugar',
-          unitPriceMinorUnits: 500,
-          quantity: 1,
+      await container.read(cartControllerProvider.notifier).loadResumed(
+        'held-sale-1',
+        const ResumedCart(
+          lines: [
+            CartLine(
+              productId: 'product-2',
+              productName: 'Sugar',
+              unitPriceMinorUnits: 500,
+              quantity: 1,
+            ),
+          ],
         ),
-      ]);
+      );
 
       expect(container.read(cartControllerProvider).draftId, 'held-sale-1');
       expect(container.read(cartControllerProvider).lines, hasLength(1));
+    });
+  });
+
+  // Sprint 32 (backlog.md M3 item 2).
+  group('attachCustomer / removeCustomer', () {
+    test('attaching a customer to a non-empty cart persists it on the draft row', () async {
+      final container = makeContainer();
+      addTearDown(container.dispose);
+      final db = container.read(appDatabaseProvider);
+      final controller = container.read(cartControllerProvider.notifier);
+
+      await controller.addProduct(coffee);
+      await controller.attachCustomer(
+        customerId: 'customer-1',
+        customerName: 'Ramesh Kumar',
+        customerPhone: '9876543210',
+      );
+
+      expect(container.read(cartControllerProvider).customerId, 'customer-1');
+      expect(container.read(cartControllerProvider).customerName, 'Ramesh Kumar');
+      final draftId = container.read(cartControllerProvider).draftId!;
+      final row = await (db.select(db.sales)..where((t) => t.id.equals(draftId))).getSingle();
+      expect(row.customerId, 'customer-1');
+    });
+
+    test('attaching a customer to an empty cart only sets in-memory state', () async {
+      final container = makeContainer();
+      addTearDown(container.dispose);
+      final db = container.read(appDatabaseProvider);
+
+      await container
+          .read(cartControllerProvider.notifier)
+          .attachCustomer(customerId: 'customer-1');
+
+      expect(container.read(cartControllerProvider).customerId, 'customer-1');
+      expect(await db.select(db.sales).get(), isEmpty);
+    });
+
+    test('a customer attached before any item is added survives the first addProduct', () async {
+      final container = makeContainer();
+      addTearDown(container.dispose);
+      final db = container.read(appDatabaseProvider);
+      final controller = container.read(cartControllerProvider.notifier);
+
+      await controller.attachCustomer(customerId: 'customer-1');
+      await controller.addProduct(coffee);
+
+      final draftId = container.read(cartControllerProvider).draftId!;
+      final row = await (db.select(db.sales)..where((t) => t.id.equals(draftId))).getSingle();
+      expect(row.customerId, 'customer-1');
+    });
+
+    test('removeCustomer detaches the customer and persists the change', () async {
+      final container = makeContainer();
+      addTearDown(container.dispose);
+      final db = container.read(appDatabaseProvider);
+      final controller = container.read(cartControllerProvider.notifier);
+
+      await controller.addProduct(coffee);
+      await controller.attachCustomer(customerId: 'customer-1');
+      await controller.removeCustomer();
+
+      expect(container.read(cartControllerProvider).customerId, isNull);
+      final draftId = container.read(cartControllerProvider).draftId!;
+      final row = await (db.select(db.sales)..where((t) => t.id.equals(draftId))).getSingle();
+      expect(row.customerId, isNull);
     });
   });
 }

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/money/money.dart';
 import '../../../catalogue/presentation/providers/category_providers.dart';
 import '../../../catalogue/presentation/providers/product_providers.dart';
+import '../../../customers/presentation/widgets/customer_picker_sheet.dart';
 import '../providers/pos_providers.dart';
 
 /// `/pos`, per route-map.md — backlog.md item 6's till screen. No design-
@@ -36,12 +37,29 @@ class TillScreen extends ConsumerWidget {
     ref.read(cartControllerProvider.notifier).addProduct(product);
   }
 
+  /// FR-050, taken literally — opens `CustomerPickerSheet` over this screen
+  /// rather than pushing a route (docs/modules/customers/specification.md
+  /// §1a). Attaches the result, if any; a `null` result (dismissed) leaves
+  /// the cart's existing attachment untouched.
+  Future<void> _pickCustomer(BuildContext context, WidgetRef ref) async {
+    final customer = await showCustomerPickerSheet(context);
+    if (customer == null || !context.mounted) return;
+    ref
+        .read(cartControllerProvider.notifier)
+        .attachCustomer(
+          customerId: customer.id,
+          customerName: customer.name,
+          customerPhone: customer.phone,
+        );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final products = ref.watch(filteredProductListProvider);
     final categories = ref.watch(categoriesListProvider);
     final selectedCategoryId = ref.watch(posCategoryFilterProvider);
-    final cartLines = ref.watch(cartControllerProvider).lines;
+    final cart = ref.watch(cartControllerProvider);
+    final cartLines = cart.lines;
     final grandTotal = ref.watch(cartGrandTotalProvider);
     final completeSaleState = ref.watch(completeSaleControllerProvider);
     final colorScheme = Theme.of(context).colorScheme;
@@ -84,6 +102,15 @@ class TillScreen extends ConsumerWidget {
             icon: const Icon(Icons.receipt_long),
             tooltip: 'Sales history',
             onPressed: () => context.push('/sales-history'),
+          ),
+          // Browse/lookup entry point, distinct from the Customer chip
+          // below (attach-to-sale) — customers/specification.md §1a's two
+          // distinct entry points for two distinct jobs.
+          IconButton(
+            key: const Key('pos_customers_button'),
+            icon: const Icon(Icons.people_outline),
+            tooltip: 'Customers',
+            onPressed: () => context.push('/customers'),
           ),
         ],
       ),
@@ -210,6 +237,25 @@ class TillScreen extends ConsumerWidget {
                 style: TextStyle(color: colorScheme.error),
               ),
             ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: InputChip(
+                key: const Key('pos_customer_chip'),
+                avatar: const Icon(Icons.person_outline, size: 18),
+                label: Text(
+                  cart.customerId == null
+                      ? 'Add customer'
+                      : (cart.customerName ?? cart.customerPhone ?? 'Customer'),
+                ),
+                onPressed: () => _pickCustomer(context, ref),
+                onDeleted: cart.customerId == null
+                    ? null
+                    : () => ref.read(cartControllerProvider.notifier).removeCustomer(),
+              ),
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(

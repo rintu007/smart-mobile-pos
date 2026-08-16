@@ -1,7 +1,9 @@
 import * as productsService from "@/modules/products/service";
 import * as posService from "@/modules/pos/service";
+import * as customersService from "@/modules/customers/service";
 import { createProductRequestSchema } from "@/modules/products/schema";
 import { createSaleRequestSchema } from "@/modules/pos/schema";
+import { createCustomerRequestSchema } from "@/modules/customers/schema";
 import { ApiError } from "@/core/errors/api-error";
 import * as repository from "./repository";
 import type { ProductCursor } from "./repository";
@@ -16,9 +18,11 @@ interface OperationResult {
   error?: { code: string; message: string };
 }
 
-// sync-api.md §2's full six-group ordering collapses to these two groups this sprint (only two
+// sync-api.md §2's full six-group ordering collapses to these groups this sprint (only these
 // operation types have a client-facing write path at all — docs/modules/sync-engine/specification.md §1).
-const TYPE_ORDER: SyncPushOperation["type"][] = ["product.create", "sale.create"];
+// `customer.create` (Sprint 32) is ordered alongside `product.create`, both before `sale.create` —
+// a sale referencing a customer created in the same batch needs that customer to exist first.
+const TYPE_ORDER: SyncPushOperation["type"][] = ["product.create", "customer.create", "sale.create"];
 
 /**
  * docs/modules/sync-engine/specification.md#4-api-contract.
@@ -65,6 +69,15 @@ async function runOperation(
       }
       const product = await productsService.createProduct(authUserId, tenantId, parsed.data);
       return { client_operation_id: operation.client_operation_id, status: "accepted", entity_id: product.id };
+    }
+
+    if (operation.type === "customer.create") {
+      const parsed = createCustomerRequestSchema.safeParse(operation.payload);
+      if (!parsed.success) {
+        return rejected(operation.client_operation_id, "VALIDATION_FAILED", "Customer payload failed validation.");
+      }
+      const customer = await customersService.createCustomer(authUserId, tenantId, parsed.data);
+      return { client_operation_id: operation.client_operation_id, status: "accepted", entity_id: customer.id };
     }
 
     // operation.type === "sale.create" — the schema's own enum guarantees no other value reaches here.

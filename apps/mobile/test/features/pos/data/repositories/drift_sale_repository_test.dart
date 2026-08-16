@@ -325,9 +325,9 @@ void main() {
       final resumed = await repository.resumeSale('sale-1');
 
       expect(resumed, isNotNull);
-      expect(resumed, hasLength(2));
+      expect(resumed!.lines, hasLength(2));
       expect(
-        resumed!.map((l) => l.productId).toSet(),
+        resumed.lines.map((l) => l.productId).toSet(),
         {'product-1', 'product-2'},
       );
       final row = await (db.select(
@@ -364,6 +364,90 @@ void main() {
       expect(held.map((s) => s.id).toList(), ['sale-2', 'sale-1']);
       expect(held.first.itemCount, 2);
       expect(held.first.grandTotalMinorUnits, 3500);
+    });
+  });
+
+  // Sprint 32 (backlog.md M3 item 2): the attached customer survives
+  // hold/resume, the same durability guarantee FR-026 already requires for
+  // line items.
+  group('customerId', () {
+    test('saveDraft persists the attached customer id', () async {
+      await repository.saveDraft(
+        id: 'sale-1',
+        storeId: 'store-1',
+        lines: lines,
+        customerId: 'customer-1',
+      );
+
+      final row = await (db.select(
+        db.sales,
+      )..where((t) => t.id.equals('sale-1'))).getSingle();
+      expect(row.customerId, 'customer-1');
+    });
+
+    test('resumeSale restores the attached customer\'s name/phone from the local cache', () async {
+      await db
+          .into(db.customers)
+          .insert(
+            CustomersCompanion.insert(
+              id: 'customer-1',
+              name: const Value('Ramesh Kumar'),
+              phone: const Value('9876543210'),
+            ),
+          );
+      await repository.saveDraft(
+        id: 'sale-1',
+        storeId: 'store-1',
+        lines: lines,
+        customerId: 'customer-1',
+      );
+      await repository.holdSale('sale-1');
+
+      final resumed = await repository.resumeSale('sale-1');
+
+      expect(resumed, isNotNull);
+      expect(resumed!.customerId, 'customer-1');
+      expect(resumed.customerName, 'Ramesh Kumar');
+      expect(resumed.customerPhone, '9876543210');
+    });
+
+    test('resumeSale returns null customer fields when no customer is attached', () async {
+      await repository.saveDraft(id: 'sale-1', storeId: 'store-1', lines: lines);
+      await repository.holdSale('sale-1');
+
+      final resumed = await repository.resumeSale('sale-1');
+
+      expect(resumed!.customerId, isNull);
+      expect(resumed.customerName, isNull);
+    });
+
+    test('completeSale persists the attached customer id and includes it in the payload', () async {
+      await repository.completeSale(
+        id: 'sale-1',
+        storeId: 'store-1',
+        lines: lines,
+        customerId: 'customer-1',
+      );
+
+      final row = await (db.select(
+        db.sales,
+      )..where((t) => t.id.equals('sale-1'))).getSingle();
+      expect(row.customerId, 'customer-1');
+
+      final queueRow = await (db.select(
+        db.outboundQueue,
+      )..where((t) => t.clientOperationId.equals('sale-1'))).getSingle();
+      expect(jsonDecode(queueRow.payload)['customer_id'], 'customer-1');
+    });
+
+    test('completeSale omits customer_id from the payload when none is attached', () async {
+      await repository.completeSale(id: 'sale-1', storeId: 'store-1', lines: lines);
+
+      final queueRow = await (db.select(
+        db.outboundQueue,
+      )..where((t) => t.clientOperationId.equals('sale-1'))).getSingle();
+      final payload = jsonDecode(queueRow.payload) as Map<String, dynamic>;
+      expect(payload.containsKey('customer_id'), isFalse);
     });
   });
 

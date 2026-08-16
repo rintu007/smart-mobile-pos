@@ -25,6 +25,19 @@ function formatCustomer(customer: {
   };
 }
 
+/**
+ * docs/modules/customers/specification.md#1a-sprint-32--customers-mobile-m3-item-2 — the
+ * sanctioned cross-module existence check `pos/service.ts` calls for an optional `customer_id` on
+ * `POST /sales`, service-to-service per layering-rules.md §2 (never a direct repository-to-table
+ * reach-through the way `products/repository.ts`'s own `findCategoryById`/`findUnitById`
+ * pre-existing shortcut does — that's a real, separately-noted inconsistency this function
+ * deliberately doesn't copy).
+ */
+export async function customerExists(tenantId: string, id: string): Promise<boolean> {
+  const customer = await repository.findCustomerById(tenantId, id);
+  return customer !== null;
+}
+
 function assertHasIdentifier(name: string | null | undefined, phone: string | null | undefined) {
   if (!name && !phone) {
     throw new ApiError(

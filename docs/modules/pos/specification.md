@@ -3,8 +3,8 @@
 > **Status:** 🟢 Approved
 > **Module:** POS
 > **Slice:** V1 — this document scopes only M0's minimal first cut, not the full V1 shape (§1)
-> **Version:** 0.9.0
-> **Last updated:** 2026-08-14
+> **Version:** 0.10.0
+> **Last updated:** 2026-08-16
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
 
@@ -295,7 +295,7 @@ by any code path before this sprint.
 
 | Method & path | Status |
 | --- | --- |
-| `POST /api/v1/sales` | **Implemented Sprint 05, extended since.** Request now also accepts an optional `trading_day_id` (Sprint 26), and per-line `discount_percent_basis_points`/`discount_amount_minor_units` plus a top-level `discount_approved_by` (Sprint 27). **Tax (Sprint 28) needs no new request field at all** — `tax_rate_basis_points`/`tax_mode`/`pricing_mode` are read straight from `shop_settings`, never client-supplied, per DR-008. **`payments` (Sprint 29) loosened from exactly one `cash` entry to one-or-more across `cash`/`card`/`other`**, summed against `grand_total_minor_units`. Still not the full shape [sales.md](../../11-api/endpoints/sales.md) documents — device/customer fields remain unbuilt. Requires any role (`requirePermission`, Sprint 23). |
+| `POST /api/v1/sales` | **Implemented Sprint 05, extended since.** Request now also accepts an optional `trading_day_id` (Sprint 26), and per-line `discount_percent_basis_points`/`discount_amount_minor_units` plus a top-level `discount_approved_by` (Sprint 27). **Tax (Sprint 28) needs no new request field at all** — `tax_rate_basis_points`/`tax_mode`/`pricing_mode` are read straight from `shop_settings`, never client-supplied, per DR-008. **`payments` (Sprint 29) loosened from exactly one `cash` entry to one-or-more across `cash`/`card`/`other`**, summed against `grand_total_minor_units`. **`customer_id` (Sprint 32) accepted as an optional field** — [customers/specification.md §1a](../customers/specification.md#1a-sprint-32--customers-mobile-m3-item-2), validated against the caller's tenant when supplied (`NOT_FOUND` otherwise, the same `category_id`/`unit_id` existence-check shape products/service.ts already established). Still not the full shape [sales.md](../../11-api/endpoints/sales.md) documents — device fields remain unbuilt. Requires any role (`requirePermission`, Sprint 23). |
 | `GET /sales/{id}`, `GET /sales`, `GET /sales/lookup` | **Built Sprint 24** (M1 item 8, `sales-invoices` module) — this row was stale (still said "not yet implemented") until corrected here; see [sales-invoices/specification.md](../sales-invoices/specification.md). |
 | **Hold/Resume (Sprint 30)** | **No server endpoint at all, by design** — §1's own already-established note. A held/draft cart never crosses the wire; only the eventual `POST /sales` completion call does, exactly as today. |
 
@@ -329,9 +329,12 @@ Request body for `POST /api/v1/sales` (Zod schema, server-side):
 | `line_items[].discount_percent_basis_points` (Sprint 27) | `.int().min(0).max(10000)`, optional, mutually exclusive with the field below |
 | `line_items[].discount_amount_minor_units` (Sprint 27) | `.int().nonnegative()`, optional, mutually exclusive with the field above — Zod `.refine` rejects a line carrying both |
 | `discount_approved_by` (Sprint 27) | UUIDv4, optional |
+| `customer_id` (Sprint 32) | UUIDv4, optional |
 
 Server-side, beyond schema validation: every `product_id` must resolve to a real, non-deactivated
-product in the caller's tenant (`NOT_FOUND` otherwise); each line's
+product in the caller's tenant (`NOT_FOUND` otherwise); a supplied `customer_id` must resolve to a
+real `customers` row in the caller's tenant (`NOT_FOUND` otherwise — deactivated customers are
+still valid targets, per customers/specification.md §2's soft-delete stance); each line's
 `client_unit_price_minor_units` must equal the product's current `price_minor_units`
 (`PRICE_MISMATCH` otherwise); a flat `discount_amount_minor_units` may not exceed its own line's
 pre-discount subtotal (`VALIDATION_FAILED` otherwise); if the resulting
@@ -550,3 +553,4 @@ invoice-document rendering (§1).
 | 0.7.0 | 2026-08-14 | Sprint 28 (backlog.md M2 item 4): Tax computation built — `tax_total_minor_units`/`line_tax_minor_units`/`tax_rate_basis_points`/`tax_registration_type_at_sale`, wired entirely from `shop_settings` (DR-008), both exclusive and inclusive pricing modes. Found and resolved a real gap money-and-tax.md's own two worked examples never jointly covered: inclusive pricing combined with a discount on the same line — resolved as a dated correction (discount subtracted from the tax-inclusive gross before the residual tax split runs), the natural composition of two already-accepted rules, not a new one. FR-055/056's invoice-document rendering remains explicitly deferred to Receipt & Printing. |
 | 0.8.0 | 2026-08-14 | Sprint 29 (backlog.md M2 item 5): Split Payment built, per WF-004. `payments` loosened from exactly one `cash` entry to one-or-more across `cash`/`card`/`other` (FR-028), summed against `grand_total_minor_units` (`PAYMENT_AMOUNT_MISMATCH` restated for the multi-entry case). No schema change — `sale_payments` was already a to-many relation; Trading Day's `expected_cash_minor_units` aggregation (Sprint 26) needed no change either, since it already sums every matching cash row regardless of how many belong to one sale. |
 | 0.9.0 | 2026-08-14 | Sprint 30 (backlog.md M2 item 6, **M2's last item**): Hold/Resume built — mobile-only, no server change at all. Per WF-005/the Sale state machine (both already fully designed in Phase 06). Built to a fuller requirement than the backlog item's own one-line description: navigation-model.md §4 already required the active (not-yet-held) cart to be continuously auto-persisted from the first item added, not only at an explicit "Hold" tap — satisfied by making `completeSale` update the existing draft/held row in place (same id, same provisional invoice number) rather than inserting a fresh row at payment time. Corrected schema-local.md's "Immutable event" classification for `sales`/`sale_line_items`/`sale_payments`, which cannot be literally true once a draft/held row is genuinely mutated pre-completion — now immutable only once `status` first becomes `'completed'`, mirroring schema-server.md's own trigger exactly. Resolved that the provisional invoice number is assigned once, at Draft creation, accepting gaps in the local provisional sequence from abandoned carts as a deliberate, named consequence, distinct from the canonical sequence's own stronger gapless guarantee. WF-006 (cancel) explicitly deferred, not part of this item's scope. |
+| 0.10.0 | 2026-08-16 | Sprint 32 (backlog.md M3 item 2, Customers mobile): `POST /sales` gains an optional `customer_id`, validated against the caller's tenant when supplied (`NOT_FOUND` otherwise, the same `category_id`/`unit_id` existence-check shape products/service.ts already established) — see [customers/specification.md §1a](../customers/specification.md#1a-sprint-32--customers-mobile-m3-item-2) for the full mobile picker/attach design. |

@@ -12,6 +12,7 @@ import '../../data/repositories/drift_sale_repository.dart';
 import '../../domain/entities/cart_line.dart';
 import '../../domain/entities/completed_sale.dart';
 import '../../domain/entities/held_sale.dart';
+import '../../domain/entities/resumed_cart.dart';
 import '../../domain/repositories/sale_repository.dart';
 
 final productListProvider = FutureProvider<List<Product>>((ref) {
@@ -74,12 +75,24 @@ final saleRepositoryProvider = Provider<SaleRepository>((ref) {
 /// The in-progress cart's state — `draftId` is `null` only when the cart is
 /// empty (nothing to persist yet). Sprint 30 (backlog.md M2 item 6): the
 /// cart is no longer purely in-memory — see `CartController`'s own
-/// docstring.
+/// docstring. `customerId`/`customerName`/`customerPhone` added Sprint 32
+/// (backlog.md M3 item 2) — the name/phone are a display snapshot, not a
+/// live reference (avoids a provider round-trip on every till rebuild); the
+/// id is the only field actually persisted/sent.
 class CartState {
-  const CartState({this.draftId, this.lines = const []});
+  const CartState({
+    this.draftId,
+    this.lines = const [],
+    this.customerId,
+    this.customerName,
+    this.customerPhone,
+  });
 
   final String? draftId;
   final List<CartLine> lines;
+  final String? customerId;
+  final String? customerName;
+  final String? customerPhone;
 }
 
 /// The in-progress cart. Since Sprint 30 (Hold/Resume,
@@ -138,8 +151,51 @@ class CartController extends Notifier<CartState> {
     final storeId = await ref.read(storeContextProvider.future);
     await ref
         .read(saleRepositoryProvider)
-        .saveDraft(id: draftId, storeId: storeId, lines: updatedLines);
-    state = CartState(draftId: draftId, lines: updatedLines);
+        .saveDraft(
+          id: draftId,
+          storeId: storeId,
+          lines: updatedLines,
+          customerId: state.customerId,
+        );
+    state = CartState(
+      draftId: draftId,
+      lines: updatedLines,
+      customerId: state.customerId,
+      customerName: state.customerName,
+      customerPhone: state.customerPhone,
+    );
+  }
+
+  /// Attaches a customer to the active cart — `CustomerPickerSheet`'s
+  /// result, per FR-050 (Sprint 32, backlog.md M3 item 2). If the cart
+  /// already has a persisted draft row, re-persists immediately so the
+  /// attachment survives hold/resume like every other cart field; if the
+  /// cart is still empty (no draft row yet), only in-memory state is set —
+  /// the attachment is carried along naturally once the first item's own
+  /// `_persist` call creates the row.
+  Future<void> attachCustomer({
+    required String customerId,
+    String? customerName,
+    String? customerPhone,
+  }) async {
+    state = CartState(
+      draftId: state.draftId,
+      lines: state.lines,
+      customerId: customerId,
+      customerName: customerName,
+      customerPhone: customerPhone,
+    );
+    if (state.lines.isNotEmpty) {
+      await _persist(state.lines);
+    }
+  }
+
+  /// Detaches the active cart's customer, the mirror of [attachCustomer].
+  Future<void> removeCustomer() async {
+    state = CartState(draftId: state.draftId, lines: state.lines);
+    if (state.lines.isNotEmpty) {
+      await _persist(state.lines);
+    }
   }
 
   /// WF-005 step 1 — holds the active cart (a no-op on an empty cart, which
@@ -155,13 +211,21 @@ class CartController extends Notifier<CartState> {
   /// WF-005 step 3 — loads a resumed held cart as the active one.
   /// pos/specification.md §2's resolved design decision: if a *different*
   /// cart is already active with items, it's implicitly held first, so
-  /// nothing is silently discarded.
-  Future<void> loadResumed(String id, List<CartLine> lines) async {
+  /// nothing is silently discarded. Sprint 32: the resumed cart's attached
+  /// customer (if any) is restored too, the same durability guarantee
+  /// (FR-026) already applied to line items.
+  Future<void> loadResumed(String id, ResumedCart resumed) async {
     final currentDraftId = state.draftId;
     if (currentDraftId != null && currentDraftId != id && state.lines.isNotEmpty) {
       await ref.read(saleRepositoryProvider).holdSale(currentDraftId);
     }
-    state = CartState(draftId: id, lines: lines);
+    state = CartState(
+      draftId: id,
+      lines: resumed.lines,
+      customerId: resumed.customerId,
+      customerName: resumed.customerName,
+      customerPhone: resumed.customerPhone,
+    );
   }
 
   /// Resets the in-memory cart only — used after `completeSale` has already
@@ -195,7 +259,12 @@ class CompleteSaleController extends AsyncNotifier<CompletedSale?> {
       final storeId = await ref.read(storeContextProvider.future);
       return ref
           .read(saleRepositoryProvider)
-          .completeSale(id: cart.draftId!, storeId: storeId, lines: cart.lines);
+          .completeSale(
+            id: cart.draftId!,
+            storeId: storeId,
+            lines: cart.lines,
+            customerId: cart.customerId,
+          );
     });
 
     if (!state.hasError) {
@@ -222,8 +291,8 @@ final heldSalesListProvider = FutureProvider.autoDispose<List<HeldSale>>((ref) {
 /// success, the same shape `TillScreen._scanBarcode` already established
 /// for a one-shot async action with no state of its own worth tracking.
 Future<bool> resumeHeldSale(WidgetRef ref, String id) async {
-  final lines = await ref.read(saleRepositoryProvider).resumeSale(id);
-  if (lines == null) return false;
-  await ref.read(cartControllerProvider.notifier).loadResumed(id, lines);
+  final resumed = await ref.read(saleRepositoryProvider).resumeSale(id);
+  if (resumed == null) return false;
+  await ref.read(cartControllerProvider.notifier).loadResumed(id, resumed);
   return true;
 }
