@@ -17,6 +17,7 @@ const row = (overrides: Partial<Record<string, unknown>> = {}) => ({
   currencyCode: "INR",
   discountAutoApprovalThresholdMinorUnits: BigInt(50000),
   returnAutoApprovalThresholdMinorUnits: BigInt(100000),
+  lowStockThresholdQuantity: 5,
   printerConfig: null,
   receiptTemplateConfig: null,
   createdAt: updatedAt,
@@ -68,6 +69,16 @@ describe("getSettings", () => {
       status: 404,
       code: "NOT_FOUND",
     });
+  });
+
+  it("includes low_stock_threshold_quantity for every role, including Cashier (Sprint 37)", async () => {
+    vi.mocked(repository.findSettings).mockResolvedValue(row({ lowStockThresholdQuantity: 8 }) as never);
+
+    const cashierResult = await getSettings(tenantId, "cashier");
+    const ownerResult = await getSettings(tenantId, "owner");
+
+    expect(cashierResult).toMatchObject({ low_stock_threshold_quantity: 8 });
+    expect(ownerResult).toMatchObject({ low_stock_threshold_quantity: 8 });
   });
 });
 
@@ -159,5 +170,21 @@ describe("updateSettings", () => {
       status: 404,
       code: "NOT_FOUND",
     });
+  });
+
+  it("writes low_stock_threshold_quantity alone, leaving other fields untouched (Sprint 37)", async () => {
+    vi.mocked(repository.findSettings)
+      .mockResolvedValueOnce(row() as never)
+      .mockResolvedValueOnce(row({ lowStockThresholdQuantity: 10 }) as never);
+    vi.mocked(repository.updateSettingsIfUnchanged).mockResolvedValue(true);
+
+    const result = await updateSettings(tenantId, { ...baseInput, low_stock_threshold_quantity: 10 });
+
+    expect(repository.updateSettingsIfUnchanged).toHaveBeenCalledWith(
+      tenantId,
+      updatedAt,
+      { lowStockThresholdQuantity: 10 },
+    );
+    expect(result).toMatchObject({ low_stock_threshold_quantity: 10 });
   });
 });

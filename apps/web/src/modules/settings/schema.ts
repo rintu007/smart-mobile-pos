@@ -25,6 +25,9 @@ export const updateSettingsRequestSchema = z
     currency_code: z.string().trim().length(3).optional(),
     discount_auto_approval_threshold_minor_units: z.number().int().min(0).optional(),
     return_auto_approval_threshold_minor_units: z.number().int().min(0).optional(),
+    // Added Sprint 37 (backlog.md M4 item 2) — docs/modules/reports/specification.md §1's own
+    // found gap: BR-024/BR-045 need a configurable low-stock threshold and none existed anywhere.
+    low_stock_threshold_quantity: z.number().int().min(0).optional(),
   })
   .strict();
 

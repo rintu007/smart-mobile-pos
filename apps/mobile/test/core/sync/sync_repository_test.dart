@@ -418,4 +418,92 @@ void main() {
       expect(sales, hasLength(1));
     });
   });
+
+  group('shop_settings pull + Reports role probe (Sprint 37, backlog.md M4 item 2)', () {
+    test('writes the pulled low-stock threshold and probe result into ShopSettingsCache', () async {
+      final repo = SyncRepository(
+        db,
+        (operations) async => const SyncPushResponse([]),
+        ({cursor}) async => const SyncPullPage(products: [], nextCursor: null),
+        null,
+        null,
+        () async => const PulledShopSettings(lowStockThresholdQuantity: 8),
+        () async => true,
+      );
+
+      await repo.syncNow();
+
+      final cache = await (db.select(
+        db.shopSettingsCache,
+      )..where((t) => t.id.equals('current'))).getSingle();
+      expect(cache.lowStockThresholdQuantity, 8);
+      expect(cache.canViewReports, true);
+    });
+
+    test('a swallowed probe failure (false) does not throw and is written as-is', () async {
+      final repo = SyncRepository(
+        db,
+        (operations) async => const SyncPushResponse([]),
+        ({cursor}) async => const SyncPullPage(products: [], nextCursor: null),
+        null,
+        null,
+        () async => const PulledShopSettings(lowStockThresholdQuantity: 5),
+        () async => false,
+      );
+
+      await repo.syncNow();
+
+      final cache = await (db.select(
+        db.shopSettingsCache,
+      )..where((t) => t.id.equals('current'))).getSingle();
+      expect(cache.canViewReports, false);
+    });
+
+    test('a null shop_settings pull leaves a previously-cached threshold untouched', () async {
+      await db
+          .into(db.shopSettingsCache)
+          .insert(
+            ShopSettingsCacheCompanion.insert(
+              id: 'current',
+              lowStockThresholdQuantity: const Value(7),
+            ),
+          );
+
+      final repo = SyncRepository(
+        db,
+        (operations) async => const SyncPushResponse([]),
+        ({cursor}) async => const SyncPullPage(products: [], nextCursor: null),
+        null,
+        null,
+        () async => null,
+        () async => true,
+      );
+
+      await repo.syncNow();
+
+      final cache = await (db.select(
+        db.shopSettingsCache,
+      )..where((t) => t.id.equals('current'))).getSingle();
+      expect(cache.lowStockThresholdQuantity, 7);
+      expect(cache.canViewReports, true);
+    });
+
+    test('every pre-existing 3-through-5-arg constructor call site still works unchanged', () async {
+      // No 6th/7th arg supplied at all — defaults to a no-op pull and a false probe,
+      // never throwing, matching every earlier optional-trailing-param precedent.
+      final repo = SyncRepository(
+        db,
+        (operations) async => const SyncPushResponse([]),
+        ({cursor}) async => const SyncPullPage(products: [], nextCursor: null),
+      );
+
+      await repo.syncNow();
+
+      final cache = await (db.select(
+        db.shopSettingsCache,
+      )..where((t) => t.id.equals('current'))).getSingle();
+      expect(cache.lowStockThresholdQuantity, null);
+      expect(cache.canViewReports, false);
+    });
+  });
 }

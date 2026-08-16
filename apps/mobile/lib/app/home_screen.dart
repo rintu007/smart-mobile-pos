@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../core/store_context/store_context_providers.dart';
 import '../core/sync/sync_providers.dart';
 import '../features/authentication/presentation/providers/auth_providers.dart';
+import '../features/reports/presentation/providers/reports_providers.dart';
 import 'providers.dart';
 
 /// The app shell's own root screen — not a feature, per mobile-structure.md
@@ -92,6 +93,29 @@ class HomeScreen extends ConsumerWidget {
               onPressed: () => context.push('/catalogue/units'),
               child: const Text('Units'),
             ),
+            // Sprint 37 (backlog.md M4 item 2) — hidden entirely, not merely
+            // disabled, for a Cashier (or while the probe is still loading/
+            // failed): docs/modules/reports/specification.md §1's "visibility,
+            // not an error state" design decision, since no network call at
+            // report-view time exists to surface a 403 the way every other
+            // role-gated screen in this codebase does.
+            ref
+                .watch(canViewReportsProvider)
+                .maybeWhen(
+                  data: (canView) => canView
+                      ? Column(
+                          children: [
+                            const SizedBox(height: 8),
+                            OutlinedButton(
+                              key: const Key('go_to_reports_button'),
+                              onPressed: () => context.push('/reports'),
+                              child: const Text('Reports'),
+                            ),
+                          ],
+                        )
+                      : const SizedBox.shrink(),
+                  orElse: () => const SizedBox.shrink(),
+                ),
           ],
         ),
       ),

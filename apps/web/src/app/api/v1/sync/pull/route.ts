@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/core/auth/session";
 import { ApiError } from "@/core/errors/api-error";
-import { pullProducts, pullStockMovements, pullSales } from "@/modules/sync/service";
+import { pullProducts, pullStockMovements, pullSales, pullShopSettings } from "@/modules/sync/service";
 import { syncPullQuerySchema } from "@/modules/sync/schema";
 
 // docs/modules/sync-engine/specification.md#4-api-contract. Route Handlers are thin: parse,
@@ -39,6 +39,12 @@ export async function GET(request: NextRequest) {
 
     if (parsed.data.entity_type === "sales") {
       const result = await pullSales(tenantId, parsed.data.cursor, parsed.data.limit);
+      return NextResponse.json(result);
+    }
+
+    // shop_settings added Sprint 37 (backlog.md M4 item 2).
+    if (parsed.data.entity_type === "shop_settings") {
+      const result = await pullShopSettings(tenantId);
       return NextResponse.json(result);
     }
 

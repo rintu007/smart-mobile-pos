@@ -7,12 +7,14 @@ import '../database/tables/stock_movements.dart' show MovementType, MovementType
 import 'sync_dto.dart';
 
 /// Drains `outbound_queue` via `POST /sync/push`, then refreshes the local
-/// `products`/`stock_movements`/`sales` caches via `GET /sync/pull` —
-/// docs/modules/sync-engine/specification.md. `stock_movements`/`sales`
-/// added Sprint 36 (backlog.md M4 item 1) — Reports (M4 item 2) reads from
-/// the local caches this fills. The network calls are injected (same
-/// reasoning `StoreContextRepository` already established) so tests can fake
-/// them without a mocking package.
+/// `products`/`stock_movements`/`sales`/`shop_settings` caches via `GET
+/// /sync/pull` — docs/modules/sync-engine/specification.md.
+/// `stock_movements`/`sales` added Sprint 36 (backlog.md M4 item 1);
+/// `shop_settings` (the low-stock threshold) plus a Manager/Owner
+/// permission probe (`canViewReports`) added Sprint 37 (M4 item 2) — Reports
+/// reads from the local caches this fills. The network calls are injected
+/// (same reasoning `StoreContextRepository` already established) so tests
+/// can fake them without a mocking package.
 class SyncRepository {
   /// The last two pull functions are optional, trailing positional params
   /// with safe no-op defaults — added Sprint 36 (backlog.md M4 item 1) —
@@ -25,20 +27,30 @@ class SyncRepository {
     this._pullProductsPage, [
     Future<StockMovementPullPage> Function({String? cursor})? pullStockMovementsPage,
     Future<SalePullPage> Function({String? cursor})? pullSalesPage,
+    Future<PulledShopSettings?> Function()? pullShopSettings,
+    Future<bool> Function()? probeCanViewReports,
   ]) : _pullStockMovementsPage = pullStockMovementsPage ?? _noPullStockMovements,
-       _pullSalesPage = pullSalesPage ?? _noPullSales;
+       _pullSalesPage = pullSalesPage ?? _noPullSales,
+       _pullShopSettings = pullShopSettings ?? _noPullShopSettings,
+       _probeCanViewReports = probeCanViewReports ?? _noProbeCanViewReports;
 
   final AppDatabase _db;
   final Future<SyncPushResponse> Function(List<QueuedOperation>) _pushOperations;
   final Future<SyncPullPage> Function({String? cursor}) _pullProductsPage;
   final Future<StockMovementPullPage> Function({String? cursor}) _pullStockMovementsPage;
   final Future<SalePullPage> Function({String? cursor}) _pullSalesPage;
+  final Future<PulledShopSettings?> Function() _pullShopSettings;
+  final Future<bool> Function() _probeCanViewReports;
 
   static Future<StockMovementPullPage> _noPullStockMovements({String? cursor}) async =>
       const StockMovementPullPage(movements: [], nextCursor: null, hasMore: false);
 
   static Future<SalePullPage> _noPullSales({String? cursor}) async =>
       const SalePullPage(sales: [], nextCursor: null, hasMore: false);
+
+  static Future<PulledShopSettings?> _noPullShopSettings() async => null;
+
+  static Future<bool> _noProbeCanViewReports() async => false;
 
   /// Pushes every queued/retrying operation, then pulls `products` (full
   /// re-pull every call, no persisted cursor — §2's own named trade-off,
@@ -50,6 +62,7 @@ class SyncRepository {
     final pulledCount = await _pullAllProducts();
     final stockMovementsPulled = await _pullAllStockMovements();
     final salesPulled = await _pullAllSales();
+    await _refreshShopSettingsCache();
 
     return SyncRunSummary(
       accepted: pushResult.accepted,
@@ -244,6 +257,31 @@ class SyncRepository {
 
     await _writeCursor('sales', cursor);
     return count;
+  }
+
+  /// Sprint 37 (backlog.md M4 item 2). `_pullShopSettings`/`_probeCanViewReports`
+  /// never throw (both default to safe no-ops, and their real implementations
+  /// in `sync_api.dart` swallow their own failures) — this always completes,
+  /// writing whatever it learned into the single-row `ShopSettingsCache`. A
+  /// `null` threshold (no `shop_settings` row at all — a theoretical
+  /// pre-Sprint-25 case) leaves the cached column untouched rather than
+  /// overwriting a real cached value with nothing.
+  Future<void> _refreshShopSettingsCache() async {
+    final settings = await _pullShopSettings();
+    final canViewReports = await _probeCanViewReports();
+
+    await _db
+        .into(_db.shopSettingsCache)
+        .insertOnConflictUpdate(
+          ShopSettingsCacheCompanion(
+            id: const Value('current'),
+            lowStockThresholdQuantity: settings == null
+                ? const Value.absent()
+                : Value(settings.lowStockThresholdQuantity),
+            canViewReports: Value(canViewReports),
+            fetchedAt: Value(DateTime.now()),
+          ),
+        );
   }
 
   MovementType _movementTypeFromWire(String wire) =>

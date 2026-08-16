@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +11,7 @@ import 'package:mobile/core/store_context/store_context_providers.dart';
 import 'package:mobile/core/sync/sync_dto.dart';
 import 'package:mobile/core/sync/sync_providers.dart';
 import 'package:mobile/core/sync/sync_repository.dart';
+import 'package:mobile/features/reports/presentation/providers/reports_providers.dart';
 
 void main() {
   testWidgets('home screen proves the local database opens and is queryable', (
@@ -72,5 +75,66 @@ void main() {
       find.text('Synced — nothing queued, 0 product(s) pulled.'),
       findsOneWidget,
     );
+  });
+
+  // Sprint 37 (backlog.md M4 item 2) — docs/modules/reports/specification.md
+  // §1's "visibility, not an error state" design decision.
+  testWidgets('shows the Reports entry point when canViewReportsProvider resolves true', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(AppDatabase(NativeDatabase.memory())),
+          storeContextProvider.overrideWith((ref) async => 'fake-store-id'),
+          autoSyncOnStartProvider.overrideWith((ref) async {}),
+          canViewReportsProvider.overrideWith((ref) async => true),
+        ],
+        child: const MaterialApp(home: HomeScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('go_to_reports_button')), findsOneWidget);
+  });
+
+  testWidgets('hides the Reports entry point when canViewReportsProvider resolves false', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(AppDatabase(NativeDatabase.memory())),
+          storeContextProvider.overrideWith((ref) async => 'fake-store-id'),
+          autoSyncOnStartProvider.overrideWith((ref) async {}),
+          canViewReportsProvider.overrideWith((ref) async => false),
+        ],
+        child: const MaterialApp(home: HomeScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('go_to_reports_button')), findsNothing);
+  });
+
+  testWidgets('hides the Reports entry point (fail-closed) while the probe is still resolving', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(AppDatabase(NativeDatabase.memory())),
+          storeContextProvider.overrideWith((ref) async => 'fake-store-id'),
+          autoSyncOnStartProvider.overrideWith((ref) async {}),
+          // A never-completing Future (no Timer involved, unlike
+          // Future.delayed) so the test doesn't leave a pending timer behind.
+          canViewReportsProvider.overrideWith((ref) => Completer<bool>().future),
+        ],
+        child: const MaterialApp(home: HomeScreen()),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const Key('go_to_reports_button')), findsNothing);
   });
 }

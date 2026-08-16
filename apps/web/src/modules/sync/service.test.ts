@@ -4,9 +4,10 @@ import * as posService from "@/modules/pos/service";
 import * as customersService from "@/modules/customers/service";
 import * as returnsService from "@/modules/returns/service";
 import * as stockMovementsRepository from "@/modules/stock-movements/repository";
+import * as settingsRepository from "@/modules/settings/repository";
 import { ApiError } from "@/core/errors/api-error";
 import * as repository from "./repository";
-import { pushOperations, pullProducts, pullStockMovements, pullSales } from "./service";
+import { pushOperations, pullProducts, pullStockMovements, pullSales, pullShopSettings } from "./service";
 import type { SyncPushRequest } from "./schema";
 
 vi.mock("@/modules/products/service");
@@ -14,6 +15,7 @@ vi.mock("@/modules/pos/service");
 vi.mock("@/modules/customers/service");
 vi.mock("@/modules/returns/service");
 vi.mock("@/modules/stock-movements/repository");
+vi.mock("@/modules/settings/repository");
 vi.mock("./repository");
 
 const authUserId = "11111111-1111-4111-8111-111111111111";
@@ -673,5 +675,33 @@ describe("pullSales", () => {
       status: 422,
       code: "VALIDATION_FAILED",
     });
+  });
+});
+
+describe("pullShopSettings", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("returns the tenant's row wrapped in the standard envelope, cursor/has_more always null/false", async () => {
+    vi.mocked(settingsRepository.findSettings).mockResolvedValue({
+      lowStockThresholdQuantity: 8,
+    } as never);
+
+    const result = await pullShopSettings(tenantId);
+
+    expect(result).toEqual({
+      data: [{ low_stock_threshold_quantity: 8 }],
+      next_cursor: null,
+      has_more: false,
+    });
+  });
+
+  it("returns an empty data array rather than throwing when no row exists", async () => {
+    vi.mocked(settingsRepository.findSettings).mockResolvedValue(null);
+
+    const result = await pullShopSettings(tenantId);
+
+    expect(result.data).toEqual([]);
   });
 });

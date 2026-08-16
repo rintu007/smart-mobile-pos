@@ -84,6 +84,10 @@ export async function createOnboarding(input: OnboardingRequest & { authUserId: 
         currencyCode: "INR",
         discountAutoApprovalThresholdMinorUnits: BigInt(50000),
         returnAutoApprovalThresholdMinorUnits: BigInt(100000),
+        // Added Sprint 37 (backlog.md M4 item 2) — matches ShopSettings.lowStockThresholdQuantity's
+        // own schema default; written explicitly here anyway, same as every other field in this
+        // block, rather than relying on the column default alone.
+        lowStockThresholdQuantity: 5,
         createdBy: input.user_id,
       },
       update: {},
