@@ -9,23 +9,28 @@ Future<ShopSettings> fetchSettings(Dio dio) async {
   return _fromJson(response.data!);
 }
 
-/// `PATCH /api/v1/settings` — same endpoint, Owner only. Translates the two
-/// status codes this screen actually needs to distinguish (§6) into typed
-/// exceptions; any other failure (network, 5xx, …) is left as the raw
-/// `DioException`, same as every other plain-Dio data source in this
-/// codebase (e.g. `units_api.dart`).
+/// `PATCH /api/v1/settings` — same endpoint, Owner only. A genuine partial
+/// update: only the fields the caller passes are sent at all (matching the
+/// server's own optional-everything Zod schema), so `/settings/receipt-template`
+/// (M4 item 4) can send `footerMessage` alone without also resending every
+/// scalar field `/settings` itself edits. Translates the two status codes
+/// this screen actually needs to distinguish (§6) into typed exceptions;
+/// any other failure (network, 5xx, …) is left as the raw `DioException`,
+/// same as every other plain-Dio data source in this codebase (e.g.
+/// `units_api.dart`).
 Future<ShopSettings> updateSettingsOnServer(
   Dio dio, {
   required String clientOperationId,
   required DateTime baseUpdatedAt,
-  required String taxMode,
-  required int taxRateBasisPoints,
-  required String pricingMode,
-  required String roundingRule,
-  required String currencyCode,
-  required int lowStockThresholdQuantity,
+  String? taxMode,
+  int? taxRateBasisPoints,
+  String? pricingMode,
+  String? roundingRule,
+  String? currencyCode,
+  int? lowStockThresholdQuantity,
   int? discountAutoApprovalThresholdMinorUnits,
   int? returnAutoApprovalThresholdMinorUnits,
+  String? footerMessage,
 }) async {
   try {
     final response = await dio.patch<Map<String, dynamic>>(
@@ -33,14 +38,15 @@ Future<ShopSettings> updateSettingsOnServer(
       data: {
         'client_operation_id': clientOperationId,
         'base_updated_at': baseUpdatedAt.toIso8601String(),
-        'tax_mode': taxMode,
-        'tax_rate_basis_points': taxRateBasisPoints,
-        'pricing_mode': pricingMode,
-        'rounding_rule': roundingRule,
-        'currency_code': currencyCode,
-        'low_stock_threshold_quantity': lowStockThresholdQuantity,
+        'tax_mode': ?taxMode,
+        'tax_rate_basis_points': ?taxRateBasisPoints,
+        'pricing_mode': ?pricingMode,
+        'rounding_rule': ?roundingRule,
+        'currency_code': ?currencyCode,
+        'low_stock_threshold_quantity': ?lowStockThresholdQuantity,
         'discount_auto_approval_threshold_minor_units': ?discountAutoApprovalThresholdMinorUnits,
         'return_auto_approval_threshold_minor_units': ?returnAutoApprovalThresholdMinorUnits,
+        if (footerMessage != null) 'receipt_template_config': {'footer_message': footerMessage},
       },
     );
     return _fromJson(response.data!);
@@ -56,6 +62,7 @@ Future<ShopSettings> updateSettingsOnServer(
 }
 
 ShopSettings _fromJson(Map<String, dynamic> json) {
+  final receiptTemplateConfig = json['receipt_template_config'] as Map<String, dynamic>?;
   return ShopSettings(
     taxMode: json['tax_mode'] as String,
     taxRateBasisPoints: json['tax_rate_basis_points'] as int,
@@ -68,5 +75,6 @@ ShopSettings _fromJson(Map<String, dynamic> json) {
         json['discount_auto_approval_threshold_minor_units'] as int?,
     returnAutoApprovalThresholdMinorUnits:
         json['return_auto_approval_threshold_minor_units'] as int?,
+    footerMessage: receiptTemplateConfig?['footer_message'] as String?,
   );
 }

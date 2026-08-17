@@ -130,6 +130,11 @@ export async function updateSettings(tenantId: string, input: UpdateSettingsRequ
     ...(input.low_stock_threshold_quantity !== undefined && {
       lowStockThresholdQuantity: input.low_stock_threshold_quantity,
     }),
+    // Added Sprint 39 (backlog.md M4 item 4) — Prisma's Json column accepts the plain object
+    // directly, already validated/shaped by receiptTemplateConfigSchema (schema.ts).
+    ...(input.receipt_template_config !== undefined && {
+      receiptTemplateConfig: input.receipt_template_config,
+    }),
   };
 
   const applied = await repository.updateSettingsIfUnchanged(tenantId, current.updatedAt, data);

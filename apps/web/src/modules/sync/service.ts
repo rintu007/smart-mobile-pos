@@ -335,17 +335,27 @@ function decodeSaleCursor(cursor: string): SaleCursor {
 
 /**
  * docs/modules/sync-engine/specification.md#4-api-contract — GET /sync/pull, entity_type=shop_settings.
- * Added Sprint 37 (backlog.md M4 item 2). Unlike every other pull entity type, `shop_settings` is
- * exactly one row per tenant — no cursor pagination is meaningful, `cursor`/`limit` are accepted
- * (schema-level) but unused. Deliberately minimal: only `low_stock_threshold_quantity`, the one
- * field Reports needs offline (docs/modules/reports/specification.md §3) — not the full `GET
- * /settings` shape, which stays role-shaped and full-featured for its own direct callers.
+ * Added Sprint 37 (backlog.md M4 item 2), extended Sprint 39 (M4 item 4) with
+ * `receipt_footer_message`. Unlike every other pull entity type, `shop_settings` is exactly one row
+ * per tenant — no cursor pagination is meaningful, `cursor`/`limit` are accepted (schema-level) but
+ * unused. Deliberately minimal: only the fields an offline feature actually needs (Reports' low-stock
+ * threshold, `ReceiptFormatter`'s footer message per FR-077/FR-078's "Fully offline" classification)
+ * — not the full `GET /settings` shape, which stays role-shaped and full-featured for its own direct
+ * callers.
  */
 export async function pullShopSettings(tenantId: string) {
   const settings = await settingsRepository.findSettings(tenantId);
+  const receiptTemplateConfig = settings?.receiptTemplateConfig as { footer_message?: string } | null;
 
   return {
-    data: settings ? [{ low_stock_threshold_quantity: settings.lowStockThresholdQuantity }] : [],
+    data: settings
+      ? [
+          {
+            low_stock_threshold_quantity: settings.lowStockThresholdQuantity,
+            receipt_footer_message: receiptTemplateConfig?.footer_message ?? null,
+          },
+        ]
+      : [],
     next_cursor: null,
     has_more: false,
   };

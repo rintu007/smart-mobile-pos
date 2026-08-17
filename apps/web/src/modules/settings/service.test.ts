@@ -187,4 +187,27 @@ describe("updateSettings", () => {
     );
     expect(result).toMatchObject({ low_stock_threshold_quantity: 10 });
   });
+
+  it("writes receipt_template_config alone, leaving other fields untouched (Sprint 39)", async () => {
+    vi.mocked(repository.findSettings)
+      .mockResolvedValueOnce(row() as never)
+      .mockResolvedValueOnce(
+        row({ receiptTemplateConfig: { footer_message: "See you soon!" } }) as never,
+      );
+    vi.mocked(repository.updateSettingsIfUnchanged).mockResolvedValue(true);
+
+    const result = await updateSettings(tenantId, {
+      ...baseInput,
+      receipt_template_config: { footer_message: "See you soon!" },
+    });
+
+    expect(repository.updateSettingsIfUnchanged).toHaveBeenCalledWith(
+      tenantId,
+      updatedAt,
+      { receiptTemplateConfig: { footer_message: "See you soon!" } },
+    );
+    expect(result).toMatchObject({
+      receipt_template_config: { footer_message: "See you soon!" },
+    });
+  });
 });

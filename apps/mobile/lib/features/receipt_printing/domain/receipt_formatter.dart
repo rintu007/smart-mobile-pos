@@ -49,6 +49,24 @@ class ReceiptFormatter {
     );
   }
 
+  /// `/settings/printer`'s "Test print" button (Sprint 39, backlog.md M4
+  /// item 4) — FR-077's "test-printed from settings, independent of any
+  /// sale," so this deliberately does not depend on a real [SaleDetail] at
+  /// all, unlike [build] above.
+  ReceiptDocument buildTest({required String shopName, String footerMessage = 'Thank you, visit again!'}) {
+    return ReceiptDocument(
+      shopName: shopName,
+      invoiceNumber: 'TEST',
+      dateLabel: _formatDate(DateTime.now()),
+      lineItems: const [
+        ReceiptLineItem(name: 'Test item', quantity: 1, unitPriceLabel: '0.00', lineTotalLabel: '0.00'),
+      ],
+      totalLabel: '0.00',
+      paymentLabel: 'Test print — no payment taken',
+      footerMessage: footerMessage,
+    );
+  }
+
   String _plainAmount(int minorUnits) {
     final rupees = minorUnits ~/ 100;
     final paise = (minorUnits % 100).abs().toString().padLeft(2, '0');

@@ -5,8 +5,8 @@
 > **Slice:** V1, minimal — `shop_settings` table, a default row written at onboarding, `GET`/`PATCH
 > /settings` with the role-shaped read scope [settings.md](../../11-api/endpoints/settings.md)
 > already specifies (§1)
-> **Version:** 0.2.0
-> **Last updated:** 2026-08-16
+> **Version:** 0.3.0
+> **Last updated:** 2026-08-17
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
 
@@ -49,7 +49,8 @@ for the full reasoning.
   validation needs a mandatory-field list that isn't specified as code anywhere. Both columns are
   created (nullable, per schema-server.md) but `PATCH /settings` rejects any attempt to set either
   this sprint — the same "table exists, endpoint doesn't touch the field yet" shape Units'
-  `allows_fractional` already established.
+  `allows_fractional` already established. **Superseded for `receipt_template_config` by Sprint 39,
+  below — `printer_config` stays exactly as described here.**
 - Business-type-based default seeding ([seed-data.md](../../07-database/seed-data.md)'s per-vertical
   defaults, FR-002) — onboarding collects no business-type field today. This sprint uses
   seed-data.md's own named **"safest universal default"** instead (§3), not a per-vertical one.
@@ -92,6 +93,43 @@ by writing code first:
   this sprint — consolidated into the one `/settings` screen, since `PATCH /settings`'s own
   whole-row optimistic concurrency (§2) has no natural per-field-group boundary to split routes
   along.
+
+**Sprint 39 addition (backlog.md M4 item 4): printer pairing + receipt template.** Two genuinely
+different halves, resolved differently — full detail in
+[receipt-printing/specification.md §1](../receipt-printing/specification.md#1-purpose-and-business-context)
+for the printer half, which this module does not own:
+
+- **`receipt_template_config` becomes an accepted `PATCH /settings` key — but only with one field,
+  `footer_message`.** [receipt-design.md §2](../../10-design-system/receipt-design.md#2-layout--common-structure-two-widths)
+  names exactly one customisable receipt field, the footer's "thank you" message; every other zone
+  (shop name, invoice number/date, line items, totals) is structurally mandatory. Rather than
+  designing a broader togglable-fields shape to make `RECEIPT_TEMPLATE_MISSING_MANDATORY_FIELD`
+  reachable (backlog item 4's own speculative framing), that error is **named here as staying
+  unreachable this sprint too** — a real, found correction to the backlog's early guess. The one
+  plausible candidate for a genuinely conditional mandatory field, GSTIN (mandatory only for a
+  `standard`-registered shop), isn't captured anywhere in `shop_settings` at all yet — a separate,
+  larger prerequisite gap, not this item's to close. `.strict()` on the nested object means
+  attempting to set anything else (e.g. `show_gstin`) still 422s, just as `VALIDATION_FAILED`, the
+  same way it always has for an unrecognized top-level key.
+- **`printer_config` stays untouched, rejected exactly as before.** "Which printer is paired" is
+  per-device data — no `devices` table exists anywhere in this schema for a per-device row to
+  belong to, and `shop_settings` is one row per *tenant*. Storing a MAC address here would mean
+  every device in a shop overwrites every other device's own pairing on its next `PATCH`. Resolved
+  entirely outside this module: a new, purely local, never-synced mobile table,
+  `PairedPrinterCache` — see receipt-printing/specification.md §1. Backlog item 4's "`PATCH
+  /settings` stops rejecting `printer_config`... outright" framing does not survive contact with
+  this reasoning; corrected here rather than forced.
+- **`SettingsRepository.updateSettings` becomes a true partial update on mobile**, not just
+  server-side: every scalar field but `clientOperationId`/`baseUpdatedAt` is now optional, so
+  `/settings/receipt-template` (a new, independent screen — its own `GET`→edit→`PATCH` cycle, own
+  `base_updated_at`) can send `footerMessage` alone without resending every field `/settings`
+  itself edits. `/settings` itself is unaffected — it already sent every field.
+- **The footer message needed to reach printing without breaking FR-077's "Fully offline"
+  classification** — resolved by extending `ShopSettingsCache` (Sprint 37) with a third field,
+  synced through the existing `shop_settings` pull entity type, exactly as that cache's own doc
+  comment anticipated. `/settings/receipt-template` itself still requires connectivity to *save*
+  (§2's rule, unchanged); only *reading* the configured message at print time is offline, via the
+  cache, never a live `GET /settings`.
 
 ## 2. Business rules
 
@@ -155,7 +193,7 @@ RLS: tenant-scoped, same template as every other table
 | --- | --- |
 | `POST /api/v1/onboarding` | **Extended this sprint.** Now also creates one `shop_settings` row (§2's defaults) in the same transaction as the tenant/store/user/role rows. Request/response shape unchanged. |
 | `GET /api/v1/settings` | **Built this sprint.** Any authenticated role. Returns a **role-shaped** response per [settings.md §"Field-level read scope"](../../11-api/endpoints/settings.md#field-level-read-scope): `tax_mode`/`tax_rate_basis_points`/`pricing_mode`/`rounding_rule`/`currency_code`/`printer_config`/`receipt_template_config` to everyone; `discount_auto_approval_threshold_minor_units`/`return_auto_approval_threshold_minor_units` omitted entirely (not merely zeroed) for a Cashier. |
-| `PATCH /api/v1/settings` | **Built this sprint.** Owner only. Partial update — only fields present in the request body are changed. Requires `client_operation_id` (idempotency) and `base_updated_at` (optimistic concurrency, §2). Rejects `printer_config`/`receipt_template_config` if present in the body (§1 — deferred this sprint) with `VALIDATION_FAILED`, not silently ignored. |
+| `PATCH /api/v1/settings` | **Built this sprint; extended Sprint 39.** Owner only. Partial update — only fields present in the request body are changed. Requires `client_operation_id` (idempotency) and `base_updated_at` (optimistic concurrency, §2). Accepts `receipt_template_config: { footer_message }` since Sprint 39 (§1) — any other key inside it, or `printer_config` at the top level at all, still 422s with `VALIDATION_FAILED`, not silently ignored. |
 
 ## 5. Validation rules (client and server)
 
@@ -169,7 +207,8 @@ RLS: tenant-scoped, same template as every other table
 | `rounding_rule` | Zod `.enum(["round_half_up", "round_half_even"])`, optional. |
 | `currency_code` | Zod `.string().length(3)`, optional — format-validated only; no ISO-4217 membership check this sprint (same "accept the shape, don't build the full reference table" scoping `hsn_sac_code` used). |
 | `discount_auto_approval_threshold_minor_units`, `return_auto_approval_threshold_minor_units` | `.int().min(0)`, optional. |
-| `printer_config`, `receipt_template_config` | **Rejected if present at all** — `VALIDATION_FAILED` (§1, §4). |
+| `receipt_template_config` | `z.object({ footer_message: z.string().trim().min(1).max(200) }).strict().optional()` — **accepted since Sprint 39** (§1). Any key other than `footer_message` inside it still fails validation. |
+| `printer_config` | **Still rejected if present at all** — `VALIDATION_FAILED` (§1, §4) — per-device data, not this table's concern (Sprint 39's own found correction). |
 
 ## 6. Error handling and user-facing messages
 
@@ -178,7 +217,7 @@ RLS: tenant-scoped, same template as every other table
 | `PERMISSION_DENIED` | 403 | Already reserved (cross-cutting). `PATCH /settings` called by a non-Owner. |
 | `SETTINGS_CONFLICT` | 409 | Already reserved ([settings.md](../../11-api/endpoints/settings.md)), implemented this sprint: `base_updated_at` doesn't match the row's current `updated_at`. |
 | `TAX_RATE_REQUIRES_STANDARD_MODE` | 422 | **New.** A nonzero `tax_rate_basis_points` combined with a non-`'standard'` `tax_mode` (§5). |
-| `VALIDATION_FAILED` | 422 | Any Zod failure, including an attempt to set `printer_config`/`receipt_template_config` this sprint. |
+| `VALIDATION_FAILED` | 422 | Any Zod failure, including an attempt to set `printer_config` at all, or `receipt_template_config` with anything other than a `footer_message` string (Sprint 39). |
 | `NOT_FOUND` | 404 | `GET`/`PATCH /settings` called for a tenant with no `shop_settings` row — should not occur for any tenant onboarded after this sprint (§2), named for tenants onboarded before it (§ Change Log migration note). |
 
 ## 7. Offline behaviour
@@ -227,8 +266,23 @@ always visible, unlike Reports' role-gated one.
 - No offline read: `GET /settings` is a live call with no local cache (§1's design decision) — a
   cold, offline app-open of `/settings` shows the same generic error state `daily_sales_report_screen.dart`
   et al. use for any other load failure, not a stale-but-usable cached value.
-- `printer_config`/`receipt_template_config` are not rendered — deferred to M4 item 4 (printer
-  pairing + receipt template), same scope line §1 already draws for the server.
+- `printer_config`/`receipt_template_config` are not rendered on this screen — the printer half
+  moved to its own screen below (Sprint 39); `receipt_template_config` likewise (its own screen),
+  not folded into this form, since it has its own independent save cycle (§1).
+
+**`/settings/receipt-template` (Sprint 39, backlog.md M4 item 4)** — reachable from `/settings`'s
+AppBar (`go_to_receipt_template_button`), same Pattern B shape as `/settings` itself: every role
+reaches it, a non-Owner's `PATCH` gets the server's own `403` surfaced as "Only the Owner can
+change the receipt template." A single text field (`receipt_template_footer_field`, pre-filled
+from the loaded `footer_message`, client-validated non-empty) and its own **Save**
+(`receipt_template_save_button`) — a genuine partial update, sending `footerMessage` alone via the
+same `SettingsRepository.updateSettings` `/settings` itself uses (§1), with its own independent
+`GET`-fetched `base_updated_at` and the same `409`-discards-and-refetches behaviour. A static line
+states plainly that every other receipt field is mandatory and not editable here.
+
+**`/settings/printer` (Sprint 39, backlog.md M4 item 4)** — owned by
+[receipt-printing/specification.md §9](../receipt-printing/specification.md#9-ui-specification),
+reachable from the same AppBar (`go_to_printer_settings_button`); not described again here.
 
 ## 10. Test plan
 
@@ -239,7 +293,8 @@ always visible, unlike Reports' role-gated one.
   both "this request sets tax_mode away from standard while keeping a nonzero rate" and "this
   request sets a nonzero rate while the existing row's tax_mode is already non-standard"); rejects
   `printer_config`/`receipt_template_config` in the body with `VALIDATION_FAILED`; a partial update
-  changes only the submitted fields, leaving the rest untouched.
+  changes only the submitted fields, leaving the rest untouched; writes `receipt_template_config`
+  alone, leaving other fields untouched (Sprint 39).
 - **Live verification, real database, throwaway tenant (deleted after):**
   1. Onboarding a fresh tenant → exactly one `shop_settings` row exists, matching §2's defaults
      exactly (`tax_mode: 'unregistered'`, `tax_rate_basis_points: 0`, `pricing_mode: 'inclusive'`,
@@ -281,6 +336,22 @@ with a nonzero rate. `widget_test.dart` gains one case confirming the home scree
 point is unconditionally present (no provider override needed, unlike Reports' three probe-state
 cases). Total 227 mobile tests (were 218 after Sprint 37).
 
+**Sprint 39 addition.** Server: `service.test.ts` gains one case (`receipt_template_config` written
+alone, above); live-verified, real database, throwaway tenants (7/7): `PATCH` accepts
+`receipt_template_config: { footer_message }` → `200`, `GET` reflects it; `PATCH` with
+`receipt_template_config: {}` (missing `footer_message`) → `422`; `PATCH` with an unrecognized
+nested key (`show_gstin`) → `422 VALIDATION_FAILED`, confirming `RECEIPT_TEMPLATE_MISSING_MANDATORY_FIELD`
+is genuinely unreachable this sprint (§1); `PATCH` with `printer_config: {}` → still `422`,
+unchanged; `GET /sync/pull?entity_type=shop_settings` includes `receipt_footer_message`; a second,
+untouched tenant's pull sees `null`, not the first tenant's value — cross-tenant isolation held.
+Mobile: `receipt_template_screen_test.dart` (4 cases — pre-fills from loaded settings; sends only
+`footerMessage`, never the other scalar fields; rejects an empty message client-side; shows the
+Owner-only message on a `403`); `printer_settings_screen_test.dart` (3 cases, receipt-printing's
+own suite — see that spec's §10); `sync_repository_test.dart` gains 2 cases. Total 239 mobile
+tests (were 227), 209 web tests (were 207 — one new `settings/service.test.ts` case plus one new
+`sync/service.test.ts` case for `pullShopSettings`'s own `receipt_footer_message`, see
+sync-engine/specification.md §10).
+
 ## 11. Traceability
 
 | Requirement | Covered by | Status |
@@ -289,9 +360,10 @@ cases). Total 227 mobile tests (were 218 after Sprint 37).
 | [DR-009](../../03-functional-requirements/business-rules.md) (composition/unregistered → no tax breakup) | §2, §5, §6 | Met — `tax_rate_basis_points` cannot be nonzero outside `'standard'` |
 | [DR-012](../../03-functional-requirements/business-rules.md) (discount auto-approval threshold, config half) | §2, §3 | Met — the threshold now exists and is readable/writable; the *enforcement* half is M2 item 3 (Discount), not this sprint |
 | [DR-021](../../03-functional-requirements/business-rules.md) (Owner-only settings configuration) | §4, §6 | Met |
-| [permission-matrix.md — Settings](../../05-personas/permission-matrix.md#settings) | §4, §9 | Met for tax/rate/rounding/currency/thresholds, server- and mobile-side; printer pairing and receipt-template configuration remain unbuilt (§1, M4 item 4) |
+| [permission-matrix.md — Settings](../../05-personas/permission-matrix.md#settings) | §4, §9 | Met in full — tax/rate/rounding/currency/thresholds and receipt-template (footer message) server- and mobile-side; printer pairing owned by receipt-printing/specification.md |
 | [conflict-resolution.md §4](../../13-offline-sync/conflict-resolution.md#4-the-one-deliberate-exception--shop_settings-does-not-field-merge) (whole-row reject, no field merge) | §2, §6, §9, §10 | Met — mirrored client-side (discard-and-refetch on `409`), not just server-enforced |
 | [seed-data.md](../../07-database/seed-data.md) (safest-universal-default framing) | §2 | Met for `tax_mode`; business-type-based per-vertical seeding remains a named, deferred gap |
+| [FR-078](../../03-functional-requirements/functional-requirements.md) (a mandatory receipt field cannot be disabled via shop-level settings) | §1, §5 | Met by construction — the accepted `receipt_template_config` shape has exactly one key, `footer_message`; no mandatory field is ever a key to disable |
 
 ## Change Log
 
@@ -300,3 +372,4 @@ cases). Total 227 mobile tests (were 218 after Sprint 37).
 | 0.1.0 | 2026-08-14 | First version — written to drive Sprint 25's implementation of Settings (backlog.md M2 item 1): `shop_settings` table, a default row written at onboarding, `GET`/`PATCH /settings` with role-shaped reads and whole-row optimistic concurrency. Two real gaps found and closed in the same pass: no `shop_settings` row was ever created anywhere in code (dependency-graph.md's "sensible defaults" assumption didn't hold), and neither `shop_settings` nor `products` ever named where DR-008's tax rate actually comes from (resolved as a dated correction to schema-server.md/money-and-tax.md — a single shop-wide flat rate, not a per-product table). |
 | 0.1.1 | 2026-08-14 | §10 corrected after implementation and live verification (26/26): two real bugs found and fixed — onboarding's response crashed serializing the new row's `BIGINT` columns (fixed by keeping the onboarding response shape unchanged, not adding formatting for a field it never returned), and the RLS-enable statement was silently dropped by the verification script's own naive comment-splitting logic (found by checking `pg_class.relrowsecurity` directly, not by trusting the script's own output). |
 | 0.2.0 | 2026-08-16 | Sprint 38 (backlog.md M4 item 3): built the mobile `/settings` screen — §9 filled in (was a placeholder), §1/§3 updated. Two things found while writing this update: this file had silently drifted from the service code since Sprint 37 added `low_stock_threshold_quantity` without a version bump here (now named in §1/§3); and Reports' hide-entirely role-gating pattern doesn't fit Settings (which already has a real, role-shaping network call and a real `403`) — resolved as Pattern B, reusing `return_approvals_screen.dart`'s own established reasoning rather than re-deriving it. `route-map.md` corrected in the same pass (0.1.5): `/settings`'s "Offline: Yes" overstated a cache this screen deliberately doesn't have, and `/settings/tax`/`/settings/currency` are consolidated into the one screen rather than built as separate routes. No server change this sprint; 227 mobile tests (were 218). |
+| 0.3.0 | 2026-08-17 | Sprint 39 (backlog.md M4 item 4): `receipt_template_config` becomes an accepted `PATCH /settings` key, but only `{ footer_message }` — receipt-design.md's own sole customisable field. `RECEIPT_TEMPLATE_MISSING_MANDATORY_FIELD` stays deliberately unreachable, a found correction to the backlog's early framing (GSTIN, the one plausible conditional-mandatory candidate, isn't captured in `shop_settings` at all — a separate, larger gap). `printer_config` stays exactly as before — "which printer is paired" is per-device data, resolved entirely outside this module (receipt-printing/specification.md's own new `PairedPrinterCache`). New `/settings/receipt-template` mobile screen, its own independent save cycle; `SettingsRepository.updateSettings` relaxed to a true partial update to support it. Live-verified 7/7; 239 mobile tests (were 227), 209 web tests (were 207). |

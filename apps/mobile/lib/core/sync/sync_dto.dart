@@ -177,13 +177,19 @@ class SalePullPage {
 }
 
 /// The result of `GET /sync/pull?entity_type=shop_settings` — added Sprint 37
-/// (backlog.md M4 item 2). Deliberately minimal (only what Reports needs,
-/// docs/modules/reports/specification.md §3) — `null` when the tenant
-/// genuinely has no `shop_settings` row (a theoretical pre-Sprint-25 case).
+/// (backlog.md M4 item 2), extended Sprint 39 (M4 item 4) with
+/// `receiptFooterMessage`. Deliberately minimal (only what an offline
+/// feature actually needs — Reports' threshold, `ReceiptFormatter`'s
+/// footer) — `null` when the tenant genuinely has no `shop_settings` row (a
+/// theoretical pre-Sprint-25 case).
 class PulledShopSettings {
-  const PulledShopSettings({required this.lowStockThresholdQuantity});
+  const PulledShopSettings({
+    required this.lowStockThresholdQuantity,
+    this.receiptFooterMessage,
+  });
 
   final int lowStockThresholdQuantity;
+  final String? receiptFooterMessage;
 }
 
 /// The result of one `SyncRepository.syncNow()` call — what the UI shows.

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/money/money.dart';
 import '../../domain/entities/shop_settings.dart';
@@ -25,7 +26,29 @@ class SettingsScreen extends ConsumerWidget {
     final settings = ref.watch(settingsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(
+        title: const Text('Settings'),
+        actions: [
+          // M4 item 4 — both reachable by every role (Pattern B again, same
+          // as this screen's own): printer pairing has no permission
+          // restriction at all (permission-matrix.md — "operational, not
+          // business-sensitive"); the receipt-template screen has its own
+          // independent Owner-edit/everyone-reachable gate, the same shape
+          // this screen already uses, not re-derived here.
+          IconButton(
+            key: const Key('go_to_printer_settings_button'),
+            icon: const Icon(Icons.print_outlined),
+            tooltip: 'Pair printer',
+            onPressed: () => context.push('/settings/printer'),
+          ),
+          IconButton(
+            key: const Key('go_to_receipt_template_button'),
+            icon: const Icon(Icons.receipt_long_outlined),
+            tooltip: 'Receipt template',
+            onPressed: () => context.push('/settings/receipt-template'),
+          ),
+        ],
+      ),
       body: settings.when(
         data: (data) => _SettingsForm(
           // Forces a fresh `State` (fresh controllers) whenever the loaded

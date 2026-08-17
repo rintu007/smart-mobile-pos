@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 07 — Database Design
-> **Version:** 0.1.2
-> **Last updated:** 2026-08-16
+> **Version:** 0.1.3
+> **Last updated:** 2026-08-17
 > **Owner:** PostgreSQL Architect
 > **Approved by:** _pending_
 
@@ -421,8 +421,8 @@ WF-013.
 | `discount_auto_approval_threshold_minor_units` | `BIGINT` | `NOT NULL` |
 | `return_auto_approval_threshold_minor_units` | `BIGINT` | `NOT NULL` |
 | `low_stock_threshold_quantity` | `INTEGER` | `NOT NULL DEFAULT 5` — added Sprint 37 ([backlog.md M4 item 2](../17-sprints/backlog.md#5-m4--fully-decomposed-2026-08-16-now-that-m3-has-reached-this-point)): a real, blocking gap found starting Reports — [BR-024](../02-business-requirements/business-requirements.md)/[BR-045](../02-business-requirements/business-requirements.md) require the low-stock report's threshold to be configurable, and no such field existed anywhere in this schema. A single shop-wide value, matching `tax_rate_basis_points`' own V1-simplification precedent (per-product granularity deferred, named) |
-| `printer_config` | `JSONB` | nullable |
-| `receipt_template_config` | `JSONB` | nullable — cannot disable mandatory fields, enforced at the service layer, not here ([BR-049](../02-business-requirements/business-requirements.md)) |
+| `printer_config` | `JSONB` | nullable — unused (Sprint 39, backlog.md M4 item 4): "which printer is paired" is per-device data, resolved as a mobile-local-only table instead, never written here — see [settings/specification.md §1](../modules/settings/specification.md#1-purpose-and-business-context) |
+| `receipt_template_config` | `JSONB` | nullable — cannot disable mandatory fields, enforced at the service layer, not here ([BR-049](../02-business-requirements/business-requirements.md)); shape since Sprint 39 is `{ footer_message: string }` only, the one field this column actually holds |
 
 **Indexes:** none beyond the primary key. **RLS:** tenant-scoped.
 
@@ -487,3 +487,4 @@ records an *anomaly to be worked*, not a financial fact; the underlying rejected
 | 0.1.0 | 2026-07-30 | Initial 22-table schema across 7 bounded contexts. Trading Day scoped per-device, resolving the Phase 06 Finding 2 open question. |
 | 0.1.1 | 2026-08-14 | Correction found decomposing M2 (backlog.md): `shop_settings` never named where DR-008's `tax_rate` comes from. Added `tax_rate_basis_points` — a single shop-wide flat rate, not a per-product/per-HSN table (named, deferred to V2+). |
 | 0.1.2 | 2026-08-16 | Correction found starting Reports, Sprint 37 (backlog.md M4 item 2): BR-024/BR-045 require a configurable low-stock threshold and none existed anywhere. Added `shop_settings.low_stock_threshold_quantity` — a single shop-wide value, not per-product (named, deferred). |
+| 0.1.3 | 2026-08-17 | Sprint 39 (backlog.md M4 item 4): `receipt_template_config`'s row note now names its actual shape (`{ footer_message: string }`, the only field the module accepts); `printer_config`'s row note now names why it stays unused — a paired printer is per-device data, resolved as a new mobile-local-only table instead of a write to this column. |

@@ -11,14 +11,15 @@ class ApiSettingsRepository implements SettingsRepository {
   final Future<ShopSettings> Function({
     required String clientOperationId,
     required DateTime baseUpdatedAt,
-    required String taxMode,
-    required int taxRateBasisPoints,
-    required String pricingMode,
-    required String roundingRule,
-    required String currencyCode,
-    required int lowStockThresholdQuantity,
+    String? taxMode,
+    int? taxRateBasisPoints,
+    String? pricingMode,
+    String? roundingRule,
+    String? currencyCode,
+    int? lowStockThresholdQuantity,
     int? discountAutoApprovalThresholdMinorUnits,
     int? returnAutoApprovalThresholdMinorUnits,
+    String? footerMessage,
   })
   _update;
 
@@ -29,14 +30,15 @@ class ApiSettingsRepository implements SettingsRepository {
   Future<ShopSettings> updateSettings({
     required String clientOperationId,
     required DateTime baseUpdatedAt,
-    required String taxMode,
-    required int taxRateBasisPoints,
-    required String pricingMode,
-    required String roundingRule,
-    required String currencyCode,
-    required int lowStockThresholdQuantity,
+    String? taxMode,
+    int? taxRateBasisPoints,
+    String? pricingMode,
+    String? roundingRule,
+    String? currencyCode,
+    int? lowStockThresholdQuantity,
     int? discountAutoApprovalThresholdMinorUnits,
     int? returnAutoApprovalThresholdMinorUnits,
+    String? footerMessage,
   }) => _update(
     clientOperationId: clientOperationId,
     baseUpdatedAt: baseUpdatedAt,
@@ -48,5 +50,6 @@ class ApiSettingsRepository implements SettingsRepository {
     lowStockThresholdQuantity: lowStockThresholdQuantity,
     discountAutoApprovalThresholdMinorUnits: discountAutoApprovalThresholdMinorUnits,
     returnAutoApprovalThresholdMinorUnits: returnAutoApprovalThresholdMinorUnits,
+    footerMessage: footerMessage,
   );
 }

@@ -31,16 +31,24 @@ class SettingsConflictException implements Exception {
 abstract class SettingsRepository {
   Future<ShopSettings> getSettings();
 
+  /// Every field but `clientOperationId`/`baseUpdatedAt` is optional — a
+  /// genuine partial update, matching `PATCH /settings`'s own Zod schema
+  /// (nothing here forces a caller to resend the whole form). The main
+  /// `/settings` screen (M4 item 3) sends every scalar field, since it edits
+  /// all of them at once; `/settings/receipt-template` (M4 item 4) sends
+  /// only `footerMessage`, relying on this same method rather than a
+  /// parallel one.
   Future<ShopSettings> updateSettings({
     required String clientOperationId,
     required DateTime baseUpdatedAt,
-    required String taxMode,
-    required int taxRateBasisPoints,
-    required String pricingMode,
-    required String roundingRule,
-    required String currencyCode,
-    required int lowStockThresholdQuantity,
+    String? taxMode,
+    int? taxRateBasisPoints,
+    String? pricingMode,
+    String? roundingRule,
+    String? currencyCode,
+    int? lowStockThresholdQuantity,
     int? discountAutoApprovalThresholdMinorUnits,
     int? returnAutoApprovalThresholdMinorUnits,
+    String? footerMessage,
   });
 }

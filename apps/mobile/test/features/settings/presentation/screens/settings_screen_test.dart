@@ -24,14 +24,15 @@ class _FakeSettingsRepository implements SettingsRepository {
   final Object? getSettingsError;
   final Object? updateSettingsError;
   final void Function({
-    required String taxMode,
-    required int taxRateBasisPoints,
-    required String pricingMode,
-    required String roundingRule,
-    required String currencyCode,
-    required int lowStockThresholdQuantity,
+    String? taxMode,
+    int? taxRateBasisPoints,
+    String? pricingMode,
+    String? roundingRule,
+    String? currencyCode,
+    int? lowStockThresholdQuantity,
     int? discountAutoApprovalThresholdMinorUnits,
     int? returnAutoApprovalThresholdMinorUnits,
+    String? footerMessage,
   })?
   onUpdate;
 
@@ -46,14 +47,15 @@ class _FakeSettingsRepository implements SettingsRepository {
   Future<ShopSettings> updateSettings({
     required String clientOperationId,
     required DateTime baseUpdatedAt,
-    required String taxMode,
-    required int taxRateBasisPoints,
-    required String pricingMode,
-    required String roundingRule,
-    required String currencyCode,
-    required int lowStockThresholdQuantity,
+    String? taxMode,
+    int? taxRateBasisPoints,
+    String? pricingMode,
+    String? roundingRule,
+    String? currencyCode,
+    int? lowStockThresholdQuantity,
     int? discountAutoApprovalThresholdMinorUnits,
     int? returnAutoApprovalThresholdMinorUnits,
+    String? footerMessage,
   }) async {
     onUpdate?.call(
       taxMode: taxMode,
@@ -64,6 +66,7 @@ class _FakeSettingsRepository implements SettingsRepository {
       lowStockThresholdQuantity: lowStockThresholdQuantity,
       discountAutoApprovalThresholdMinorUnits: discountAutoApprovalThresholdMinorUnits,
       returnAutoApprovalThresholdMinorUnits: returnAutoApprovalThresholdMinorUnits,
+      footerMessage: footerMessage,
     );
     if (updateSettingsError != null) throw updateSettingsError!;
     return ownerSettings;
@@ -147,14 +150,15 @@ void main() {
         repository: _FakeSettingsRepository(
           onUpdate:
               ({
-                required taxMode,
-                required taxRateBasisPoints,
-                required pricingMode,
-                required roundingRule,
-                required currencyCode,
-                required lowStockThresholdQuantity,
+                taxMode,
+                taxRateBasisPoints,
+                pricingMode,
+                roundingRule,
+                currencyCode,
+                lowStockThresholdQuantity,
                 discountAutoApprovalThresholdMinorUnits,
                 returnAutoApprovalThresholdMinorUnits,
+                footerMessage,
               }) {
                 captured = {
                   'taxMode': taxMode,
@@ -213,7 +217,7 @@ void main() {
     var updateCalled = false;
     await tester.pumpWidget(
       _wrap(
-        repository: _FakeSettingsRepository(onUpdate: ({required taxMode, required taxRateBasisPoints, required pricingMode, required roundingRule, required currencyCode, required lowStockThresholdQuantity, discountAutoApprovalThresholdMinorUnits, returnAutoApprovalThresholdMinorUnits}) {
+        repository: _FakeSettingsRepository(onUpdate: ({taxMode, taxRateBasisPoints, pricingMode, roundingRule, currencyCode, lowStockThresholdQuantity, discountAutoApprovalThresholdMinorUnits, returnAutoApprovalThresholdMinorUnits, footerMessage}) {
           updateCalled = true;
         }),
       ),

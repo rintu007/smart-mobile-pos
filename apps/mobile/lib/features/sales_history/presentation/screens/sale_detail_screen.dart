@@ -20,14 +20,31 @@ class SaleDetailScreen extends ConsumerWidget {
 
   final String saleId;
 
+  /// Prefers the printer paired via `/settings/printer` (Sprint 39,
+  /// backlog.md M4 item 4) — falls back to the ad-hoc picker only when
+  /// nothing is paired yet, and remembers whatever's picked there too, so
+  /// this dialog stops appearing on every future print once a choice has
+  /// been made once, from either screen.
   Future<void> _printReceipt(BuildContext context, WidgetRef ref, SaleDetail sale) async {
-    final printer = await showPrinterPickerDialog(context);
-    if (printer == null || !context.mounted) return;
+    var printer = await ref.read(pairedPrinterRepositoryProvider).getPairedPrinter();
+    if (printer == null) {
+      if (!context.mounted) return;
+      printer = await showPrinterPickerDialog(context);
+      if (printer == null) return;
+      await ref.read(pairedPrinterRepositoryProvider).setPairedPrinter(printer);
+    }
+    if (!context.mounted) return;
 
     final shopName = await ref.read(shopNameProvider.future);
+    final footerMessage = await ref.read(receiptFooterMessageProvider.future);
     await ref
         .read(receiptPrintControllerProvider.notifier)
-        .printReceipt(sale: sale, shopName: shopName, macAddress: printer.macAddress);
+        .printReceipt(
+          sale: sale,
+          shopName: shopName,
+          macAddress: printer.macAddress,
+          footerMessage: footerMessage,
+        );
   }
 
   @override
