@@ -4,8 +4,8 @@
 > **Module:** Receipt & Printing
 > **Slice:** V1 — this document scopes only backlog.md item 10's M0-minimal cut, not the full
 > [receipt-design.md](../../10-design-system/receipt-design.md) shape (§1)
-> **Version:** 0.1.0
-> **Last updated:** 2026-08-13
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-17
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
 
@@ -40,6 +40,36 @@ receipt-design.md §2's second column, out of scope), no PDF/share-sheet equival
 happens in the phone's own Bluetooth settings, per every ESC/POS Bluetooth app's usual pattern —
 this app only lists already-paired devices and lets the user pick one).
 
+**Sprint 39 addition (backlog.md M4 item 4): `/settings/printer` and the footer message.**
+FR-077 — "A Bluetooth printer can be paired and test-printed from settings, independent of any
+sale" — needed a real settings-side entry point this module never had (§1's own "no
+printer-setup/pairing screen" line above, now superseded for the *settings* half specifically; the
+per-sale picker on `/sales-history/:id` is unchanged). Two design decisions, found while writing
+this update:
+
+- **A paired printer is per-device, never server data.** No `devices` table exists anywhere in
+  this schema (the same gap Trading Day's own spec already named), and `shop_settings` is one row
+  per *tenant* — storing a MAC address there would mean every device in the shop overwrites every
+  other device's own pairing on its next sync. Resolved as a new, purely local Drift table,
+  `PairedPrinterCache` (single-row-cache convention, matching `ShopSettingsCache`/`StoreContext`),
+  never round-tripped to the server at all — see
+  [settings/specification.md §1](../settings/specification.md#1-purpose-and-business-context)'s
+  matching design decision for `printer_config`, which stays unused this sprint for the same reason.
+- **The footer message needed to reach this module without breaking FR-077's "Fully offline."**
+  `receipt_template_config.footer_message` (the one field
+  [settings/specification.md](../settings/specification.md) now lets an Owner edit, via
+  `/settings/receipt-template`) is edited through a live `PATCH /settings` call, but printing
+  itself — both the per-sale action and this module's own new test-print — must keep working
+  offline. Resolved by extending `ShopSettingsCache` (Sprint 37's Reports-only cache) with a third
+  field, `footerMessage`, synced through the existing `shop_settings` pull entity type — the same
+  "extend the narrow read-only cache" shape that cache's own doc comment already anticipated, not a
+  new mechanism.
+
+`/sales-history/:id`'s own print action now prefers the printer paired via `/settings/printer`
+(falling back to the ad-hoc picker only when nothing is paired yet, and remembering whatever gets
+picked there too) and now sources the footer message from the same cache — both real,
+value-adding uses of what this sprint added, not dead configuration.
+
 **The one thing this document cannot close, by its own design's admission:** receipt-design.md §5
 already states plainly that a receipt layout is "proven correct on paper... but not yet proven
 correct on a physical... thermal printer," and
@@ -68,14 +98,22 @@ here rather than silently assumed passed.
 
 ## 3. Database tables and relationships
 
-None — this module reads `SaleDetail` (already assembled by `sales_history`'s own repository,
-Sprint 10) and `StoreContext.storeName` (cached locally since Sprint 08). No new local table, no
-server involvement at all — printing is entirely on-device.
+This module reads `SaleDetail` (already assembled by `sales_history`'s own repository, Sprint 10)
+and `StoreContext.storeName` (cached locally since Sprint 08) — both unchanged since Sprint 15.
+**Sprint 39** adds one new local table this module owns outright, `PairedPrinterCache`
+(`id` fixed `'current'`, nullable `macAddress`/`name`) — see §1's first design decision — and reads
+(never writes) `footerMessage` off `ShopSettingsCache`, a table Reports/Settings own (Sprint 37/39),
+not this module.
 
 ## 4. API contract
 
-None — no server endpoint exists or is needed. This is the first M0 module with zero backend
-component.
+None owned by this module — no server endpoint exists here or is needed; pairing and test-printing
+are entirely on-device Bluetooth operations. **Sprint 39** makes this module an indirect *consumer*
+of two endpoints it does not own: `PATCH /api/v1/settings` (Settings module, `/settings/receipt-template`
+edits `receipt_template_config.footer_message`) and `GET /api/v1/sync/pull?entity_type=shop_settings`
+(Sync Engine, the one already-existing pull type that now also carries `receipt_footer_message` —
+see [sync-engine/specification.md](../sync-engine/specification.md)). Neither call is made by this
+module's own code.
 
 ## 5. Validation rules (client and server)
 
@@ -104,12 +142,22 @@ None — not applicable to a local hardware action.
 
 A `print` `IconButton` on `/sales-history/:id`'s `AppBar` (`sale_detail_print_button`) — the
 natural place a Cashier already is right after completing a sale (via sales history) or looking up
-a past one to reprint. Tapping it opens a modal printer picker (`printer_picker_item_<mac>`,
-listing every paired Bluetooth device — not filtered to "printers," since neither this app nor the
-underlying plugin can distinguish one) or an empty-state message if none are paired
-(`printer_picker_empty`). Selecting one connects, prints, and disconnects, surfacing the result via
-`SnackBar` (`receipt_print_result`). No new route — a modal dialog, same reasoning `/catalogue/add`'s
-FAB and `/pos`'s home-screen button already established for entry points that don't need one.
+a past one to reprint. Tapping it now checks `PairedPrinterCache` first (Sprint 39); if a printer
+is already paired it prints directly, otherwise it falls back to the modal printer picker
+(`printer_picker_item_<mac>`, listing every paired Bluetooth device — not filtered to "printers,"
+since neither this app nor the underlying plugin can distinguish one) or an empty-state message if
+none are paired (`printer_picker_empty`), persisting whatever gets picked there too. Either path
+connects, prints, and disconnects, surfacing the result via `SnackBar` (`receipt_print_result`).
+
+**`/settings/printer` (Sprint 39, backlog.md M4 item 4)** — reachable from `/settings`'s own AppBar
+(`go_to_printer_settings_button`), no permission restriction (permission-matrix.md — "operational,
+not business-sensitive"). Shows the currently-paired printer, if any (`printer_settings_paired`) or
+an empty state (`printer_settings_none_paired`); a "Choose printer" button
+(`printer_settings_choose_button`) reopens the same picker dialog above and persists the pick; a
+"Test print" button (`printer_settings_test_print_button`, shown only once a printer is paired)
+sends a placeholder receipt via `ReceiptFormatter.buildTest` — FR-077's own "independent of any
+sale" — surfacing the result the same `SnackBar` shape (`printer_test_print_result`). No route
+existed for either the per-sale print action or this screen originally.
 
 ## 10. Test plan
 
@@ -131,8 +179,22 @@ FAB and `/pos`'s home-screen button already established for entry points that do
 - 75/75 `flutter test` (up from 60), `flutter analyze` clean.
 
 **Explicitly deferred, and explicitly not verifiable without hardware (§1):** MTS-01's physical
-printer run, 80 mm, the PDF/share-sheet equivalent, a printer-setup/pairing screen, GSTIN/address/
-cashier-name/discount/tax/split-payment content.
+printer run, 80 mm, the PDF/share-sheet equivalent, GSTIN/address/cashier-name/discount/tax/
+split-payment content.
+
+**Sprint 39 additions:**
+- `paired_printer_repository_test.dart` (3 cases): returns `null` before any pairing; persists and
+  returns a paired printer; a second pairing replaces the first (single-row-cache behaviour).
+- `printer_settings_screen_test.dart` (3 cases, `escPosReceiptEncoderProvider` faked at the
+  screen-test level — `EscPosReceiptEncoder.encode`'s real `rootBundle` asset load deadlocks inside
+  `testWidgets()`'s fake-async zone, unlike the plain `test()` `esc_pos_receipt_encoder_test.dart`
+  itself uses; the encoder's own correctness is already covered there): shows the empty state and
+  hides "Test print" when nothing is paired; choosing a printer persists it, shows it, and reveals
+  "Test print"; tapping "Test print" sends bytes through the paired printer and shows the result.
+- `sync_repository_test.dart` gains 2 cases (footer message written when pulled; a real settings
+  pull overwrites a stale cached footer with `null`, unlike the threshold's leave-untouched rule —
+  see sync-engine/specification.md §1's Sprint 39 note for why the two fields differ).
+- Total 239 mobile tests (were 227 after Sprint 38).
 
 ## 11. Traceability
 
@@ -142,9 +204,12 @@ cashier-name/discount/tax/split-payment content.
 | [receipt-design.md §5](../../10-design-system/receipt-design.md#5-what-this-document-does-not-close-out) (physical-printer verification) | — | **Not met, by design** — a founder action (§1), tracked in [manual-test-scripts.md — MTS-01](../../14-testing/manual-test-scripts.md#mts-01--thermal-printer--both-widths-real-hardware) |
 | [BR-034](../../02-business-requirements/business-requirements.md)/[BR-035](../../02-business-requirements/business-requirements.md) (printing failure never blocks/reverses a sale) | §2, §10 | Met |
 | [milestones.md — M0 exit criterion](../../16-milestones/milestones.md#m0--walking-skeleton) ("...print the receipt") | §9 | Software half met — the physical print itself is the founder's own remaining step |
+| [FR-077](../../03-functional-requirements/functional-requirements.md) (pair + test-print from settings, independent of any sale) | §1, §9, §10 | Met — `/settings/printer`, Sprint 39 |
+| [FR-078](../../03-functional-requirements/functional-requirements.md) (a mandatory receipt field cannot be disabled via settings) | [settings/specification.md §9](../settings/specification.md#9-ui-specification) | Met by construction (not this module — see that spec's own reasoning) |
 
 ## Change Log
 
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-08-13 | First version — written to drive Sprint 15's Bluetooth ESC/POS receipt printing (backlog.md item 10). Scope deliberately narrow: 58 mm only, M0's actual local data only, no printer-setup screen, no PDF equivalent. Named, not built: physical-printer verification (MTS-01), a founder action per device-matrix.md §3's own precedent. |
+| 0.2.0 | 2026-08-17 | Sprint 39 (backlog.md M4 item 4): `/settings/printer` built — FR-077's own "pair and test-print, independent of any sale." Two design decisions: a paired printer is per-device data, persisted in a new local-only `PairedPrinterCache` table, never sent to the server (no `devices` table exists to hold it server-side even if it should be); the footer message needed for offline printing is read from `ShopSettingsCache`, extended with a third field synced through the existing `shop_settings` pull entity type. The per-sale print action on `/sales-history/:id` now prefers the paired printer and the configured footer message, both real uses of what this sprint added. 239 mobile tests (were 227), `flutter analyze` clean. |

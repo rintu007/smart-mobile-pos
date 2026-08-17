@@ -17,14 +17,15 @@ final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
     ({
       required clientOperationId,
       required baseUpdatedAt,
-      required taxMode,
-      required taxRateBasisPoints,
-      required pricingMode,
-      required roundingRule,
-      required currencyCode,
-      required lowStockThresholdQuantity,
+      taxMode,
+      taxRateBasisPoints,
+      pricingMode,
+      roundingRule,
+      currencyCode,
+      lowStockThresholdQuantity,
       discountAutoApprovalThresholdMinorUnits,
       returnAutoApprovalThresholdMinorUnits,
+      footerMessage,
     }) => api.updateSettingsOnServer(
       dio,
       clientOperationId: clientOperationId,
@@ -37,6 +38,7 @@ final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
       lowStockThresholdQuantity: lowStockThresholdQuantity,
       discountAutoApprovalThresholdMinorUnits: discountAutoApprovalThresholdMinorUnits,
       returnAutoApprovalThresholdMinorUnits: returnAutoApprovalThresholdMinorUnits,
+      footerMessage: footerMessage,
     ),
   );
 });
@@ -60,14 +62,15 @@ class SaveSettingsController extends AsyncNotifier<ShopSettings?> {
 
   Future<void> save({
     required ShopSettings base,
-    required String taxMode,
-    required int taxRateBasisPoints,
-    required String pricingMode,
-    required String roundingRule,
-    required String currencyCode,
-    required int lowStockThresholdQuantity,
+    String? taxMode,
+    int? taxRateBasisPoints,
+    String? pricingMode,
+    String? roundingRule,
+    String? currencyCode,
+    int? lowStockThresholdQuantity,
     int? discountAutoApprovalThresholdMinorUnits,
     int? returnAutoApprovalThresholdMinorUnits,
+    String? footerMessage,
   }) async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(
@@ -84,6 +87,7 @@ class SaveSettingsController extends AsyncNotifier<ShopSettings?> {
             lowStockThresholdQuantity: lowStockThresholdQuantity,
             discountAutoApprovalThresholdMinorUnits: discountAutoApprovalThresholdMinorUnits,
             returnAutoApprovalThresholdMinorUnits: returnAutoApprovalThresholdMinorUnits,
+            footerMessage: footerMessage,
           ),
     );
     // Refetch on success, and on a conflict too — conflict-resolution.md

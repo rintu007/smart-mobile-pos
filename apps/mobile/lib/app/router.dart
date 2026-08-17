@@ -17,6 +17,7 @@ import '../features/customers/presentation/screens/customers_screen.dart';
 import '../features/pos/presentation/screens/barcode_scan_screen.dart';
 import '../features/pos/presentation/screens/held_carts_screen.dart';
 import '../features/pos/presentation/screens/till_screen.dart';
+import '../features/receipt_printing/presentation/screens/printer_settings_screen.dart';
 import '../features/reports/presentation/screens/daily_sales_report_screen.dart';
 import '../features/reports/presentation/screens/low_stock_report_screen.dart';
 import '../features/reports/presentation/screens/reports_screen.dart';
@@ -27,6 +28,7 @@ import '../features/returns/presentation/screens/return_approvals_screen.dart';
 import '../features/returns/presentation/screens/return_detail_screen.dart';
 import '../features/sales_history/presentation/screens/sale_detail_screen.dart';
 import '../features/sales_history/presentation/screens/sales_history_screen.dart';
+import '../features/settings/presentation/screens/receipt_template_screen.dart';
 import '../features/settings/presentation/screens/settings_screen.dart';
 import 'home_screen.dart';
 
@@ -157,6 +159,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/settings/printer',
+        builder: (context, state) => const PrinterSettingsScreen(),
+      ),
+      GoRoute(
+        path: '/settings/receipt-template',
+        builder: (context, state) => const ReceiptTemplateScreen(),
       ),
     ],
   );

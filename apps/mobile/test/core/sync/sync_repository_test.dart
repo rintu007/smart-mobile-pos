@@ -488,6 +488,60 @@ void main() {
       expect(cache.canViewReports, true);
     });
 
+    test('writes the pulled footer message into ShopSettingsCache (Sprint 39, M4 item 4)', () async {
+      final repo = SyncRepository(
+        db,
+        (operations) async => const SyncPushResponse([]),
+        ({cursor}) async => const SyncPullPage(products: [], nextCursor: null),
+        null,
+        null,
+        () async => const PulledShopSettings(
+          lowStockThresholdQuantity: 5,
+          receiptFooterMessage: 'See you soon!',
+        ),
+        () async => true,
+      );
+
+      await repo.syncNow();
+
+      final cache = await (db.select(
+        db.shopSettingsCache,
+      )..where((t) => t.id.equals('current'))).getSingle();
+      expect(cache.footerMessage, 'See you soon!');
+    });
+
+    test(
+      'a real (non-null) settings pull overwrites a stale cached footer message with null '
+      '— unlike the threshold, "no footer configured" is a real state, not "never synced" (Sprint 39)',
+      () async {
+        await db
+            .into(db.shopSettingsCache)
+            .insert(
+              ShopSettingsCacheCompanion.insert(
+                id: 'current',
+                footerMessage: const Value('stale message'),
+              ),
+            );
+
+        final repo = SyncRepository(
+          db,
+          (operations) async => const SyncPushResponse([]),
+          ({cursor}) async => const SyncPullPage(products: [], nextCursor: null),
+          null,
+          null,
+          () async => const PulledShopSettings(lowStockThresholdQuantity: 5),
+          () async => true,
+        );
+
+        await repo.syncNow();
+
+        final cache = await (db.select(
+          db.shopSettingsCache,
+        )..where((t) => t.id.equals('current'))).getSingle();
+        expect(cache.footerMessage, null);
+      },
+    );
+
     test('every pre-existing 3-through-5-arg constructor call site still works unchanged', () async {
       // No 6th/7th arg supplied at all — defaults to a no-op pull and a false probe,
       // never throwing, matching every earlier optional-trailing-param precedent.

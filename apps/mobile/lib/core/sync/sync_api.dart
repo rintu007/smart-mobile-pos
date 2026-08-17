@@ -158,6 +158,7 @@ Future<PulledShopSettings?> pullShopSettings(Dio dio) async {
   final row = data.first as Map<String, dynamic>;
   return PulledShopSettings(
     lowStockThresholdQuantity: row['low_stock_threshold_quantity'] as int,
+    receiptFooterMessage: row['receipt_footer_message'] as String?,
   );
 }
 

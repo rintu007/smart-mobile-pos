@@ -7,6 +7,7 @@ import '../../../../app/providers.dart';
 import '../../../pos/domain/entities/sale_detail.dart';
 import '../../data/bluetooth_printer_repository.dart';
 import '../../data/esc_pos_receipt_encoder.dart';
+import '../../data/paired_printer_repository.dart';
 import '../../domain/receipt_formatter.dart';
 
 final receiptFormatterProvider = Provider((ref) => const ReceiptFormatter());
@@ -29,6 +30,21 @@ final bluetoothPrinterRepositoryProvider = Provider<BluetoothPrinterRepository>(
   );
 });
 
+/// Added Sprint 39 (backlog.md M4 item 4) — `PairedPrinterCache`'s own
+/// repository wrapper, same DI-via-constructor shape every other Drift
+/// repository in this codebase uses.
+final pairedPrinterRepositoryProvider = Provider<PairedPrinterRepository>((ref) {
+  return PairedPrinterRepository(ref.watch(appDatabaseProvider));
+});
+
+/// The currently-paired printer, per `/settings/printer` — `autoDispose`
+/// since it's only watched by the two screens that need it (printer
+/// pairing and sale-detail's print action), not the always-alive
+/// home-screen graph.
+final pairedPrinterProvider = FutureProvider.autoDispose<PairedPrinter?>((ref) {
+  return ref.watch(pairedPrinterRepositoryProvider).getPairedPrinter();
+});
+
 /// The header's shop name — `StoreContext.storeName`, cached locally since
 /// Sprint 08. Falls back to a generic name if nothing has been cached yet
 /// (not reachable through normal navigation, since printing is only ever
@@ -40,6 +56,19 @@ final shopNameProvider = FutureProvider<String>((ref) async {
     db.storeContext,
   )..where((t) => t.id.equals('current'))).getSingleOrNull();
   return row?.storeName ?? 'SmartPOS X';
+});
+
+/// The receipt footer message, per `/settings/receipt-template` — read from
+/// `ShopSettingsCache` (Sprint 39, backlog.md M4 item 4), **not** a live
+/// `GET /settings` call, so printing stays fully offline per FR-077/FR-078's
+/// own classification. `null` (never configured, or never synced yet) falls
+/// through to `ReceiptFormatter`'s own hard-coded default.
+final receiptFooterMessageProvider = FutureProvider.autoDispose<String?>((ref) async {
+  final db = ref.watch(appDatabaseProvider);
+  final row = await (db.select(
+    db.shopSettingsCache,
+  )..where((t) => t.id.equals('current'))).getSingleOrNull();
+  return row?.footerMessage;
 });
 
 /// Drives the "Print receipt" action — same `AsyncNotifier` shape as
@@ -55,10 +84,40 @@ class ReceiptPrintController extends AsyncNotifier<bool?> {
     required SaleDetail sale,
     required String shopName,
     required String macAddress,
+    String? footerMessage,
   }) async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
-      final document = ref.read(receiptFormatterProvider).build(sale: sale, shopName: shopName);
+      final document = ref
+          .read(receiptFormatterProvider)
+          .build(
+            sale: sale,
+            shopName: shopName,
+            footerMessage: footerMessage ?? 'Thank you, visit again!',
+          );
+      final bytes = await ref.read(escPosReceiptEncoderProvider).encode(document);
+      return ref
+          .read(bluetoothPrinterRepositoryProvider)
+          .printBytes(macAddress: macAddress, bytes: bytes);
+    });
+  }
+
+  /// `/settings/printer`'s "Test print" button (Sprint 39, backlog.md M4
+  /// item 4) — same result semantics as [printReceipt] above, built from
+  /// [ReceiptFormatter.buildTest] instead of a real sale.
+  Future<void> printTest({
+    required String shopName,
+    required String macAddress,
+    String? footerMessage,
+  }) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      final document = ref
+          .read(receiptFormatterProvider)
+          .buildTest(
+            shopName: shopName,
+            footerMessage: footerMessage ?? 'Thank you, visit again!',
+          );
       final bytes = await ref.read(escPosReceiptEncoderProvider).encode(document);
       return ref
           .read(bluetoothPrinterRepositoryProvider)

@@ -259,13 +259,18 @@ class SyncRepository {
     return count;
   }
 
-  /// Sprint 37 (backlog.md M4 item 2). `_pullShopSettings`/`_probeCanViewReports`
-  /// never throw (both default to safe no-ops, and their real implementations
-  /// in `sync_api.dart` swallow their own failures) — this always completes,
+  /// Sprint 37 (backlog.md M4 item 2), extended Sprint 39 (M4 item 4) with
+  /// `footerMessage`. `_pullShopSettings`/`_probeCanViewReports` never throw
+  /// (both default to safe no-ops, and their real implementations in
+  /// `sync_api.dart` swallow their own failures) — this always completes,
   /// writing whatever it learned into the single-row `ShopSettingsCache`. A
-  /// `null` threshold (no `shop_settings` row at all — a theoretical
-  /// pre-Sprint-25 case) leaves the cached column untouched rather than
-  /// overwriting a real cached value with nothing.
+  /// `null` `settings` (no `shop_settings` row at all — a theoretical
+  /// pre-Sprint-25 case) leaves both the threshold *and* the footer message
+  /// untouched rather than overwriting a real cached value with nothing —
+  /// but once `settings` is non-null, `footerMessage` is written exactly as
+  /// pulled, `null` included: unlike the threshold (never legitimately
+  /// absent once a row exists), "no footer configured" is a real, distinct
+  /// state from "never synced," and must overwrite a stale cached value.
   Future<void> _refreshShopSettingsCache() async {
     final settings = await _pullShopSettings();
     final canViewReports = await _probeCanViewReports();
@@ -278,6 +283,9 @@ class SyncRepository {
             lowStockThresholdQuantity: settings == null
                 ? const Value.absent()
                 : Value(settings.lowStockThresholdQuantity),
+            footerMessage: settings == null
+                ? const Value.absent()
+                : Value(settings.receiptFooterMessage),
             canViewReports: Value(canViewReports),
             fetchedAt: Value(DateTime.now()),
           ),

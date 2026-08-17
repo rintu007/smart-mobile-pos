@@ -4,8 +4,8 @@
 > **Module:** Offline Sync Engine
 > **Slice:** V1 — this document scopes only backlog.md item 9's M0-minimal cut, not the full
 > [sync-api.md](../../11-api/sync-api.md) shape (§1)
-> **Version:** 0.8.0
-> **Last updated:** 2026-08-16
+> **Version:** 0.9.0
+> **Last updated:** 2026-08-17
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
 
@@ -59,8 +59,10 @@ named, deferred Phase 18 tuning decision (per that section's own wording).
   there is no public `POST /stock-movements` for a client to push to yet.
 - Pull handles four of sync-api.md §6's eight documented entity types: `products` (Sprint 13),
   `stock_movements` and `sales` (Sprint 36, backlog.md M4 item 1 — see the dedicated note below),
-  and `shop_settings` (Sprint 37, backlog.md M4 item 2 — deliberately minimal, one field only, see
-  [reports/specification.md §3](../reports/specification.md#3-database-tables-and-relationships)).
+  and `shop_settings` (Sprint 37, backlog.md M4 item 2 — deliberately minimal, originally one field,
+  see [reports/specification.md §3](../reports/specification.md#3-database-tables-and-relationships);
+  a second field, `receipt_footer_message`, added Sprint 39, backlog.md M4 item 4 — see
+  [receipt-printing/specification.md §1](../receipt-printing/specification.md#1-purpose-and-business-context)).
   `categories`, `units`, `customers`, `user_store_roles`, `sync_rejections` remain undocumented at
   the endpoint level.
 - No `sync_rejections` table/read path — a rejected operation's reason is returned synchronously in
@@ -324,6 +326,18 @@ Riverpod's idiomatic "run once" mechanism) fires automatically the first time
   local-only sync-cache plumbing, `flutter analyze`/`flutter test` is the verification bar, same
   position Sprint 30 already established for comparable mobile-only work.
 
+**Sprint 39 addition:** `pullShopSettings` gains one more field, `receipt_footer_message`, read off
+`receiptTemplateConfig`'s `footer_message` key (`null` when never configured or the JSON shape is
+absent). `sync/service.test.ts` gains a case asserting it's present in the standard envelope; the
+two pre-existing tests updated to expect the new key at `null`. Mobile: `sync_repository_test.dart`
+gains two cases — the pulled footer message is written into `ShopSettingsCache`; unlike the
+threshold, a real (non-null) settings pull **overwrites** a stale cached footer with `null` rather
+than leaving it untouched, since "no footer configured" is a real, distinct state from "never
+synced" for this field specifically (§1's own reasoning, restated in
+`sync_repository.dart`'s `_refreshShopSettingsCache` doc comment). Live-verified as part of
+[settings/specification.md §10](../settings/specification.md#10-test-plan)'s own 7/7 — this is a
+field addition to an already-verified endpoint, not a new one.
+
 **Explicitly deferred:** every other operation/entity type (§1), `sync_rejections`, the full
 six-group push ordering (only `catalogue.*`/`trading_day.*`/`stock_movement.*` push remain
 unbuilt), sync-api.md §7's full trigger set (connectivity listener, app foreground, background
@@ -352,3 +366,4 @@ trade-off, not an oversight).
 | 0.6.0 | 2026-08-16 | Sprint 35 (backlog.md M3 item 5): `customer.update` added — **this engine's first `.update` operation type of any kind** — ordered alongside `customer.create`, both before `sale.create`. Dispatches to the same, now-merge-aware `customersService.updateCustomer` `PATCH /customers/{id}` itself now uses, holding sync-api.md §1's "push calls the exact same service method as the direct endpoint" rule intact. |
 | 0.7.0 | 2026-08-16 | Sprint 36 (backlog.md M4 item 1): `GET /sync/pull` gains `stock_movements`/`sales` entity types — the "reporting parity across devices" pull sync-api.md §6 has named since Phase 11 and this sprint finally implements, unblocking Reports (M4 item 2). New response fields `next_cursor`(always the last row seen)/`has_more` for these two types only, a dated correction to sync-api.md §6's own conflated semantics; mobile persists a per-entity-type resume cursor in a new local `sync_cursors` table (schema v6→v7), unlike `products`' own unchanged full-re-pull-every-cycle trade-off. Named, not silently deferred: Reports' Manager/Owner permission-matrix.md gate has no server call left to enforce it against once this data is on every device, so it will necessarily be client-side-only when M4 item 2 builds the report screens. Live-verified 24/24. |
 | 0.8.0 | 2026-08-16 | Sprint 37 (backlog.md M4 item 2): `GET /sync/pull` gains a fourth entity type, `shop_settings` — deliberately minimal (`low_stock_threshold_quantity` only), never paginated (exactly one row per tenant). Closes Reports' second found gap: FR-074's low-stock report needs its threshold offline, and `shop_settings` had never been synced to any device despite being documented since Phase 11. Also closes the third gap §1 named at Sprint 36: mobile gains its first genuine client-side role-awareness, a probe against the already-existing `GET /users` endpoint (Manager/Owner-only), cached in a new local `ShopSettingsCache` table (schema v7→v8) alongside the threshold, fail-closed by default. Server-side additions live-verified 11/11; mobile half verified via `flutter analyze`/`flutter test` only (local-only plumbing, no live HTTP needed for it specifically). |
+| 0.9.0 | 2026-08-17 | Sprint 39 (backlog.md M4 item 4): `shop_settings` pull gains a second field, `receipt_footer_message`, so `ReceiptFormatter` can print the Owner-configured footer message fully offline (FR-077/FR-078) — the same "extend the narrow read-only cache" shape §1 already anticipated. Mobile writes it into `ShopSettingsCache` (schema v8→v9), with one real distinction from the threshold's own behaviour: a genuine settings pull overwrites a stale cached footer with `null` (a real "not configured" state), rather than leaving it untouched the way a `null` *pull result entirely* still does for both fields. Verified as part of settings/specification.md §10's own 7/7 (a field addition to an already-verified endpoint). |

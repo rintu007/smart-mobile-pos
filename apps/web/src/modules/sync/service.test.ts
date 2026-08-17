@@ -686,12 +686,13 @@ describe("pullShopSettings", () => {
   it("returns the tenant's row wrapped in the standard envelope, cursor/has_more always null/false", async () => {
     vi.mocked(settingsRepository.findSettings).mockResolvedValue({
       lowStockThresholdQuantity: 8,
+      receiptTemplateConfig: null,
     } as never);
 
     const result = await pullShopSettings(tenantId);
 
     expect(result).toEqual({
-      data: [{ low_stock_threshold_quantity: 8 }],
+      data: [{ low_stock_threshold_quantity: 8, receipt_footer_message: null }],
       next_cursor: null,
       has_more: false,
     });
@@ -703,5 +704,18 @@ describe("pullShopSettings", () => {
     const result = await pullShopSettings(tenantId);
 
     expect(result.data).toEqual([]);
+  });
+
+  it("includes receipt_footer_message when receipt_template_config has been set (Sprint 39)", async () => {
+    vi.mocked(settingsRepository.findSettings).mockResolvedValue({
+      lowStockThresholdQuantity: 5,
+      receiptTemplateConfig: { footer_message: "See you soon!" },
+    } as never);
+
+    const result = await pullShopSettings(tenantId);
+
+    expect(result.data).toEqual([
+      { low_stock_threshold_quantity: 5, receipt_footer_message: "See you soon!" },
+    ]);
   });
 });

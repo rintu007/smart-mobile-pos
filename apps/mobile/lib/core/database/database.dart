@@ -6,6 +6,7 @@ import 'tables/customers.dart';
 import 'tables/device_identity.dart';
 import 'tables/local_provisional_sequence.dart';
 import 'tables/outbound_queue.dart';
+import 'tables/paired_printer_cache.dart';
 import 'tables/products.dart';
 import 'tables/return_line_items.dart';
 import 'tables/returns.dart';
@@ -41,6 +42,7 @@ part 'database.g.dart';
     DeviceIdentity,
     LocalProvisionalSequence,
     OutboundQueue,
+    PairedPrinterCache,
     Products,
     ReturnLineItems,
     Returns,
@@ -58,7 +60,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   // The first schema change was Sprint 20 (schemaVersion 1 -> 2); Sprint 21
   // (backlog.md item 5) adds `sku`/`barcode` to `products` for the till's
@@ -68,7 +70,9 @@ class AppDatabase extends _$AppDatabase {
   // item 4) adds the `Returns`/`ReturnLineItems` tables; Sprint 36 (M4 item 1)
   // adds the `SyncCursors` table for stock_movements/sales pull resumability;
   // Sprint 37 (M4 item 2) adds `ShopSettingsCache` (the low-stock threshold
-  // plus the Reports role-probe result). Same non-destructive-migration
+  // plus the Reports role-probe result); Sprint 39 (M4 item 4) adds
+  // `ShopSettingsCache.footerMessage` and the new `PairedPrinterCache` table.
+  // Same non-destructive-migration
   // discipline — a real founder device already
   // has real local data. Existing `'completed'` rows get `created_at`
   // backfilled from `completed_at` (a reasonable historical approximation,
@@ -106,6 +110,10 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 8) {
         await m.createTable(shopSettingsCache);
+      }
+      if (from < 9) {
+        await m.addColumn(shopSettingsCache, shopSettingsCache.footerMessage);
+        await m.createTable(pairedPrinterCache);
       }
     },
   );

@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 09 — Navigation
-> **Version:** 0.1.5
-> **Last updated:** 2026-08-16
+> **Version:** 0.1.6
+> **Last updated:** 2026-08-17
 > **Owner:** UI-UX Lead / Principal Flutter Engineer
 > **Approved by:** _pending_
 
@@ -76,8 +76,8 @@ invented fresh here.
 | `/settings` | Cashier+ (contents vary), Owner (edit) | No — see 2026-08-16 correction below | Built Sprint 38 — tax mode/rate, pricing mode, rounding rule, currency, low-stock threshold, auto-approval thresholds (Manager/Owner only) |
 | `/settings/tax` | — | — | Not built as a separate route — consolidated into `/settings` (see 2026-08-16 correction below) |
 | `/settings/currency` | — | — | Not built as a separate route — consolidated into `/settings` (see 2026-08-16 correction below) |
-| `/settings/printer` | Cashier+ | Yes | Pairing/test-print — deliberately not Owner-restricted ([permission matrix](../05-personas/permission-matrix.md)) |
-| `/settings/receipt-template` | Owner | Yes | Cannot disable mandatory fields ([FR-078](../03-functional-requirements/functional-requirements.md)) |
+| `/settings/printer` | Cashier+ | Yes | Built Sprint 39 — pairing/test-print, deliberately not Owner-restricted ([permission matrix](../05-personas/permission-matrix.md)); persists the paired printer locally (`PairedPrinterCache`), never sent to the server |
+| `/settings/receipt-template` | Cashier+ (view), Owner (edit) | No — see 2026-08-16 correction below | Built Sprint 39 — the one customisable field, `footer_message` ([FR-078](../03-functional-requirements/functional-requirements.md)'s mandatory fields aren't editable here at all, by construction); same Pattern B/no-local-cache shape as `/settings` itself |
 | `/settings/users` | Owner | No — role changes are server-authoritative ([FR-019](../03-functional-requirements/functional-requirements.md)) | |
 | `/settings/devices` | Owner | No — revocation must reach the server ([FR-014](../03-functional-requirements/functional-requirements.md)) | |
 | `/settings/audit-log` | Manager+ | No — not cached locally at all ([schema-local.md](../07-database/schema-local.md)) | |
@@ -100,3 +100,4 @@ none are left blank pending "figure out later."
 | 0.1.3 | 2026-08-14 | **Correction, found building Sprint 20:** `/catalogue/categories`/`/catalogue/units` were marked flatly "Offline: Yes," but the sync engine has no `category.create`/`unit.create` push operation type (only `product.create`/`sale.create` exist) — building that is real backend scope this sprint didn't do. Both routes are offline-capable for *reads* (a local cache) but require connectivity to *create* — corrected here rather than left overstated, same reasoning as `categories/specification.md §7`'s identical correction. |
 | 0.1.4 | 2026-08-14 | **Correction, found building Sprint 21:** added `/pos/scan`, missing from the original decomposition — the barcode-scan camera view backlog item 5 needed had no route at all until now, same shape as `/catalogue/add`'s own Sprint 07 gap. |
 | 0.1.5 | 2026-08-16 | **Correction, found building Sprint 38:** `/settings` was marked flatly "Offline: Yes," but this screen deliberately has no local cache (docs/modules/settings/specification.md §1/§9's own dated decision) — `GET /settings` is a live call with nothing to fall back on offline, same overstatement shape as `/catalogue/units`' own 0.1.3 correction. Also: `/settings/tax`/`/settings/currency` are not built as separate routes — consolidated into the single `/settings` screen, since `PATCH /settings`'s whole-row optimistic concurrency has no natural per-field-group boundary to split routes along. |
+| 0.1.6 | 2026-08-17 | Built Sprint 39: `/settings/printer` and `/settings/receipt-template`, per their original rows. `/settings/receipt-template`'s permission corrected from a flat "Owner" to "Cashier+ (view), Owner (edit)," and its "Offline: Yes" corrected the same way 0.1.5 already corrected `/settings` itself — same underlying cause (no local cache for a live `GET /settings` read), not a new mistake. |
