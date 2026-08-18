@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 14 — Testing Strategy
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-31
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-19
 > **Owner:** QA Lead / CTO
 > **Approved by:** _pending_
 
@@ -23,16 +23,29 @@ or under-protect a paying customer base. Both are stated explicitly so neither i
 
 ## 2. Pilot-ready checklist
 
-| Item | Source |
-| --- | --- |
-| ☐ All PR-gated CI checks green on the release commit | [ci-pipeline.md §2](ci-pipeline.md#2-pipeline-stages--every-pull-request) |
-| ☐ Nightly suite green on the release commit (or any failure explicitly triaged and accepted by the CTO, not silently ignored) | [ci-pipeline.md §3](ci-pipeline.md#3-nightly-pipeline) |
-| ☐ Cross-tenant isolation suite green — all 22 tables plus the Realtime extension | [tenant-isolation.md](../12-security/tenant-isolation.md) |
-| ☐ All 10 offline failure scenarios passing | [failure-scenarios.md](../13-offline-sync/failure-scenarios.md) |
-| ☐ Manual test scripts MTS-01, MTS-02, MTS-03 executed and evidenced within the current release cycle | [manual-test-scripts.md](manual-test-scripts.md) |
-| ☐ **A full simulated trading day, on real hardware, with a real printer, evidenced** | MTS-03 — this phase's own explicit exit criterion, satisfied by name |
-| ☐ OWASP checklist reviewed against the actual release build, not just the design | [owasp-checklist.md](../12-security/owasp-checklist.md) |
-| ☐ Pilot cohort is informed, consenting participants — not the general public | Ties to [privacy.md](../12-security/privacy.md)'s lawful-basis framing; a pilot's data handling is still subject to the same DPDPA-provisional obligations, not exempted by being "just a pilot" |
+**Corrected Sprint 44 (backlog.md M4, cross-cutting closeout) — two rows below no longer match what
+was actually built, found while checking this checklist itself against Sprints 40–43's real
+results, the same document-vs-code verification discipline those sprints established elsewhere.
+Neither correction makes the gate easier to satisfy — both make an already-unsatisfied box more
+honestly unsatisfied, per §5's own no-partial-credit rule.**
+
+| Item | Source | Status, as of 2026-08-19 |
+| --- | --- | --- |
+| ☐ All PR-gated CI checks green on the release commit | [ci-pipeline.md §2](ci-pipeline.md#2-pipeline-stages--every-pull-request) | ✅ Satisfied — confirmed on every merge through Sprint 43. |
+| ☐ Nightly suite green on the release commit (or any failure explicitly triaged and accepted by the CTO, not silently ignored) | [ci-pipeline.md §3](ci-pipeline.md#3-nightly-pipeline) | ⬜ **Not yet satisfiable.** `nightly.yml` (Sprint 42) has never actually run on its own schedule yet — its first scheduled fire is still pending as of this correction. Verified locally only (100/100 fuzzed runs). |
+| ☐ Cross-tenant isolation suite green — all **19** tables (corrected from 22, tenant-isolation.md §2's Sprint 40 finding); the Realtime extension is explicitly **out of pilot-ready scope** — it needs the full local Supabase CLI stack, named and deferred, not required for a pilot cohort | [tenant-isolation.md](../12-security/tenant-isolation.md) | ✅ Satisfied for the 19 real tables (76/76, every PR since Sprint 40). Realtime extension knowingly excluded from this gate, not silently dropped — a pilot's real risk from an unrevoked Realtime subscription is bounded (≤60 min token lifetime, identity-and-sessions.md §5), judged acceptable for a small, consenting cohort. |
+| ☐ Server-testable failure scenarios passing (**corrected from "all 10 offline failure scenarios passing"** — test-plan.md §3's Sprint 41 finding: only 1 of the 10 named scenarios in failure-scenarios.md §1 is actually a server-side, automatable case; the other 9 are mobile-app-process behaviours, need the full Supabase CLI stack, or are already resolved as "not applicable"/"not a failure" with nothing to test) | [failure-scenarios.md](../13-offline-sync/failure-scenarios.md) | ⬜ **Not satisfied — a real, material pilot risk, not a documentation nicety.** The 1 server-testable scenario passes (`fast-integration`, every PR). Of the other 9: **zero have any automated OR manual verification on record** — grepped every sprint doc and the implementation log; the closest is Sprint 16's own airplane-mode end-to-end proof, which verifies general offline-sync recovery, not the specific provoked scenarios (app killed mid-sync, device rebooted with a full queue, a clock skewed by +36 hours, a token expired mid-queue, etc.). A real pilot shop's Cashier *will* eventually have their phone die mid-shift or reboot with a full queue — this is exactly the "hard to reproduce, easy to skip" failure class Phase 13's own charter exists to catch, currently unverified by any mechanism. |
+| ☐ Manual test scripts MTS-01, MTS-02, MTS-03 executed and evidenced within the current release cycle | [manual-test-scripts.md](manual-test-scripts.md) | ⬜ **Not satisfied — founder-blocked.** No printer or reference low-end device owned yet (backlog.md M4 item 9, device-matrix.md §3). |
+| ☐ **A full simulated trading day, on real hardware, with a real printer, evidenced** | MTS-03 — this phase's own explicit exit criterion, satisfied by name | ⬜ Same blocker as the row above. |
+| ☐ OWASP checklist reviewed against the actual release build, **with no unresolved critical/high-severity finding** (corrected from bare "reviewed" — a review that finds and does not resolve a critical gap should not silently satisfy this gate just because the review itself happened) | [owasp-checklist.md](../12-security/owasp-checklist.md) | ⬜ **Not satisfied.** The review happened (Sprint 43) and found two unresolved findings with real production risk: row-level security is very likely inert for all real traffic (owasp-checklist.md's top-flagged finding), and rate limiting on sign-in is entirely unimplemented. Both need resolution — or a CTO-accepted, explicitly-documented risk exception, per this section's own §5 rule — before this box can honestly be checked. |
+| ☐ Pilot cohort is informed, consenting participants — not the general public | Ties to [privacy.md](../12-security/privacy.md)'s lawful-basis framing; a pilot's data handling is still subject to the same DPDPA-provisional obligations, not exempted by being "just a pilot" | ⬜ Not yet assessed — pilot recruitment (M5) hasn't started. |
+
+**Honest bottom line, stated plainly per §5's no-partial-credit rule: this product is not pilot-ready
+today.** M4's 8 engineering backlog items are all done, but the actual release gate above has four
+unresolved rows, only one of which (MTS execution) was already known to be founder-blocked. The
+other three — the nightly suite's first real run, the 9 unverified failure scenarios, and the two
+unresolved OWASP findings — are new information from this same round of verification, not previously
+tracked as open risks against this specific checklist.
 
 ## 3. Commercial-launch-ready checklist — pilot-ready, plus:
 
@@ -70,3 +83,4 @@ release, consistent with [Definition of Done](../00-governance/definition-of-don
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-31 | Two-tier checklist (pilot vs. commercial launch) assembled from every gate specified across Phases 11–14; explicit non-gating items stated; single-approver, no-partial-credit sign-off rule. |
+| 0.2.0 | 2026-08-19 | Sprint 44 — §2 checked against Sprints 40–43's real results, the first time since this document was written. Two rows corrected to match reality (19 tables not 22, Realtime out of pilot scope; "server-testable failure scenarios" not "all 10," since 9 of 10 have zero automated *or* manual verification on record); the OWASP row's wording tightened so a review that finds unresolved critical findings can't silently satisfy the gate. Explicit status column added per row, concluding honestly: this product is not pilot-ready today, with four unresolved rows, three of them newly surfaced by this same correction pass. |
