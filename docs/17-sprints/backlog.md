@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.41.0
+> **Version:** 0.42.0
 > **Last updated:** 2026-08-19
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
@@ -250,6 +250,18 @@ once actually attempted — no CI-enforced isolation or adversarial-sync suite h
 against this codebase before, and item 9 remains genuinely blocked on hardware the founder does not
 yet own, tracked the same way M0's own physical-print step was.
 
+**Cross-cutting closeout, [Sprint 44](sprint-44.md) (not a numbered item — a direct consequence of
+item 8's own findings):** with items 1–8 done, [release-checklist.md §2](../14-testing/release-checklist.md#2-pilot-ready-checklist)
+(this milestone's actual exit criterion, per [milestones.md — M4](../16-milestones/milestones.md#m4--reports-settings-and-release-readiness))
+was checked against Sprints 40–43's real results for the first time since it was written. Two rows
+were stale (22 tables/Realtime; "all 10 failure scenarios") and corrected to match what was actually
+built. The honest conclusion, stated in that document rather than left implicit: **this product is
+not pilot-ready today** — four rows are unresolved, only one of which (MTS execution, item 9) was
+already tracked; the other three (the nightly suite's first real scheduled run still pending, 9 of
+10 failure scenarios having zero verification of any kind, and the OWASP review's two unresolved
+findings) are new information surfaced by this same pass, not previously named as open risks against
+this specific gate.
+
 ## 6. Ordering rule, restated
 
 Every dependency column above traces directly to
@@ -302,3 +314,4 @@ specifically.
 | 0.39.0 | 2026-08-19 | Item 6 (offline adversarial suite, CI-enforced) done — [Sprint 41](sprint-41.md): idempotent-replay (3/3 cases), concurrent-composition non-fuzzed (4/4 cases), and 1 server-testable failure scenario added to the same `fast-integration` job Sprint 40 built, no new CI infra — replay/order-independence proved server-observable, no toxiproxy needed for this subset. N-device fuzzed composition (100 runs) written and locally confirmed (100/100 passing, ~90s), nightly-gated, ready for item 7. Found and fixed a real, previously-unverified concurrency gap: `sale.create`/`return.create`/`return.approve`'s replay-safety check was a read-then-write race under genuine concurrent requests (not sequential replay) — the first test in this project's history to exercise real overlapping requests against the same row, not one at a time. Found `seedTenant` (Sprint 40) never exposed the seeded user's `authUserId`, making it unusable for any test calling application service code — fixed additively. Found `test-plan.md §3`'s "one test per row" (10 named failure scenarios) conflated three different test venues (server / mobile-only / needs the full Supabase CLI stack / already-proven-no-test-needed) — reclassified; only 1 row was actually buildable here. 84/84 integration checks pass (76 cross-tenant + 8 new); 209 web unit tests unaffected. **M4 now has items 7–9 remaining.** |
 | 0.40.0 | 2026-08-19 | Item 7 (nightly CI pipeline) done — [Sprint 42](sprint-42.md): new `.github/workflows/nightly.yml` (N-device fuzzed composition, 100 runs, the only nightly-deferred content items 5/6 actually produced) plus `.github/dependabot.yml` (npm/pub/github-actions, weekly). Found item 5 has no distinct slow subset ready at all (its one deferred piece, the Realtime extension, needs the full Supabase CLI stack); found `ci-pipeline.md §3`'s "full failure-scenario suite"/"extended property-based tests" rows have no code to run on any tier — the former because Sprint 41 already found only 1 of 10 scenarios is server-testable, the latter because no property-based suite was ever built despite `test-strategy.md §1` claiming DR-008/DR-013 coverage from it (corrected to the real unit-test coverage that does exist). No `release-candidate.yml` exists to gate on a nightly failure, so built a standing-GitHub-issue-on-failure mechanism instead; found `type:defect`/`priority:P0` labels (project-board.md §3) were never actually created in the repo, substituted the stock `bug` label. `tsc`/`eslint`/`vitest`/production build all clean. **M4 now has items 8–9 remaining.** |
 | 0.41.0 | 2026-08-19 | Item 8 (OWASP checklist review against the real build) done — [Sprint 43](sprint-43.md): every one of `owasp-checklist.md`'s 20 rows re-verified against real code, not the design docs it cited. **The single most significant finding of this project so far**: row-level security is very likely inert for all real production API traffic — no `FORCE ROW LEVEL SECURITY` exists anywhere, and no code ever sets `request.jwt.claims` on the app's own database connection, so the "defence in depth" second layer `tenant-isolation.md`/`tenancy-model.md` have claimed since Phase 07/12 may not actually protect anything beyond the API's own tenant-scoping logic — flagged for the founder, deliberately not fixed, since a wrong change risks a full production outage. Also found rate limiting is entirely unimplemented despite `identity-and-sessions.md §6` claiming it. Fixed in the same pass: missing `next.config.ts` security headers, and a real DR-025 audit-log-coverage gap (3 of 4 `stock_movements` types plus settings changes had no paired `audit_log` entry at all) — first self-identified in Sprint 12's own implementation-log entry and never subsequently closed across 15 sprints, closed now across 5 repository functions, verified against a real database. Four further real gaps named, not fixed (mobile session storage falls back to plaintext, the local Drift database is unencrypted, customer-erasure anonymisation is designed but unbuilt, the Android release build signs with the debug keystore — founder-blocked). `tsc`/`eslint`/`vitest`/production build all clean. **M4 now has item 9 remaining.** |
+| 0.42.0 | 2026-08-19 | Cross-cutting closeout, Sprint 44 (not a numbered M4 item): `release-checklist.md §2`, M4's own actual exit criterion, checked against Sprints 40–43's real results for the first time — two stale rows corrected (22 tables/Realtime → 19 tables, Realtime out of pilot scope; "all 10 failure scenarios" → "server-testable failure scenarios," since 9 of 10 have zero verification of any kind on record); the OWASP row's wording tightened so unresolved critical findings can't silently satisfy it. Honest conclusion recorded: this product is not pilot-ready today — four checklist rows unresolved, three newly surfaced by this pass. |
