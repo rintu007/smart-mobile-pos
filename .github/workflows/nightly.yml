@@ -1,0 +1,83 @@
+name: Nightly
+
+# Sprint 42 (backlog.md M4 item 7) — ci-pipeline.md §3's nightly tier, built for real for the first
+# time. Runs only what Sprint 41 actually produced as nightly-deferred content: the N-device fuzzed
+# concurrent-composition case (test-plan.md §2, 100 runs — too slow for the ≤10-minute PR budget).
+#
+# ci-pipeline.md §3's table also lists "full failure-scenario suite" and "extended property-based
+# tests" as nightly content — neither has anything to run here yet. test-plan.md §3's Sprint 41
+# correction found only 1 of the 10 named failure scenarios is a server-testable case at all, and
+# that one already gates every PR (fast-integration); the rest need mobile `integration_test`
+# infrastructure or the full local Supabase CLI stack, neither built. The property-based money/stock
+# suite test-strategy.md §4 describes was never built at all, on any tier — test-strategy.md's own
+# §1 traceability table is corrected in the same PR that added this file, not silently left claiming
+# coverage that doesn't exist. Both are real, named, tracked gaps — not stubbed here ahead of having
+# anything real to run, matching this file's own established growth pattern (pr.yml's trailing
+# comment).
+#
+# No release-candidate.yml exists yet either (a bigger, separate M4/Phase-14 item, not this one) — so
+# "blocks the next release candidate" (ci-pipeline.md §3's own rule for a nightly failure) has nothing
+# to gate today. The nightly-failure issue step below is this sprint's actual answer to that rule's
+# spirit ("treated with urgency, not ignored until convenient") for a solo-founder project with no
+# release pipeline yet: a visible, standing GitHub issue, not a dashboard nobody is asked to check.
+
+on:
+  schedule:
+    - cron: "30 20 * * *" # 20:30 UTC = 02:00 IST — off-peak for this project's India-based usage
+  workflow_dispatch: {}
+
+jobs:
+  nightly-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: smartpos_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/smartpos_test
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/smartpos_test
+      NEXT_PUBLIC_SUPABASE_URL: "https://placeholder.supabase.co"
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "placeholder"
+      SUPABASE_SERVICE_ROLE_KEY: "placeholder"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @smart-pos/web exec prisma generate
+      - run: pnpm --filter @smart-pos/web exec prisma migrate deploy
+      - run: node integration-tests/setup/apply-sql.mjs
+        working-directory: apps/web
+      - run: pnpm --filter @smart-pos/web test:integration:nightly
+      # `type:defect`/`priority:P0` (project-board.md §3's label taxonomy) were never actually
+      # created in this repository — found live running this step for the first time; only GitHub's
+      # stock default labels exist. Uses the stock `bug` label instead rather than failing the whole
+      # notification step on a label that doesn't exist — a named, dated substitution, not a silent
+      # one; creating the full label taxonomy is project-board.md's own separate, larger setup gap.
+      - name: Open or update a nightly-failure issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --label nightly-failure --state open --json number --jq '.[0].number // empty')
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "Nightly run failed again: $run_url"
+          else
+            gh label create nightly-failure --repo "$GITHUB_REPOSITORY" --color B60205 \
+              --description "Auto-opened by nightly.yml on failure" 2>/dev/null || true
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "Nightly CI failure" \
+              --body "Nightly run failed: $run_url" --label nightly-failure --label bug
+          fi

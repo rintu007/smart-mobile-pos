@@ -1,0 +1,22 @@
+version: 2
+updates:
+  # Sprint 42 (backlog.md M4 item 7) — ci-pipeline.md §3's "Full dependency audit," the free,
+  # GitHub-native scan this project chose over a separate paid service. Dependabot's vulnerability
+  # *alerts* run automatically once this file exists (no separate job to wire into nightly.yml) —
+  # the weekly `open-pull-requests-limit` below is the version-currency half, alerts are the
+  # security half and need no schedule of their own.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+  - package-ecosystem: "pub"
+    directory: "/apps/mobile"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5

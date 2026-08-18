@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 14 — Testing Strategy
-> **Version:** 0.1.2
+> **Version:** 0.1.3
 > **Last updated:** 2026-08-19
 > **Owner:** QA Lead / DevOps
 > **Approved by:** _pending_
@@ -50,16 +50,18 @@ not strictly sequentially as the diagram's left-to-right layout might suggest.
 
 ## 3. Nightly pipeline
 
-| Stage | Content |
-| --- | --- |
-| N-device fuzzed composition (100 runs) | [test-plan.md §2](../13-offline-sync/test-plan.md#2-concurrent-composition-tests) |
-| Full failure-scenario suite | All 10 scenarios in [failure-scenarios.md §1](../13-offline-sync/failure-scenarios.md#1-the-named-scenarios), including the slower-to-set-up ones deferred from the PR gate |
-| Property-based money/stock tests, extended run | [test-strategy.md §4](test-strategy.md#4-property-based-testing--money-and-stock-not-only-worked-examples), run with a larger generated-input budget than the PR-gated quick pass |
-| Full dependency audit | Open-source dependency vulnerability scan (a free GitHub-native feature — Dependabot alerts — rather than a separate paid service) |
+| Stage | Content | Status |
+| --- | --- | --- |
+| N-device fuzzed composition (100 runs) | [test-plan.md §2](../13-offline-sync/test-plan.md#2-concurrent-composition-tests) | **Built, Sprint 42** (`.github/workflows/nightly.yml`) |
+| Full failure-scenario suite | All 10 scenarios in [failure-scenarios.md §1](../13-offline-sync/failure-scenarios.md#1-the-named-scenarios) | **Corrected, Sprint 42**: [test-plan.md §3](../13-offline-sync/test-plan.md#3-the-10-named-failure-scenarios--one-test-per-row-of-failure-scenariosmd-1)'s Sprint 41 venue reclassification found only 1 row is server-testable, and it already gates every PR — there is no separate "full" nightly superset to run; the other 9 need infrastructure not yet built |
+| Property-based money/stock tests, extended run | [test-strategy.md §4](test-strategy.md#4-property-based-testing--money-and-stock-not-only-worked-examples) | **Corrected, Sprint 42**: no property-based suite exists on any tier, PR or nightly — `test-strategy.md §1`'s traceability table corrected in the same pass |
+| Full dependency audit | Open-source dependency vulnerability scan (a free GitHub-native feature — Dependabot alerts — rather than a separate paid service) | **Built, Sprint 42** (`.github/dependabot.yml`) — needs no CI job, alerts run automatically once the file exists |
 
 A nightly failure does not block same-day merges already in flight, but **does block the next
 release candidate from being cut** until resolved — treated with urgency, not ignored until
-convenient.
+convenient. No `release-candidate.yml` exists yet (§4 below is still design-only), so this rule has
+nothing to gate today; Sprint 42's actual, built substitute is `nightly.yml` opening (or updating) a
+standing GitHub issue on failure, so a regression is visible without anyone checking a dashboard.
 
 ## 4. Release-candidate pipeline (additional, on top of nightly)
 
@@ -83,3 +85,4 @@ purely about *when* a failure stops work, never about *whether* a check matters.
 | 0.1.0 | 2026-07-31 | Full pipeline specified across 3 tiers (PR/nightly/release-candidate), sized against the ≤10-minute PR budget and GitHub Actions' free-tier minute constraint; merge-vs-release-blocking distinction made explicit. |
 | 0.1.1 | 2026-08-18 | §2's fast-integration row corrected: the cross-tenant suite is 19 tables, not 22 (tenant-isolation.md §2's dated correction), and is now actually built (Sprint 40, backlog.md M4 item 5); idempotent-replay/2-device composition remain unbuilt, M4 item 6. |
 | 0.1.2 | 2026-08-19 | §2's fast-integration row updated: idempotent-replay/2-device concurrent-composition/1-of-10 failure scenarios now built (Sprint 41, backlog.md M4 item 6), added to the same `fast-integration` job, no new CI infra needed. |
+| 0.1.3 | 2026-08-19 | §3 (nightly pipeline) built for real (Sprint 42, backlog.md M4 item 7) — N-device fuzzed composition and the dependency audit now run; the "full failure-scenario suite" and "extended property-based tests" rows corrected to real, named, deferred gaps (neither has any code to run, on any tier) rather than left implying they're covered. §3's release-candidate-blocking rule noted as currently ungated (no `release-candidate.yml` exists), with `nightly.yml`'s actual issue-on-failure mechanism named as this sprint's real substitute. |
