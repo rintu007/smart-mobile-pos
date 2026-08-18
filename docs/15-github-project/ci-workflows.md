@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 15 — GitHub Project
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-31
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-18
 > **Owner:** DevOps Engineer / CTO
 > **Approved by:** _pending_
 
@@ -35,19 +35,29 @@ jobs:
     needs: lint-typecheck
     # 10-design-system component state-matrix tests
   fast-integration:
-    needs: [unit-tests]
-    # Idempotent-replay + 2-device composition (offline-test-suite.md) +
-    # cross-tenant isolation, all 22 tables (security-test-plan.md §1) — REQUIRED, every PR, no path filter
+    needs: [lint-typecheck]
+    # Cross-tenant isolation, all 19 real tables (security-test-plan.md §1) — built Sprint 40.
+    # Idempotent-replay + 2-device composition (offline-test-suite.md) — M4 item 6, not built yet;
+    # added to this same job when that item lands, not a separate one.
   bundle-secret-scan:
     needs: [lint-typecheck]
     # secrets-management.md §3's content-scan mechanism
 ```
 
+**Built Sprint 40 (backlog.md M4 item 5) — two corrections to this draft, found building it for
+real:** `fast-integration` depends on `lint-typecheck` alone, not `unit-tests` — this draft
+originally guessed the latter, but the two suites are independent (different database, different
+code path) and ci-pipeline.md §2 itself already says stages "run in parallel where they have no
+dependency on one another," so gating on `unit-tests` would only add latency for no correctness
+benefit. And the table count is 19, not 22 — [tenant-isolation.md §2](../12-security/tenant-isolation.md#2-what-every-table-means-precisely-restated-as-a-checklist)'s
+own dated correction, found in the same pass.
+
 **Migration validation** runs inside `fast-integration` specifically as its own step: every PR
-touching `prisma/migrations/` applies its migrations to a **freshly created** ephemeral test
-database (not a persisted, reused one) before any other test in that job runs — per this phase's
-exit criterion, "a migration that only works on the developer's machine is not a migration," proven
-by never running a migration against anything **but** a fresh database in CI.
+applies its migrations to a **freshly created** ephemeral test database (a `postgres:15` service
+container, ephemeral to the job — never a persisted, reused, or shared/production one) before any
+other test in that job runs — per this phase's exit criterion, "a migration that only works on the
+developer's machine is not a migration," proven by never running a migration against anything
+**but** a fresh database in CI.
 
 ## 2. `nightly.yml`
 

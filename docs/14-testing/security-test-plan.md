@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 14 — Testing Strategy
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-31
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-18
 > **Owner:** QA Lead / Security Engineer
 > **Approved by:** _pending_
 
@@ -16,11 +16,13 @@ pointer-not-duplicate pattern as [offline-test-suite.md](offline-test-suite.md).
 ## 1. Cross-tenant isolation
 
 **Content:** [tenant-isolation.md §2](../12-security/tenant-isolation.md#2-what-every-table-means-precisely-restated-as-a-checklist)'s
-22-table checklist, plus the Realtime-channel extension in
-[tenant-isolation.md §4](../12-security/tenant-isolation.md#4-extending-the-cross-tenant-proof-to-realtime).
-**CI placement:** every migration touching a tenant-owned table, blocking — restated as this phase's
-own exit criterion, not a new requirement. **Owner:** the same automated suite; this document adds
-no new test cases, only confirms it is wired as a hard release/merge gate.
+19-table checklist (corrected 2026-08-18 from an original 22 — see that section's own note), plus
+the Realtime-channel extension in
+[tenant-isolation.md §4](../12-security/tenant-isolation.md#4-extending-the-cross-tenant-proof-to-realtime)
+(named there as a real, deferred gap, not yet built). **CI placement: every PR, no path filter**,
+blocking (§2's own table above) — built Sprint 40 (backlog.md M4 item 5) as `pr.yml`'s
+`fast-integration` job. **Owner:** the same automated suite; this document adds no new test cases,
+only confirms it is wired as a hard release/merge gate.
 
 ## 2. Authorisation
 
@@ -74,3 +76,4 @@ in kind to the untested assumptions this entire documentation set exists to avoi
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-31 | Execution plan for Phase 12's four control areas; added the fixture-based self-test for the SQL-injection lint rule as this phase's one genuinely new instrument. |
+| 0.2.0 | 2026-08-18 | §1 updated for Sprint 40 (backlog.md M4 item 5): the cross-tenant suite is built and CI-enforced (`pr.yml`'s `fast-integration` job); corrected the table count (19, not 22 — tenant-isolation.md §2's own dated correction) and the CI-placement wording ("every PR," not "every migration," matching ci-pipeline.md/ci-workflows.md's own already-fixed framing this section had drifted from). |
