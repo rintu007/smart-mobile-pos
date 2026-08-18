@@ -1,4 +1,5 @@
 import * as repository from "./repository";
+import * as identityService from "@/modules/identity/service";
 import { ApiError } from "@/core/errors/api-error";
 import type { UpdateSettingsRequest } from "./schema";
 import type { Role } from "@/modules/roles/schema";
@@ -82,7 +83,11 @@ export async function getSettings(tenantId: string, role: Role) {
  * docs/modules/settings/specification.md §4 — PATCH /api/v1/settings. Owner-only (enforced by the
  * Route Handler's own `requirePermission` call, not here).
  */
-export async function updateSettings(tenantId: string, input: UpdateSettingsRequest) {
+export async function updateSettings(
+  authUserId: string,
+  tenantId: string,
+  input: UpdateSettingsRequest,
+) {
   const current = await repository.findSettings(tenantId);
   if (!current) {
     throw new ApiError(404, "NOT_FOUND", "No settings exist for this tenant.");
@@ -137,7 +142,24 @@ export async function updateSettings(tenantId: string, input: UpdateSettingsRequ
     }),
   };
 
-  const applied = await repository.updateSettingsIfUnchanged(tenantId, current.updatedAt, data);
+  const actorUserId = await identityService.resolveUserId(authUserId);
+  // Every field this request actually intends to change, already JSON-safe (the raw Zod-parsed
+  // input, not `data` above, which carries BigInt values `afterState`'s Json column can't hold) —
+  // `base_updated_at`/`client_operation_id` aren't field changes themselves, so both are excluded.
+  const changedFields: Record<string, unknown> = { ...input };
+  delete changedFields.base_updated_at;
+  delete changedFields.client_operation_id;
+  for (const key of Object.keys(changedFields)) {
+    if (changedFields[key] === undefined) delete changedFields[key];
+  }
+
+  const applied = await repository.updateSettingsIfUnchanged(
+    tenantId,
+    current.updatedAt,
+    data,
+    actorUserId,
+    changedFields,
+  );
   if (!applied) {
     // A concurrent PATCH landed between the read above and this write — the same outcome as the
     // base_updated_at check above, just caught at the database level instead of in JS.

@@ -145,6 +145,33 @@ export function createSale(input: CreateSaleInput) {
       })),
     });
 
+    // DR-025 / audit-logging.md §1's Phase 14 correction (found unfixed Sprint 43, backlog.md M4
+    // item 8): every stock_movements row gets its own paired audit_log entry — "sale" movements were
+    // the second of four movement types found still missing one, distinct from the single
+    // "sale.completed" entry below (DR-025 lists "stock movement" and "sale" as separate audited
+    // categories; a 3-line-item sale needs 3 stock-movement entries plus its own 1 sale entry, not
+    // 1 total). Each entry reuses its own stock movement's id, the same pattern the movement itself
+    // already uses to reuse its line item's id.
+    await tx.auditLog.createMany({
+      data: input.lineItems.map((item) => ({
+        id: item.id,
+        tenantId: input.tenantId,
+        storeId: input.storeId,
+        actorUserId: input.createdBy,
+        action: "stock_movement.sale",
+        entityType: "stock_movement",
+        entityId: item.id,
+        afterState: {
+          id: item.id,
+          product_id: item.productId,
+          quantity_delta: -item.quantity,
+          movement_type: "sale",
+          reference_type: "sale",
+          reference_id: input.id,
+        },
+      })),
+    });
+
     // DR-025 (backlog.md item 8): one audit entry per completed sale, in the same transaction as
     // the sale itself — docs/modules/audit-log/specification.md. Reuses the sale's own id as this
     // row's id, the same 1:1 idempotency-key reuse the stock movements above already established.

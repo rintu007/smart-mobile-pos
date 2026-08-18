@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 12 — Security Design
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-30
+> **Version:** 0.1.1
+> **Last updated:** 2026-08-19
 > **Owner:** Security Engineer / CTO
 > **Approved by:** _pending_
 
@@ -69,8 +69,15 @@ limit — a lockout mechanism is itself a denial-of-service vector against a leg
 attacker deliberately fails logins to lock a real account out during business hours. Rate limiting
 achieves the brute-force resistance goal without introducing that new risk.
 
+**Correction, found Sprint 43 (backlog.md M4 item 8, [owasp-checklist.md](owasp-checklist.md) A07):**
+"rate limiting achieves" is a design claim, not a present fact — no rate-limiting code exists
+anywhere in `apps/web/src` (confirmed by grep, and by the absence of any rate-limit package in
+`package.json`). This section's design is sound and unchanged; it has simply never been built. Real,
+standalone scope for a future sprint, not fixed in this pass.
+
 ## Change Log
 
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Token lifetimes justified, reuse detection and multi-device stance stated, revocation guarantee precisely scoped (hard for API, bounded-not-instant for Realtime), lockout-vs-rate-limit trade-off decided. |
+| 0.1.1 | 2026-08-19 | §6 corrected (Sprint 43, backlog.md M4 item 8): rate limiting is a design claim, not yet implemented anywhere in code — flagged as a real gap, not fixed this pass. |

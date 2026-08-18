@@ -14,20 +14,51 @@ export function createStockMovement(
   input: CreateStockMovementRequest & { tenantId: string; storeId: string; createdBy: string },
 ) {
   // Upsert-on-id, same idempotent-replay mechanism as every other creation endpoint —
-  // docs/11-api/api-principles.md §3.
-  return prisma.stockMovement.upsert({
-    where: { id: input.id },
-    create: {
-      id: input.id,
-      tenantId: input.tenantId,
-      storeId: input.storeId,
-      productId: input.product_id,
-      quantityDelta: input.quantity_delta,
-      movementType: input.movement_type,
-      reasonCode: input.reason_code ?? null,
-      createdBy: input.createdBy,
-    },
-    update: {},
+  // docs/11-api/api-principles.md §3. Wrapped in a transaction (was a bare upsert before Sprint 43,
+  // backlog.md M4 item 8) so the movement and its paired audit entry are created atomically.
+  return prisma.$transaction(async (tx) => {
+    const movement = await tx.stockMovement.upsert({
+      where: { id: input.id },
+      create: {
+        id: input.id,
+        tenantId: input.tenantId,
+        storeId: input.storeId,
+        productId: input.product_id,
+        quantityDelta: input.quantity_delta,
+        movementType: input.movement_type,
+        reasonCode: input.reason_code ?? null,
+        createdBy: input.createdBy,
+      },
+      update: {},
+    });
+
+    // DR-025 / audit-logging.md §1's Phase 14 correction (found unfixed Sprint 43, backlog.md M4
+    // item 8): every stock_movements row gets its own paired audit_log entry — "adjustment" was the
+    // fourth and last movement type found still missing one (the *only* one this project's own
+    // v0.1.0 draft ever intended to log, per audit-logging.md's own correction note — even that
+    // narrower original intent had never actually been implemented in code).
+    await tx.auditLog.upsert({
+      where: { id: input.id },
+      create: {
+        id: input.id,
+        tenantId: input.tenantId,
+        storeId: input.storeId,
+        actorUserId: input.createdBy,
+        action: "stock_movement.adjustment",
+        entityType: "stock_movement",
+        entityId: input.id,
+        afterState: {
+          id: input.id,
+          product_id: input.product_id,
+          quantity_delta: input.quantity_delta,
+          movement_type: input.movement_type,
+          reason_code: input.reason_code ?? null,
+        },
+      },
+      update: {},
+    });
+
+    return movement;
   });
 }
 

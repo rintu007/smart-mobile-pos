@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const { tenantId } = await requirePermission(request, ["owner"]);
+    const { tenantId, authUserId } = await requirePermission(request, ["owner"]);
 
     const body = await request.json();
     const parsed = updateSettingsRequestSchema.safeParse(body);
@@ -33,7 +33,7 @@ export async function PATCH(request: NextRequest) {
       });
     }
 
-    const result = await updateSettings(tenantId, parsed.data);
+    const result = await updateSettings(authUserId, tenantId, parsed.data);
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof ApiError) {

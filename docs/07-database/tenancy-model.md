@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 07 — Database Design
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-30
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-19
 > **Owner:** PostgreSQL Architect / CTO
 > **Approved by:** _pending_
 
@@ -71,6 +71,17 @@ Per [ADR-0004](../adr/ADR-0004-shared-schema-multi-tenancy.md), RLS is enabled *
 authorisation checks (TB-1, TB-3) are the first line; RLS is the second, independent one. This is a
 deliberate redundancy: if the API's own tenant-scoping logic has a bug, RLS still stops the leak.
 
+**Correction, found Sprint 43 (backlog.md M4 item 8, [owasp-checklist.md](../12-security/owasp-checklist.md)
+A01):** this section states the *design intent* correctly, but no `ALTER TABLE ... FORCE ROW LEVEL
+SECURITY` exists anywhere in `supabase/sql/*.sql`, and `BYPASSRLS` is the wrong thing to have
+checked — Postgres exempts a table's own **owner** from its own RLS policies regardless of `ENABLE`,
+independent of `BYPASSRLS`, unless `FORCE` is also set. The role `prisma migrate deploy` runs as (the
+same `DATABASE_URL` the running app uses) becomes the owner of every table it creates. Whether this
+"second, independent" layer actually holds in production today depends entirely on whether the real
+`DATABASE_URL` role is deliberately *not* the table owner — something no code in this repository
+confirms one way or the other. Flagged, not fixed: applying `FORCE` without first confirming the
+real production role risks every tenant-scoped query suddenly returning zero rows.
+
 ## 4. Store-level scoping is a second, finer-grained layer
 
 Tables that are store-scoped as well as tenant-scoped (`stock_movements`, `trading_days`, `sales`,
@@ -115,3 +126,4 @@ RLS protects row-level read/write isolation. It does **not** protect against:
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial tenancy mechanism: JWT claim design, RLS policy template, cross-tenant negative test suite specification. |
+| 0.2.0 | 2026-08-19 | §3 corrected (Sprint 43, backlog.md M4 item 8): the "RLS is never bypassed" claim checked the wrong mechanism (`BYPASSRLS`) — the real risk is the table-owner exemption, uncontrolled by `FORCE ROW LEVEL SECURITY` (absent from every migration) and unconfirmed against the real production connection's role. Flagged as the most significant finding of the OWASP-checklist-against-real-code review, not fixed pending founder confirmation of production's actual `DATABASE_URL` role. |
