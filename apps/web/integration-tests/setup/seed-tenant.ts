@@ -13,6 +13,13 @@ export async function seedTenant(prisma: PrismaClient, label: string) {
     tenantId: randomUUID(),
     storeId: randomUUID(),
     userId: randomUUID(),
+    // Sprint 41 (backlog.md M4 item 6) — found a real gap: this fixture never exposed the seeded
+    // owner's `authUserId` (Supabase's own `auth.users.id`, distinct from `userId`/`users.id` per
+    // `identity/service.ts`'s own doc comment), so no test built on `seedTenant` could call any
+    // service function taking a session's `authUserId` (`pushOperations` and everything it
+    // dispatches to). Never noticed in Sprint 40, whose suite only ever queried raw SQL directly,
+    // never through application service code.
+    authUserId: randomUUID(),
     categoryId: randomUUID(),
     unitId: randomUUID(),
     productId: randomUUID(),
@@ -36,7 +43,7 @@ export async function seedTenant(prisma: PrismaClient, label: string) {
       data: {
         id: ids.userId,
         tenantId: ids.tenantId,
-        authUserId: randomUUID(),
+        authUserId: ids.authUserId,
         displayName: `Owner ${label}`,
         createdBy: ids.userId,
       },

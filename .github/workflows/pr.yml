@@ -81,12 +81,14 @@ jobs:
       - run: flutter test
         working-directory: apps/mobile
 
-  # Sprint 40 (backlog.md M4 item 5) — the first of ci-pipeline.md §2's "Fast integration tests"
-  # stage to actually be built; idempotent-replay/2-device composition (M4 item 6) are added to
-  # this same job when that item lands, not stubbed ahead of it. A `postgres:15` service container
-  # (fresh per run, no shared/production database) so this genuinely blocks every PR without state
-  # pollution across concurrent runs — docs/12-security/tenant-isolation.md §1's "independent of
-  # the API layer being correct" is only true if the suite hits real RLS, not a mock.
+  # Sprint 40 (backlog.md M4 item 5) built this job's cross-tenant isolation suite; Sprint 41
+  # (M4 item 6) added idempotent-replay/2-device concurrent-composition/the server-testable failure-
+  # scenario subset to the same job, not a new one — offline-test-suite.md §2 needs no toxiproxy/new
+  # infra for that subset, since replay-safety is server-observable without a real network hop (see
+  # sync-idempotent-replay.test.ts's own doc comment). A `postgres:15` service container (fresh per
+  # run, no shared/production database) so this genuinely blocks every PR without state pollution
+  # across concurrent runs — docs/12-security/tenant-isolation.md §1's "independent of the API layer
+  # being correct" is only true if the suite hits real RLS, not a mock.
   fast-integration:
     needs: lint-typecheck
     runs-on: ubuntu-latest
@@ -106,6 +108,14 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/smartpos_test
       DIRECT_URL: postgresql://postgres:postgres@localhost:5432/smartpos_test
+      # Added Sprint 41 — unlike Sprint 40's suite (raw SQL only), the new sync-engine tests call
+      # `pushOperations` in-process, which transitively imports `roles/service.ts` →
+      # `core/auth/admin-client.ts`'s module-load-time `createClient(url, key)` call (the same
+      # "supabaseKey is required" crash the `build` job's own env block already works around).
+      # Placeholders only — no live Supabase project is called here, only constructed.
+      NEXT_PUBLIC_SUPABASE_URL: "https://placeholder.supabase.co"
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "placeholder"
+      SUPABASE_SERVICE_ROLE_KEY: "placeholder"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 15 — GitHub Project
-> **Version:** 0.2.0
-> **Last updated:** 2026-08-18
+> **Version:** 0.3.0
+> **Last updated:** 2026-08-19
 > **Owner:** DevOps Engineer / CTO
 > **Approved by:** _pending_
 
@@ -37,8 +37,8 @@ jobs:
   fast-integration:
     needs: [lint-typecheck]
     # Cross-tenant isolation, all 19 real tables (security-test-plan.md §1) — built Sprint 40.
-    # Idempotent-replay + 2-device composition (offline-test-suite.md) — M4 item 6, not built yet;
-    # added to this same job when that item lands, not a separate one.
+    # Idempotent-replay (3/3) + concurrent-composition non-fuzzed (4/4) + 1-of-10 server-testable
+    # failure scenarios (offline-test-suite.md §3) — M4 item 6, built Sprint 41, same job.
   bundle-secret-scan:
     needs: [lint-typecheck]
     # secrets-management.md §3's content-scan mechanism
@@ -103,3 +103,5 @@ two different GitHub settings that must be configured to agree.
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-31 | Three workflow files structured (PR/nightly/release-candidate); migration validation specified as fresh-database-only; required-checks list named exactly against repository-setup.md's branch protection. |
+| 0.2.0 | 2026-08-18 | **Retroactively added Sprint 41 — this row was missing despite the header already carrying this version.** Sprint 40 (backlog.md M4 item 5): `fast-integration` corrected to depend on `lint-typecheck` alone (not `unit-tests` — the two suites are independent, no correctness benefit from the added latency); table count corrected to 19, not 22 (tenant-isolation.md §2's dated correction); migration-validation paragraph updated to name the actual `postgres:15` service-container mechanism. |
+| 0.3.0 | 2026-08-19 | Sprint 41 (backlog.md M4 item 6): `fast-integration`'s pseudocode comment updated — idempotent-replay/concurrent-composition/1-of-10 failure scenarios now built, in the same job, not deferred. |

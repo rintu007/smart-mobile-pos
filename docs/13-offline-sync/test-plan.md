@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 13 — Offline Synchronisation
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-31
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-19
 > **Owner:** CTO / Principal Flutter Engineer
 > **Approved by:** _pending_
 
@@ -28,7 +28,7 @@ pass/fail criterion for each; **how** it runs (CI wiring, device farm, harness c
 | Test | Setup | Assertion |
 | --- | --- | --- |
 | Two-device concurrent oversell | Two simulated offline devices each sell the last unit of the same product, then sync in both possible orders | Final balance is identical (`-1`) regardless of sync order — the automated form of [stock-ledger.md §4](../07-database/stock-ledger.md#4-worked-example--two-devices-selling-concurrently-offline) |
-| N-device fuzzed interleaving | 5 simulated devices each generate a random sequence of opening/sale/adjustment movements offline, synced in a randomised order across 100 runs | Final balance is identical across all 100 runs — a property-based/fuzz test proving order-independence isn't merely true for the two-device hand-worked case |
+| N-device fuzzed interleaving | 5 simulated devices each generate a random sequence of opening/sale movements offline, synced in a randomised order across 100 runs | Final balance is identical across all 100 runs — a property-based/fuzz test proving order-independence isn't merely true for the two-device hand-worked case |
 | Field-edit non-overlap merge | Two devices edit different fields of the same `customers` row offline | Both edits applied; no conflict surfaced — per [conflict-resolution.md §3](conflict-resolution.md#3-field-edit-collisions--merge-what-doesnt-overlap-ask-about-what-does) |
 | Field-edit same-field collision | Two devices edit the *same* field of the same `customers` row to different values, offline | Neither value silently wins; a field-level conflict record is created, retrievable and matching the business-language wording in [conflict-resolution.md §3](conflict-resolution.md#3-field-edit-collisions--merge-what-doesnt-overlap-ask-about-what-does) |
 | Creation collision | Two devices create a `customers` row with the same phone number, offline, then both sync | The second to arrive is rejected with `PHONE_ALREADY_ASSIGNED`; the first stands unmodified |
@@ -41,6 +41,29 @@ the network connection at a byte offset partway through a batch response, forcin
 +36 hours, expiring a token server-side mid-queue, etc.) and asserting the **expected behaviour**
 column from that table holds — this document does not repeat those expectations here, only points
 at them as the test suite's ten required cases.
+
+**Correction, Sprint 41 (backlog.md M4 item 6):** "one test per row" conflated three genuinely
+different test venues, only discovered while actually building the suite against
+[14-testing](../14-testing/README.md)'s real infrastructure. Reclassified here, per row:
+
+| Scenario | Venue | Status |
+| --- | --- | --- |
+| Server rejects one item in a batch | Server — a real Postgres/`pushOperations` integration test, no new infra | **Built**, `apps/web/integration-tests/sync-failure-scenarios.test.ts` |
+| Connectivity lost mid-batch | Server half: identical to idempotent-replay's "ambiguous-acknowledgement" case (§1) — already-committed operations stay committed on a retry. Client half (scheduling the retry itself after a real severed connection): mobile SyncEngine, needs a live server + fault-injecting proxy in front of it | Server half **built** (§1); client half **deferred**, needs infra not yet built |
+| App killed mid-sync | Mobile-only (`outbound_queue`/Drift, app-process lifecycle) | **Deferred** — no server code path exists to test |
+| Device rebooted with a full queue | Mobile-only, same reasoning | **Deferred** |
+| Schema version mismatch after an update | Mobile-only (Drift's own versioned-migration mechanism) | **Deferred** — not a sync-engine adversarial case at all |
+| Storage full | Mobile-only (on-device disk pressure), no server involvement whatsoever | **Deferred** |
+| Token expired while queued | Needs a real Supabase Auth (GoTrue) JWT issuance/expiry — the full local Supabase CLI stack Sprint 40 already named and deferred for the Realtime extension, for the same reason | **Deferred**, same infra gap as Sprint 40's Realtime deferral |
+| Device clock wrong by hours or days | Already proven by design in [clock-and-ordering.md §4](clock-and-ordering.md#4-what-this-means-for-a-device-with-a-badly-wrong-clock--the-failure-scenario-itself) | No code test needed |
+| Same account on two devices | [failure-scenarios.md §1](failure-scenarios.md#1-the-named-scenarios) itself already resolves this as "not a failure at all" | Nothing to test |
+| Queue older than server retention | [failure-scenarios.md §1](failure-scenarios.md#1-the-named-scenarios) itself already resolves this as "not applicable... no retention job exists" | Nothing to test |
+
+The genuinely mobile-only and Supabase-stack-dependent rows are real, tracked gaps — named here, not
+silently dropped — but building a mobile `integration_test` + toxiproxy harness, or the full local
+Supabase CLI stack, is materially larger scope than backlog item 6's own 4-person-day estimate
+covers. Both are candidates for a dedicated future item, the same way Sprint 40 named the Realtime
+extension rather than silently building a fake stand-in for it.
 
 ## 4. Failure-injection tooling
 
@@ -71,3 +94,4 @@ loss or duplication) is exactly as invisible-until-it-happens as a tenant-isolat
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-31 | Idempotent-replay and concurrent-composition test cases specified with assertions; all 10 named failure scenarios mapped to dedicated adversarial tests; fault-injecting proxy approach specified; CI-gate status established matching Phase 12's precedent. |
+| 0.2.0 | 2026-08-19 | Sprint 41 (backlog.md M4 item 6) built §1's three idempotent-replay cases and §2's 2-device-scale rows (all 4) plus the N-device fuzzed case (nightly-only) for real, against a real Postgres connection, no toxiproxy needed for any of it — replay/order-independence are server-observable properties. §2's N-device row corrected: no `adjustment` sync-push operation type exists, fuzzed across `opening`/`sale` only. §3 reclassified by actual test venue (server / mobile-only / needs the full Supabase stack / already-proven-no-test-needed) — "one test per row" conflated three different venues; only 1 of the 10 rows was actually buildable as a server integration test this sprint. |
