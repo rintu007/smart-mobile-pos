@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 14 — Testing Strategy
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-31
+> **Version:** 0.1.1
+> **Last updated:** 2026-08-18
 > **Owner:** QA Lead / DevOps
 > **Approved by:** _pending_
 
@@ -40,7 +40,7 @@ flowchart LR
 | Import-boundary rules | [layering-rules.md](../08-folder-structure/layering-rules.md)'s dependency-cruiser config, plus [secrets-management.md §3](../12-security/secrets-management.md#3-the-build-time-check--the-exit-criterions-actual-mechanism)'s client/server boundary rule | Yes |
 | Unit tests | [test-strategy.md §1](test-strategy.md#1-business-rule-traceability--the-exit-criterion-made-checkable)'s full 26-rule DR traceability suite, plus every other unit test | Yes |
 | Widget tests | [10-design-system](../10-design-system/README.md)'s per-component state matrix | Yes |
-| Fast integration tests | [offline-test-suite.md §3](offline-test-suite.md#3-ci-placement)'s PR-gated subset (idempotent-replay, 2-device composition) **and** [security-test-plan.md §1](security-test-plan.md#1-cross-tenant-isolation)'s 22-table cross-tenant suite — both run on **every** PR regardless of which files changed, since a tenant-isolation regression is too severe to gate only on a heuristic "did this PR look relevant" filter | Yes |
+| Fast integration tests | [offline-test-suite.md §3](offline-test-suite.md#3-ci-placement)'s PR-gated subset (idempotent-replay, 2-device composition — M4 item 6, not yet built) **and** [security-test-plan.md §1](security-test-plan.md#1-cross-tenant-isolation)'s 19-table cross-tenant suite (built Sprint 40, backlog.md M4 item 5) — both run on **every** PR regardless of which files changed, since a tenant-isolation regression is too severe to gate only on a heuristic "did this PR look relevant" filter | Yes |
 | Bundle secret scan | [secrets-management.md §3](../12-security/secrets-management.md#3-the-build-time-check--the-exit-criterions-actual-mechanism)'s content scan of the built client bundle | Yes |
 
 **Target: ≤10 minutes total**, per [success-metrics.md](../01-vision/success-metrics.md) — stages
@@ -81,3 +81,4 @@ purely about *when* a failure stops work, never about *whether* a check matters.
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-31 | Full pipeline specified across 3 tiers (PR/nightly/release-candidate), sized against the ≤10-minute PR budget and GitHub Actions' free-tier minute constraint; merge-vs-release-blocking distinction made explicit. |
+| 0.1.1 | 2026-08-18 | §2's fast-integration row corrected: the cross-tenant suite is 19 tables, not 22 (tenant-isolation.md §2's dated correction), and is now actually built (Sprint 40, backlog.md M4 item 5); idempotent-replay/2-device composition remain unbuilt, M4 item 6. |
