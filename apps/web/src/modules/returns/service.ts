@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import * as identityService from "@/modules/identity/service";
 import * as storesService from "@/modules/stores/service";
 import * as rolesService from "@/modules/roles/service";
@@ -10,6 +11,8 @@ import { ApiError } from "@/core/errors/api-error";
 import * as repository from "./repository";
 import type { ReturnCursor } from "./repository";
 import type { CreateReturnRequest } from "./schema";
+
+const UNIQUE_CONSTRAINT_VIOLATION = "P2002";
 
 // Business rules live here, not in the Route Handler — docs/08-folder-structure/backend-structure.md §2.
 
@@ -171,16 +174,31 @@ export async function createReturn(
 
   const createdBy = await identityService.resolveUserId(authUserId);
 
-  const created = await repository.createReturn({
-    id: input.id,
-    tenantId,
-    storeId: sale.storeId,
-    originalSaleId: input.original_sale_id,
-    status,
-    refundTotalMinorUnits,
-    createdBy,
-    lineItems,
-  });
+  let created;
+  try {
+    created = await repository.createReturn({
+      id: input.id,
+      tenantId,
+      storeId: sale.storeId,
+      originalSaleId: input.original_sale_id,
+      status,
+      refundTotalMinorUnits,
+      createdBy,
+      lineItems,
+    });
+  } catch (error) {
+    // Sprint 41 (backlog.md M4 item 6) — the same read-then-write replay race as
+    // `pos/service.ts`'s `createSale` (found by the same new concurrent-composition suite),
+    // same shape, same fix: this function's own top-of-function `findReturnById` check races
+    // against a second genuinely concurrent push of the identical `id`.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === UNIQUE_CONSTRAINT_VIOLATION) {
+      const existingAfterRace = await repository.findReturnById(tenantId, input.id);
+      if (existingAfterRace) {
+        return formatReturn(existingAfterRace);
+      }
+    }
+    throw error;
+  }
 
   return formatReturn(created);
 }
@@ -239,18 +257,39 @@ export async function approveReturn(authUserId: string, tenantId: string, id: st
   }
   const productIdByLineItemId = new Map(sale.lineItems.map((item) => [item.id, item.productId]));
 
-  const updated = await repository.completeReturn({
-    returnId: id,
-    tenantId,
-    storeId: existing.storeId,
-    approvedBy: actorUserId,
-    refundTotalMinorUnits: existing.refundTotalMinorUnits,
-    lineItems: existing.lineItems.map((item) => ({
-      id: item.id,
-      productId: productIdByLineItemId.get(item.originalSaleLineItemId)!,
-      quantity: item.quantity,
-    })),
-  });
+  let updated;
+  try {
+    updated = await repository.completeReturn({
+      returnId: id,
+      tenantId,
+      storeId: existing.storeId,
+      approvedBy: actorUserId,
+      refundTotalMinorUnits: existing.refundTotalMinorUnits,
+      lineItems: existing.lineItems.map((item) => ({
+        id: item.id,
+        productId: productIdByLineItemId.get(item.originalSaleLineItemId)!,
+        quantity: item.quantity,
+      })),
+    });
+  } catch (error) {
+    // Sprint 41 (backlog.md M4 item 6) — the same class of race as `createSale`/`createReturn`
+    // above, one step later in the lifecycle: two genuinely concurrent `approve` calls on the same
+    // pending return can both pass the `status === "pending_approval"` check above before either
+    // commits. `repository.completeReturn`'s own transaction reuses each return line item's id as
+    // its stock-movement id (the same 1:1 idempotency-key reuse `products/repository.ts`'s opening
+    // movement and `pos/repository.ts`'s sale movements already establish) — so the losing call's
+    // `stockMovement.createMany` hits a real unique violation, rolling back that entire transaction
+    // (including its own otherwise-harmless re-`update` of `returns.status`) and leaving the row
+    // exactly as the winning call left it. Re-fetching and returning that is the correct idempotent
+    // outcome, not an error.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === UNIQUE_CONSTRAINT_VIOLATION) {
+      const existingAfterRace = await repository.findReturnById(tenantId, id);
+      if (existingAfterRace && existingAfterRace.status === "completed") {
+        return formatReturn(existingAfterRace);
+      }
+    }
+    throw error;
+  }
 
   return formatReturn(updated);
 }

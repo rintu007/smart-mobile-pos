@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import * as identityService from "@/modules/identity/service";
 import * as rolesService from "@/modules/roles/service";
 import * as settingsService from "@/modules/settings/service";
@@ -6,6 +7,8 @@ import * as customersService from "@/modules/customers/service";
 import { ApiError } from "@/core/errors/api-error";
 import * as repository from "./repository";
 import type { CreateSaleRequest } from "./schema";
+
+const UNIQUE_CONSTRAINT_VIOLATION = "P2002";
 
 // docs/modules/trading-day/specification.md §1 — full-V1-shape rejection of an unresolvable
 // trading_day_id: distinct from "no store found" (NOT_FOUND) because the day may genuinely exist
@@ -337,26 +340,47 @@ export async function createSale(
     );
   }
 
-  const sale = await repository.createSale({
-    id: input.id,
-    tenantId,
-    storeId: input.store_id,
-    createdBy,
-    tradingDayId: input.trading_day_id,
-    customerId: input.customer_id,
-    provisionalInvoiceNumber: input.provisional_invoice_number,
-    subtotalMinorUnits,
-    discountTotalMinorUnits,
-    taxTotalMinorUnits,
-    taxRegistrationTypeAtSale: taxMode,
-    grandTotalMinorUnits,
-    lineItems,
-    payments: input.payments.map((payment) => ({
-      id: randomUUID(),
-      method: payment.method,
-      amountMinorUnits: BigInt(payment.amount_minor_units),
-    })),
-  });
+  let sale;
+  try {
+    sale = await repository.createSale({
+      id: input.id,
+      tenantId,
+      storeId: input.store_id,
+      createdBy,
+      tradingDayId: input.trading_day_id,
+      customerId: input.customer_id,
+      provisionalInvoiceNumber: input.provisional_invoice_number,
+      subtotalMinorUnits,
+      discountTotalMinorUnits,
+      taxTotalMinorUnits,
+      taxRegistrationTypeAtSale: taxMode,
+      grandTotalMinorUnits,
+      lineItems,
+      payments: input.payments.map((payment) => ({
+        id: randomUUID(),
+        method: payment.method,
+        amountMinorUnits: BigInt(payment.amount_minor_units),
+      })),
+    });
+  } catch (error) {
+    // Sprint 41 (backlog.md M4 item 6) — found by the new concurrent-composition suite, not by
+    // inspection: this function's own top-of-function `findSaleById` replay check (line ~219) is a
+    // read-then-write race, not an atomic guard — two genuinely concurrent pushes of the identical
+    // `id` (a tight client retry, or two devices somehow minting the same id) can both pass that
+    // check before either commits, and the second `repository.createSale` then hits a real Postgres
+    // unique violation on the sale's own primary key. Translated the same way
+    // `customers/service.ts`'s `translatePhoneConflict`/`products/service.ts`'s
+    // `BARCODE_ALREADY_ASSIGNED` catch already establish for this class of race — except here the
+    // losing side's correct outcome is the same idempotent "return what's already there" result the
+    // top-of-function check was trying to give it, not a rejection.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === UNIQUE_CONSTRAINT_VIOLATION) {
+      const existingAfterRace = await repository.findSaleById(input.id);
+      if (existingAfterRace) {
+        return formatSale(existingAfterRace);
+      }
+    }
+    throw error;
+  }
 
   return formatSale(sale);
 }
