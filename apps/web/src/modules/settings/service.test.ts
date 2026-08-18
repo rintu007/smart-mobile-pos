@@ -1,11 +1,15 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import * as repository from "./repository";
+import * as identityService from "@/modules/identity/service";
 import { getSettings, updateSettings } from "./service";
 import type { UpdateSettingsRequest } from "./schema";
 
 vi.mock("./repository");
+vi.mock("@/modules/identity/service");
 
 const tenantId = "22222222-2222-4222-8222-222222222222";
+const authUserId = "33333333-3333-4333-8333-333333333333";
+const actorUserId = "11111111-1111-4111-8111-111111111111";
 const updatedAt = new Date("2026-08-14T00:00:00.000Z");
 
 const row = (overrides: Partial<Record<string, unknown>> = {}) => ({
@@ -85,6 +89,7 @@ describe("getSettings", () => {
 describe("updateSettings", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(identityService.resolveUserId).mockResolvedValue(actorUserId);
   });
 
   const baseInput: UpdateSettingsRequest = {
@@ -96,7 +101,10 @@ describe("updateSettings", () => {
     vi.mocked(repository.findSettings).mockResolvedValue(row() as never);
 
     await expect(
-      updateSettings(tenantId, { ...baseInput, base_updated_at: "2020-01-01T00:00:00.000Z" }),
+      updateSettings(authUserId, tenantId, {
+        ...baseInput,
+        base_updated_at: "2020-01-01T00:00:00.000Z",
+      }),
     ).rejects.toMatchObject({ status: 409, code: "SETTINGS_CONFLICT" });
     expect(repository.updateSettingsIfUnchanged).not.toHaveBeenCalled();
   });
@@ -105,7 +113,7 @@ describe("updateSettings", () => {
     vi.mocked(repository.findSettings).mockResolvedValue(row({ taxMode: "unregistered" }) as never);
 
     await expect(
-      updateSettings(tenantId, { ...baseInput, tax_rate_basis_points: 500 }),
+      updateSettings(authUserId, tenantId, { ...baseInput, tax_rate_basis_points: 500 }),
     ).rejects.toMatchObject({ status: 422, code: "TAX_RATE_REQUIRES_STANDARD_MODE" });
   });
 
@@ -115,7 +123,7 @@ describe("updateSettings", () => {
     ).mockResolvedValue(row({ taxMode: "standard", taxRateBasisPoints: 500 }) as never);
 
     await expect(
-      updateSettings(tenantId, { ...baseInput, tax_mode: "unregistered" }),
+      updateSettings(authUserId, tenantId, { ...baseInput, tax_mode: "unregistered" }),
     ).rejects.toMatchObject({ status: 422, code: "TAX_RATE_REQUIRES_STANDARD_MODE" });
   });
 
@@ -125,7 +133,7 @@ describe("updateSettings", () => {
       .mockResolvedValueOnce(row({ taxMode: "standard", taxRateBasisPoints: 500 }) as never);
     vi.mocked(repository.updateSettingsIfUnchanged).mockResolvedValue(true);
 
-    const result = await updateSettings(tenantId, {
+    const result = await updateSettings(authUserId, tenantId, {
       ...baseInput,
       tax_mode: "standard",
       tax_rate_basis_points: 500,
@@ -135,6 +143,8 @@ describe("updateSettings", () => {
       tenantId,
       updatedAt,
       expect.objectContaining({ taxMode: "standard", taxRateBasisPoints: 500 }),
+      actorUserId,
+      { tax_mode: "standard", tax_rate_basis_points: 500 },
     );
     expect(result).toMatchObject({ tax_mode: "standard", tax_rate_basis_points: 500 });
   });
@@ -145,12 +155,14 @@ describe("updateSettings", () => {
       .mockResolvedValueOnce(row({ roundingRule: "round_half_even" }) as never);
     vi.mocked(repository.updateSettingsIfUnchanged).mockResolvedValue(true);
 
-    await updateSettings(tenantId, { ...baseInput, rounding_rule: "round_half_even" });
+    await updateSettings(authUserId, tenantId, { ...baseInput, rounding_rule: "round_half_even" });
 
     expect(repository.updateSettingsIfUnchanged).toHaveBeenCalledWith(
       tenantId,
       updatedAt,
       { roundingRule: "round_half_even" },
+      actorUserId,
+      { rounding_rule: "round_half_even" },
     );
   });
 
@@ -159,14 +171,14 @@ describe("updateSettings", () => {
     vi.mocked(repository.updateSettingsIfUnchanged).mockResolvedValue(false);
 
     await expect(
-      updateSettings(tenantId, { ...baseInput, rounding_rule: "round_half_even" }),
+      updateSettings(authUserId, tenantId, { ...baseInput, rounding_rule: "round_half_even" }),
     ).rejects.toMatchObject({ status: 409, code: "SETTINGS_CONFLICT" });
   });
 
   it("throws NOT_FOUND when no settings row exists for the tenant", async () => {
     vi.mocked(repository.findSettings).mockResolvedValue(null);
 
-    await expect(updateSettings(tenantId, baseInput)).rejects.toMatchObject({
+    await expect(updateSettings(authUserId, tenantId, baseInput)).rejects.toMatchObject({
       status: 404,
       code: "NOT_FOUND",
     });
@@ -178,12 +190,17 @@ describe("updateSettings", () => {
       .mockResolvedValueOnce(row({ lowStockThresholdQuantity: 10 }) as never);
     vi.mocked(repository.updateSettingsIfUnchanged).mockResolvedValue(true);
 
-    const result = await updateSettings(tenantId, { ...baseInput, low_stock_threshold_quantity: 10 });
+    const result = await updateSettings(authUserId, tenantId, {
+      ...baseInput,
+      low_stock_threshold_quantity: 10,
+    });
 
     expect(repository.updateSettingsIfUnchanged).toHaveBeenCalledWith(
       tenantId,
       updatedAt,
       { lowStockThresholdQuantity: 10 },
+      actorUserId,
+      { low_stock_threshold_quantity: 10 },
     );
     expect(result).toMatchObject({ low_stock_threshold_quantity: 10 });
   });
@@ -196,7 +213,7 @@ describe("updateSettings", () => {
       );
     vi.mocked(repository.updateSettingsIfUnchanged).mockResolvedValue(true);
 
-    const result = await updateSettings(tenantId, {
+    const result = await updateSettings(authUserId, tenantId, {
       ...baseInput,
       receipt_template_config: { footer_message: "See you soon!" },
     });
@@ -205,6 +222,8 @@ describe("updateSettings", () => {
       tenantId,
       updatedAt,
       { receiptTemplateConfig: { footer_message: "See you soon!" } },
+      actorUserId,
+      { receipt_template_config: { footer_message: "See you soon!" } },
     );
     expect(result).toMatchObject({
       receipt_template_config: { footer_message: "See you soon!" },

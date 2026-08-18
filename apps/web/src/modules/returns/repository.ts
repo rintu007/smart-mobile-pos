@@ -89,6 +89,31 @@ export function createReturn(input: CreateReturnInput) {
         })),
       });
 
+      // DR-025 / audit-logging.md §1's Phase 14 correction (found unfixed Sprint 43, backlog.md M4
+      // item 8): every stock_movements row gets its own paired audit_log entry — this is the
+      // auto-approval path (an under-threshold return, `createReturn` itself sets `status:
+      // "completed"` directly), a separate code path from `completeReturn` below, which needs the
+      // exact same fix. Each entry reuses its own stock movement's id.
+      await tx.auditLog.createMany({
+        data: input.lineItems.map((item) => ({
+          id: item.id,
+          tenantId: input.tenantId,
+          storeId: input.storeId,
+          actorUserId: input.createdBy,
+          action: "stock_movement.return",
+          entityType: "stock_movement",
+          entityId: item.id,
+          afterState: {
+            id: item.id,
+            product_id: item.productId,
+            quantity_delta: item.quantity,
+            movement_type: "return",
+            reference_type: "return",
+            reference_id: input.id,
+          },
+        })),
+      });
+
       // DR-025: one audit entry per completed return, in the same transaction. Reuses the return's
       // own id as this row's id, the same reuse pos/repository.ts's createSale already established.
       await tx.auditLog.create({
@@ -154,6 +179,30 @@ export function completeReturn(input: CompleteReturnInput) {
         referenceType: "return",
         referenceId: input.returnId,
         createdBy: input.approvedBy,
+      })),
+    });
+
+    // DR-025 / audit-logging.md §1's Phase 14 correction (found unfixed Sprint 43, backlog.md M4
+    // item 8): every stock_movements row gets its own paired audit_log entry — "return" movements
+    // were the third of four movement types found still missing one, distinct from the single
+    // "return.completed" entry below. Each entry reuses its own stock movement's id.
+    await tx.auditLog.createMany({
+      data: input.lineItems.map((item) => ({
+        id: item.id,
+        tenantId: input.tenantId,
+        storeId: input.storeId,
+        actorUserId: input.approvedBy,
+        action: "stock_movement.return",
+        entityType: "stock_movement",
+        entityId: item.id,
+        afterState: {
+          id: item.id,
+          product_id: item.productId,
+          quantity_delta: item.quantity,
+          movement_type: "return",
+          reference_type: "return",
+          reference_id: input.returnId,
+        },
       })),
     });
 

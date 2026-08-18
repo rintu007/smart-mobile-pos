@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 12 — Security Design
-> **Version:** 0.1.1
-> **Last updated:** 2026-07-31
+> **Version:** 0.1.2
+> **Last updated:** 2026-08-19
 > **Owner:** Security Engineer / CTO
 > **Approved by:** _pending_
 
@@ -25,8 +25,8 @@ cross-reference, since it is directly testable per
 
 | Category | Actions logged |
 | --- | --- |
-| Money | Sale completed, return decided (approved/rejected), trading day closed (with variance), settings change affecting tax/pricing/thresholds |
-| Stock | **Every `stock_movements` row — `opening`, `sale`, `return`, and `adjustment` alike — gets exactly one paired `audit_log` entry, per DR-025.** *(Correction: this document's v0.1.0 draft understated this, treating the ledger's own append-only nature as sufficient and logging only adjustment decision-context — that reasoning is reasonable on its own terms but conflicts with DR-025's explicit, formally asserted 1:1 requirement, which takes precedence as an already-ratified Phase 03 business rule.)* |
+| Money | Sale completed, return decided (approved/rejected), trading day closed (with variance), settings change affecting tax/pricing/thresholds — **actually implemented Sprint 43**, see below |
+| Stock | **Every `stock_movements` row — `opening`, `sale`, `return`, and `adjustment` alike — gets exactly one paired `audit_log` entry, per DR-025.** *(Correction: this document's v0.1.0 draft understated this, treating the ledger's own append-only nature as sufficient and logging only adjustment decision-context — that reasoning is reasonable on its own terms but conflicts with DR-025's explicit, formally asserted 1:1 requirement, which takes precedence as an already-ratified Phase 03 business rule.)* **This v0.1.1 correction itself was never implemented — found unfixed 15 sprints later** (Sprint 43, backlog.md M4 item 8's OWASP-checklist-against-real-code review): `implementation-log.md`'s own Sprint 12 entry had already named "stock_movements has zero audit coverage" as a real, open gap, and it stayed open through Sprints 22 (adjustment endpoint built, still no audit write), 27–28 (sale movements, only a summary `sale.completed` entry existed), and 33–34 (return movements, same shape) — closed for real in Sprint 43 across all four movement types plus settings changes, verified against a real database ([sprint-43.md](../17-sprints/sprint-43.md), `apps/web/integration-tests/audit-log-coverage.test.ts`). |
 | Permissions | Role granted/changed/revoked, device registered/revoked, user invited/deactivated |
 | Catalogue | Product price change (the *old* and *new* price, in `before_state`/`after_state`) — a price is not itself a ledger fact, but a disputed price change is exactly the kind of thing that needs a "who changed what, when" answer |
 
@@ -78,3 +78,4 @@ independent.
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | What is logged, enumerated by category; immutability restated as a security property; Owner-only read access; retention deferred to the standing GST-review item, not guessed at. |
 | 0.1.1 | 2026-07-31 | **Correction, found during Phase 14:** stock-movement logging brought into exact alignment with DR-025's 1:1 requirement — every movement gets a paired audit entry, not only adjustments. |
+| 0.1.2 | 2026-08-19 | **Correction, found Sprint 43 (backlog.md M4 item 8):** the v0.1.1 correction above had never actually been implemented in code, in any of the 15 sprints since — closed for real this sprint, across all four `stock_movements` types plus settings changes (the "Money" category's own "settings change" claim, also never implemented until now). See [owasp-checklist.md](owasp-checklist.md)'s A09 row for the full finding. |

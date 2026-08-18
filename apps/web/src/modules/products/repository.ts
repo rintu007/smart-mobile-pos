@@ -55,6 +55,31 @@ export function createProduct(
       update: {},
     });
 
+    // DR-025 / audit-logging.md §1's Phase 14 correction (found unfixed Sprint 43, backlog.md M4
+    // item 8): every stock_movements row gets its own paired audit_log entry, not only adjustments —
+    // this 'opening' movement was the first of the four movement types found still missing one.
+    // Reuses the movement's own id (== this product's id, the same 1:1 relationship the movement
+    // upsert above already establishes), same upsert-on-id idempotent-replay shape.
+    await tx.auditLog.upsert({
+      where: { id: input.id },
+      create: {
+        id: input.id,
+        tenantId: input.tenantId,
+        storeId: input.storeId,
+        actorUserId: input.createdBy,
+        action: "stock_movement.opening",
+        entityType: "stock_movement",
+        entityId: input.id,
+        afterState: {
+          id: input.id,
+          product_id: product.id,
+          quantity_delta: input.initial_quantity ?? 0,
+          movement_type: "opening",
+        },
+      },
+      update: {},
+    });
+
     return product;
   });
 }
