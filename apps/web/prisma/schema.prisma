@@ -118,9 +118,41 @@ model User {
   fieldConflictsAsCurrentSetter   CustomerFieldConflict[] @relation("ConflictCurrentSetBy")
   fieldConflictsAsAttemptedSetter CustomerFieldConflict[] @relation("ConflictAttemptedSetBy")
   fieldConflictsResolved          CustomerFieldConflict[] @relation("ConflictResolvedBy")
+  devicesOwned                    Device[]                @relation("DeviceUser")
+  devicesRevoked                  Device[]                @relation("DeviceRevoker")
+  devicesRegistered               Device[]                @relation("DeviceCreatedBy")
 
   @@index([tenantId])
   @@map("users")
+}
+
+/// docs/07-database/schema-server.md's `devices` table — Sprint 43's OWASP checklist flagged this
+/// as a real, unaddressed gap: authorisation-model.md §2's step 2 (device revocation) has never
+/// been implemented, no `devices` table existed in code. Built Sprint 55. No direct `tenant_id`
+/// column, per that section's own design ("Tenant scoping: tenant-scoped (via `user_id`)") — RLS
+/// joins through `user_id` to `users.tenant_id`, the same parent-join shape
+/// `sale_line_items`/`sale_payments`/`return_line_items` already use, just via `users` instead of
+/// `sales`/`returns` (see `supabase/sql/019_rls_devices.sql`). `id` is server-generated
+/// (`randomUUID()` at register-device time, matching `InvoiceSequence`'s own precedent for a row
+/// created by server logic rather than an offline client write) — `clientDeviceId` is the actual
+/// client-generated, dedup-key field ADR-0007 concerns itself with.
+model Device {
+  id             String    @id @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  clientDeviceId String    @map("client_device_id")
+  lastSeenAt     DateTime? @map("last_seen_at") @db.Timestamptz
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz
+  revokedBy      String?   @map("revoked_by") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  createdBy      String    @map("created_by") @db.Uuid
+
+  user    User  @relation("DeviceUser", fields: [userId], references: [id], onDelete: Cascade)
+  revoker User? @relation("DeviceRevoker", fields: [revokedBy], references: [id], onDelete: SetNull)
+  creator User  @relation("DeviceCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@unique([userId, clientDeviceId])
+  @@index([userId])
+  @@map("devices")
 }
 
 /// docs/07-database/schema-server.md's `user_store_roles` table — assigns a role

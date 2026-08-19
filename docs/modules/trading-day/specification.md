@@ -5,8 +5,8 @@
 > **Slice:** V1, minimal — `trading_days` table, `POST /trading-days/open`, `POST
 > /trading-days/{id}/close`, `POST /trading-days/{id}/reopen`, `GET /trading-days/current`;
 > `sales.trading_day_id` threaded through `POST /sales` but not yet gated (§1)
-> **Version:** 0.1.0
-> **Last updated:** 2026-08-14
+> **Version:** 0.1.1
+> **Last updated:** 2026-08-20
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
 
@@ -49,6 +49,12 @@ This is a genuine deviation from schema-server.md's documented column (`device_i
 and dated here rather than silently substituted — `device_id` is dropped from this implementation's
 `trading_days` table entirely, not renamed. Revisit when Authentication's device-registration slice
 lands and multi-device shops become real V1 scope, not before.
+
+**Status, 2026-08-20:** the first half of that trigger has landed — Sprint 55 built device
+registration/revocation (`devices`, closing Sprint 43's OWASP finding). The second half has not:
+multi-device shops are still not real V1 scope, no product decision has been made to change that,
+and this section's own store-level scoping reasoning (shared drawer, shift handoffs) is unaffected
+by `devices` existing. Not revisited here — named as a status update, not a design change.
 
 **A second real gap, found writing this spec, not by inspection:** [audit-model.md §1](../../07-database/audit-model.md#1-what-triggers-an-audit-entry)
 already names "Trading day opened / closed / reopened" as an audit trigger, and
@@ -232,3 +238,4 @@ concrete next step before `TRADING_DAY_NOT_OPEN` can actually be enforced.
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-08-14 | First version — written to drive Sprint 26's implementation of Cash Drawer / Trading Day (backlog.md M2 item 2): `trading_days` table (store-scoped, not device-scoped — a named deviation from schema-server.md), `POST /trading-days/open`, `POST /trading-days/{id}/close`, `POST /trading-days/{id}/reopen` (closing a real gap sales.md never listed), `GET /trading-days/current`. `POST /sales` gains an optional `trading_day_id` but deliberately no hard `TRADING_DAY_NOT_OPEN` gate yet — reversing this item's own pre-sprint planning note, to avoid regressing the one live, working end-to-end sale flow this project has ahead of the matching mobile till change. |
+| 0.1.1 | 2026-08-20 | Status update, no design change: Sprint 55 built device registration/revocation, landing the first half of this section's own "revisit when..." trigger. The second half (multi-device shops becoming real V1 scope) hasn't — store-level scoping is unchanged. |

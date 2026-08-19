@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 11 — API Design
-> **Version:** 0.1.9
-> **Last updated:** 2026-08-16
+> **Version:** 0.1.10
+> **Last updated:** 2026-08-20
 > **Owner:** Principal Next.js Engineer
 > **Approved by:** _pending_
 
@@ -70,3 +70,4 @@ single complete list, not a duplicate source of truth — module documents link 
 | 0.1.7 | 2026-08-14 | Sprint 26: `TRADING_DAY_ALREADY_OPEN` (already reserved) implemented for the first time; `TRADING_DAY_NOT_OPEN` (already reserved) partially implemented — reachable only when `POST /sales`'s optional `trading_day_id` is supplied and invalid, not when omitted (trading-day/specification.md §1). Added `TRADING_DAY_NOT_CLOSED` to the module-specific index. |
 | 0.1.8 | 2026-08-14 | Sprint 27: added `DISCOUNT_REQUIRES_APPROVAL` to the module-specific index — `POST /sales`'s rejection of an over-threshold discount with no valid Manager/Owner approval (DR-012, pos/specification.md §2/§6). |
 | 0.1.9 | 2026-08-16 | Sprint 35: added `CONFLICT_RESOLUTION_VALUE_INVALID` to the module-specific index — `POST /customers/conflicts/{id}/resolve`'s rejection of a `resolved_value` matching neither of the conflict's own two candidate values (customers/specification.md §1c/§6). |
+| 0.1.10 | 2026-08-20 | Sprint 55: `DEVICE_REVOKED` (already reserved) implemented for the first time — `requireSession`'s per-request device-revocation check, `authentication.md §4`. |

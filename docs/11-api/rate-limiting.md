@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 11 — API Design
-> **Version:** 0.2.0
-> **Last updated:** 2026-08-19
+> **Version:** 0.2.1
+> **Last updated:** 2026-08-20
 > **Owner:** Principal Next.js Engineer / DevOps
 > **Approved by:** _pending_
 
@@ -21,9 +21,15 @@ legitimate user could plausibly hit during normal operation is a limit set wrong
 **200**, not 500 — `sync/schema.ts`'s `syncPushRequestSchema` has enforced `.max(200)` since Sprint
 13; this row had simply never been checked against the code that already existed. "Per device"
 below is implemented as **per authenticated user** (`authUserId`) for the two classes actually built
-— no `devices` table exists anywhere in this schema (`tenant-isolation.md`'s already-named gap),
-the same substitution Sprint 26 (Trading Day) and Sprint 41 (`seed-second-user.ts`) already made for
-the identical missing dimension.
+— no `devices` table existed anywhere in this schema (`tenant-isolation.md`'s already-named gap at
+the time), the same substitution Sprint 26 (Trading Day) and Sprint 41 (`seed-second-user.ts`)
+already made for the identical missing dimension.
+
+**Status, 2026-08-20:** `devices` now exists (Sprint 55). This substitution is left unchanged here,
+not silently revisited — a genuine per-device rate limit is real, separately-scoped follow-up work
+(deciding whether shared-till multi-user devices change the right scope, and whether the existing
+per-user limits are even too generous/strict once device-level counting is possible), named rather
+than assumed automatically correct now that the table exists.
 
 | Class | Scope | Limit | Rationale | Status |
 | --- | --- | --- | --- | --- |
@@ -79,3 +85,4 @@ not only a body field.
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial rate limits by endpoint class; Supavisor transaction-mode pooling design with the 10× load-test requirement tracked forward to Phase 14/16. |
 | 0.2.0 | 2026-08-19 | Sprint 45 — mutating/read/sync-push classes built (Postgres-backed fixed-window counter in `requirePermission`, no external service). Corrected the sync push batch cap (200, not 500 — the code has said 200 since Sprint 13). Found and named a real architectural gap: the Auth class cannot be implemented in this codebase at all, since sign-in is a direct client call to Supabase Auth that never reaches an `apps/web` Route Handler — needs Supabase's own platform-side configuration, not code. "Per device" implemented as "per user," the same substitution already established elsewhere for the missing `devices` table. |
+| 0.2.1 | 2026-08-20 | Status update: `devices` now exists (Sprint 55). The per-user substitution is left unchanged, named as real, separately-scoped follow-up work rather than silently revisited. |

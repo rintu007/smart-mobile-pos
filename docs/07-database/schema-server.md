@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 07 — Database Design
-> **Version:** 0.1.3
-> **Last updated:** 2026-08-17
+> **Version:** 0.1.4
+> **Last updated:** 2026-08-20
 > **Owner:** PostgreSQL Architect
 > **Approved by:** _pending_
 
@@ -93,6 +93,11 @@ here" check on every authenticated request (TB-1, DR-017).
 [13-offline-sync/README.md](../13-offline-sync/README.md) — never client-writable.
 
 ### `devices`
+**Built, Sprint 55** — flagged as a real, unaddressed gap by Sprint 43's OWASP checklist review;
+built exactly as designed below, plus `id` confirmed server-generated (`randomUUID()` at
+register-device time, matching `invoice_sequences`' own precedent for a row a client never directly
+writes) rather than the blanket "client-generated per ADR-0007" convention this document states for
+every table — a deliberate, reasoned exception for this one table, not an oversight.
 **Purpose:** tracks a device/session for remote revocation — [BR-005](../02-business-requirements/business-requirements.md)/[FR-014](../03-functional-requirements/functional-requirements.md).
 **Module:** Authentication. **Tenant scoping:** tenant-scoped (via `user_id`).
 
@@ -488,3 +493,4 @@ records an *anomaly to be worked*, not a financial fact; the underlying rejected
 | 0.1.1 | 2026-08-14 | Correction found decomposing M2 (backlog.md): `shop_settings` never named where DR-008's `tax_rate` comes from. Added `tax_rate_basis_points` — a single shop-wide flat rate, not a per-product/per-HSN table (named, deferred to V2+). |
 | 0.1.2 | 2026-08-16 | Correction found starting Reports, Sprint 37 (backlog.md M4 item 2): BR-024/BR-045 require a configurable low-stock threshold and none existed anywhere. Added `shop_settings.low_stock_threshold_quantity` — a single shop-wide value, not per-product (named, deferred). |
 | 0.1.3 | 2026-08-17 | Sprint 39 (backlog.md M4 item 4): `receipt_template_config`'s row note now names its actual shape (`{ footer_message: string }`, the only field the module accepts); `printer_config`'s row note now names why it stays unused — a paired printer is per-device data, resolved as a new mobile-local-only table instead of a write to this column. |
+| 0.1.4 | 2026-08-20 | Sprint 55: `devices` built, exactly as designed. `id` confirmed server-generated (`randomUUID()`), a deliberate exception to this document's blanket client-generated-id convention for a table no offline client write ever creates directly. |

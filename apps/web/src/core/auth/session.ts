@@ -4,6 +4,7 @@ import { ApiError } from "@/core/errors/api-error";
 import * as identityService from "@/modules/identity/service";
 import * as storesService from "@/modules/stores/service";
 import * as rolesService from "@/modules/roles/service";
+import * as devicesService from "@/modules/devices/service";
 import * as rateLimitService from "@/core/rate-limit/service";
 import type { Role } from "@/modules/roles/schema";
 
@@ -82,11 +83,10 @@ export async function requireAuthenticatedUser(
 /**
  * Resolves the authenticated, tenant-scoped session for a Route Handler request.
  *
- * Implements steps 1 and 3 of docs/12-security/authorisation-model.md §2's evaluation order:
- * (1) verify the JWT, (3) resolve `tenant_id` from its claim. Steps 2 (device revocation) and 4
- * (current role via `user_store_roles`) are not implemented yet — those tables don't exist until
- * a later sprint (docs/17-sprints/backlog.md, items 3+) adds them. This function is the one place
- * those steps are added to later, so no Route Handler needs to change when they land.
+ * Implements steps 1, 2, and 3 of docs/12-security/authorisation-model.md §2's evaluation order:
+ * (1) verify the JWT, (2) check device revocation (`devices.revoked_at`, Sprint 55 — see
+ * `assertDeviceUsable` below), (3) resolve `tenant_id` from its claim. Step 4 (current role via
+ * `user_store_roles`) happens one level up, in `requirePermission`.
  *
  * **Proof status:** exercised by a real request for the first time in Sprint 04
  * (`POST /api/v1/products`) — unexercised through Sprint 01–03, which is exactly how its
@@ -96,6 +96,13 @@ export interface AuthenticatedSession {
   authUserId: string;
   tenantId: string;
 }
+
+// docs/11-api/authentication.md §4 — never specified exactly how `client_device_id` is
+// "presented" on each request beyond "in addition to JWT verification." Resolved here, Sprint 55,
+// as a custom header — the first one this codebase has ever needed (`Authorization` is the only
+// other header any Route Handler reads), documented as a dated decision in authentication.md
+// rather than left implicit.
+const DEVICE_ID_HEADER = "x-device-id";
 
 export async function requireSession(request: NextRequest): Promise<AuthenticatedSession> {
   const token = extractBearerToken(request);
@@ -119,6 +126,18 @@ export async function requireSession(request: NextRequest): Promise<Authenticate
     throw new ApiError(401, "UNAUTHENTICATED", "Session has no tenant_id claim.");
   }
 
+  // Step 2, checked here rather than literally before step 3 as authorisation-model.md §2 orders
+  // it: `requireSession` is never reached without a `tenant_id` claim already present in practice
+  // (onboarding, the one caller without one, uses `requireAuthenticatedUser` above instead), so by
+  // this point a real `users` row is already guaranteed to exist — `identityService.resolveUserId`
+  // below is safe to call unconditionally, matching its own docstring's "should be unreachable
+  // without requireSession having already validated the session" assumption. Reordering this
+  // before the `tenantId` check would risk violating that assumption for the one genuinely
+  // possible misconfiguration case (the hook broken, no `users` row) by surfacing a less specific
+  // error there; this ordering keeps that existing error precedence exactly as it was.
+  const userId = await identityService.resolveUserId(user.id);
+  await devicesService.assertDeviceUsable(userId, request.headers.get(DEVICE_ID_HEADER));
+
   return { authUserId: user.id, tenantId };
 }
 
@@ -126,12 +145,12 @@ export async function requireSession(request: NextRequest): Promise<Authenticate
  * Resolves the authenticated, tenant-scoped, **role-checked** session for a Route Handler request
  * — the "one place those steps are added to later" `requireSession`'s own docstring already
  * promised. Implements steps 1, 3, 4, and 5 of
- * docs/12-security/authorisation-model.md §2's evaluation order: (1)/(3) via `requireSession`
- * above, (4) resolve the current role from `user_store_roles` (docs/modules/roles-permissions/specification.md),
- * (5) check it against `allowedRoles` — the static per-endpoint permission table, expressed here as
- * this function's own call-site argument rather than a separate lookup table, since every Route
- * Handler already names its own required roles inline. Step 2 (device revocation) remains
- * unimplemented — no `devices` table exists in code yet, a continuing, named gap (module registry).
+ * docs/12-security/authorisation-model.md §2's evaluation order: (1)/(2)/(3) via `requireSession`
+ * above (device revocation, Sprint 55), (4) resolve the current role from `user_store_roles`
+ * (docs/modules/roles-permissions/specification.md), (5) check it against `allowedRoles` — the
+ * static per-endpoint permission table, expressed here as this function's own call-site argument
+ * rather than a separate lookup table, since every Route Handler already names its own required
+ * roles inline.
  *
  * Fail-closed throughout (DR-017): no active role resolved, or the resolved role isn't in
  * `allowedRoles`, both throw `403 PERMISSION_DENIED` — never a silent allow.
