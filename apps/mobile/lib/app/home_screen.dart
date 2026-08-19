@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/storage/storage_providers.dart';
 import '../core/store_context/store_context_providers.dart';
 import '../core/sync/sync_providers.dart';
 import '../features/authentication/presentation/providers/auth_providers.dart';
@@ -48,6 +49,32 @@ class HomeScreen extends ConsumerWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Sprint 54 (docs/13-offline-sync/failure-scenarios.md §3, tier 3) — persistent, not a
+            // dismiss-and-forget toast (that document's own wording, taken literally): no close
+            // button, shown for as long as the probe reports true. `maybeWhen`'s `orElse` covers
+            // both `loading` and `error` as "don't show a warning yet," matching Reports' own
+            // fail-closed-on-the-hidden-side precedent — the inverse concern here (a false
+            // negative just delays the warning one check, not a security gate) is the deliberately
+            // accepted trade-off `isStorageCriticallyLow`'s own docstring states.
+            ref
+                .watch(isStorageCriticallyLowProvider)
+                .maybeWhen(
+                  data: (isCritical) => isCritical
+                      ? Container(
+                          key: const Key('low_storage_warning'),
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          color: Colors.red.shade100,
+                          child: const Text(
+                            'Storage is almost full. Sales may stop saving reliably — '
+                            'free up space now.',
+                            style: TextStyle(color: Colors.red),
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                  orElse: () => const SizedBox.shrink(),
+                ),
             productCount.when(
               data: (count) => Text('Local database ready — $count product(s) cached.'),
               loading: () => const CircularProgressIndicator(),

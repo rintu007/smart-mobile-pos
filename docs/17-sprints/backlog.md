@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.51.0
+> **Version:** 0.52.0
 > **Last updated:** 2026-08-20
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
@@ -359,6 +359,16 @@ from the still-unbuilt disk-space-detection tier), and "cached product images" w
 feature to prune. This is the fourth consecutive sprint where checking a design claim directly
 against the code found a real gap.
 
+**Cross-cutting fix, [Sprint 54](sprint-54.md) (not a numbered item — founder-confirmed to build
+storage-full handling, unlike Sprints 50–53 which were tests/fixes, not new product surface):**
+`failure-scenarios.md §3`'s tier 3 (real disk-space detection + the designed low-storage warning)
+built. `disk_space_2` chosen over the stale `disk_space`/`disk_space_plus` fork after checking
+pub.dev directly (Sprint 48's own SQLCipher diligence, applied again); a 100 MB threshold and a
+fail-open-on-probe-error choice, both stated as dated, correctable decisions rather than measured
+answers. Storage-full is now the 6th of the 10 named failure scenarios with real automated
+coverage — only "Token expired while queued" remains a genuinely unverified real gap, needing the
+full local Supabase CLI stack this project doesn't have.
+
 ## 6. Ordering rule, restated
 
 Every dependency column above traces directly to
@@ -421,3 +431,4 @@ specifically.
 | 0.49.0 | 2026-08-20 | Cross-cutting fix, Sprint 51 (not a numbered M4 item): "Schema version mismatch after an update" built the same way (`migration_test.dart`, this project's first migration test) — and found a real, previously-undetected production bug: a table created in one `onUpgrade` step and altered in a later one broke with an unhandled duplicate-column error for any device jumping both steps in one update, permanently losing access to its own local database. Fixed with a guarded `addColumn`; standing rule for future migrations documented in schema-local.md. Narrows release-checklist.md's failure-scenarios row further: 4 of 10 scenarios remain genuinely unverified, down from 5. 256/256 mobile tests (254 pre-existing + 2 new), `flutter analyze` clean. |
 | 0.50.0 | 2026-08-20 | Cross-cutting fix, Sprint 52 (not a numbered M4 item): the client half of "Connectivity lost mid-batch" built (`sync_repository_test.dart`) — the one row test-plan.md had specifically said needed a live server + fault-injecting proxy, found not to. Third instance of the same doc-vs-code gap Sprints 50/51 found: failure-scenarios.md's "return to FailedRetrying" is not literally what the code does. Corrected. Narrows release-checklist.md's failure-scenarios row further: 3 of 10 scenarios remain genuinely unverified, down from 4. 258/258 mobile tests (256 pre-existing + 2 new), `flutter analyze` clean. |
 | 0.51.0 | 2026-08-20 | Cross-cutting fix, Sprint 53 (not a numbered M4 item, founder-confirmed to build storage-full handling): found tier 1 (proactive pruning) was never actually built — inbound-sync.md §4's stock_movements retention window (current + prior financial year) was decided but the server pull stayed unfiltered since Sprint 36 and nothing ever pruned the local cache. Both fixed: `stockMovementsRetentionCutoff` bounds the server pull (server clock); `_pruneStaleStockMovements` prunes the local cache every sync (device clock, unconditional, a deliberate simplification over the originally-implied threshold-gating). Corrected a second stale claim: "cached product images" was never a real feature. Tier 3 (disk-space detection, warning UI) remains real, separately-scoped future work. 218/218 web unit tests (215 pre-existing + 3 new), 260/260 mobile tests (258 pre-existing + 2 new), `tsc`/`eslint`/`flutter analyze` all clean. |
+| 0.52.0 | 2026-08-20 | Cross-cutting fix, Sprint 54 (not a numbered M4 item, founder-confirmed): tier 3 built — `disk_space_2`-backed free-disk-space detection (100 MB threshold, fails open on a probe error), the designed low-storage warning shown persistently on `HomeScreen`. Package chosen after checking pub.dev directly (Sprint 48's own SQLCipher diligence). Storage-full is now the 6th of 10 named failure scenarios with real coverage; only "Token expired while queued" remains. 266/266 mobile tests (260 pre-existing + 6 new), `flutter analyze` clean, real Android debug build confirmed. |

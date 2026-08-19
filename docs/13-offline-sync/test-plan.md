@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 13 — Offline Synchronisation
-> **Version:** 0.5.0
+> **Version:** 0.6.0
 > **Last updated:** 2026-08-20
 > **Owner:** CTO / Principal Flutter Engineer
 > **Approved by:** _pending_
@@ -53,7 +53,7 @@ different test venues, only discovered while actually building the suite against
 | App killed mid-sync | Mobile-only (`outbound_queue`/Drift, app-process lifecycle) | **Built, Sprint 50.** No server code path involved — a `SyncRepository` test simulating a push call that throws mid-flight, proving the row is left untouched and safely resent by a fresh repository instance on the next cycle, the mobile equivalent of "app relaunched." Found and corrected a real doc/code gap while writing it: the client never persists a distinct `Syncing` status (state-machines.md's own dated correction). |
 | Device rebooted with a full queue | Mobile-only, same reasoning | **Built, Sprint 50** — same test, same reasoning failure-scenarios.md §1 itself already gives for treating these two rows identically. |
 | Schema version mismatch after an update | Mobile-only (Drift's own versioned-migration mechanism) | **Built, Sprint 51 (`migration_test.dart`) — and found a real, previously-undetected production bug in the same pass.** `Migrator.createTable` builds a table from its *current* Dart shape, not the shape it had when that call was originally written — a table created in one `onUpgrade` step and altered in a later one (`shop_settings_cache`, Sprint 37 creation + Sprint 39 column add) breaks with an unhandled duplicate-column error for any device jumping both steps in one update, permanently locking it out of its own local database. Fixed with a guarded `addColumn`; see [schema-local.md](../07-database/schema-local.md#schema-migration-safety--a-real-bug-found-sprint-51-not-a-hypothetical-rule) for the full account and the standing rule for future migrations. |
-| Storage full | Mobile-only (on-device disk pressure), no server involvement whatsoever | **Deferred** |
+| Storage full | Mobile-only (on-device disk pressure), no server involvement whatsoever | **Built, Sprint 54** — `core/storage/device_storage_probe.dart` (unit-tested: threshold boundary, fail-open on a probe error) plus `HomeScreen`'s low-storage banner (widget-tested: shown/hidden per the probe's result) |
 | Token expired while queued | Needs a real Supabase Auth (GoTrue) JWT issuance/expiry — the full local Supabase CLI stack Sprint 40 already named and deferred for the Realtime extension, for the same reason | **Deferred**, same infra gap as Sprint 40's Realtime deferral |
 | Device clock wrong by hours or days | Already proven by design in [clock-and-ordering.md §4](clock-and-ordering.md#4-what-this-means-for-a-device-with-a-badly-wrong-clock--the-failure-scenario-itself) | No code test needed |
 | Same account on two devices | [failure-scenarios.md §1](failure-scenarios.md#1-the-named-scenarios) itself already resolves this as "not a failure at all" | Nothing to test |
@@ -76,10 +76,14 @@ this document had specifically named as needing a live server + fault-injecting 
 out not to need either. The actual client-side guarantee (an operation missing from an otherwise
 well-formed response is left safely untouched) is exercised with a fake push function, the same
 technique the two rows above already used; no real severed connection is needed to prove the code
-handles a response shaped that way correctly. The remaining mobile-only row ("Storage full") and
-"Token expired while queued" (needing the full local Supabase CLI stack) are still real, tracked
-gaps, not silently dropped — candidates for a dedicated future item, the same way Sprint 40 named
-the Realtime extension rather than silently building a fake stand-in for it.
+handles a response shaped that way correctly.
+
+**Corrected once more, Sprint 54:** "Storage full" built — real disk-space detection
+(`disk_space_2`) plus the designed low-storage warning, both unit- and widget-tested. Of the 10
+named scenarios, only **"Token expired while queued"** remains a genuinely unverified real gap,
+needing the full local Supabase CLI stack (GoTrue token issuance/expiry) this project doesn't have
+— named, not silently dropped, the same way Sprint 40 named the Realtime extension rather than
+building a fake stand-in for it.
 
 ## 4. Failure-injection tooling
 
@@ -114,3 +118,4 @@ loss or duplication) is exactly as invisible-until-it-happens as a tenant-isolat
 | 0.3.0 | 2026-08-19 | Sprint 50 (cross-cutting fix, not a re-opening of item 6): §3's "App killed mid-sync"/"Device rebooted with a full queue" rows built — both testable with existing `flutter test` infrastructure alone, no new tooling needed, once actually attempted rather than assumed to need the same infra as the genuinely-deferred rows. Found and corrected a real doc/code gap in the same pass: the mobile client never persists the `Syncing` transitional status state-machines.md's Sync Item diagram specifies. |
 | 0.4.0 | 2026-08-20 | Sprint 51 (cross-cutting fix): §3's "Schema version mismatch" row built (`migration_test.dart`, this project's first migration test) — and found a real, previously-undetected production bug in the same pass: a table created in one `onUpgrade` step and altered in a later one broke with an unhandled duplicate-column error for any device jumping both steps in one update, permanently losing access to its own local database. Fixed; full account in schema-local.md. |
 | 0.5.0 | 2026-08-20 | Sprint 52 (cross-cutting fix): §3's "Connectivity lost mid-batch" client-half row built — it did not need the live server + fault-injecting proxy this document had specifically named for it; the actual client-side guarantee is exercised with a fake partial push response, no different in kind from Sprints 50/51's own technique. Found and corrected a third instance of the same doc-vs-code gap those two sprints found: failure-scenarios.md's "operations not yet acknowledged return to FailedRetrying" is not literally what the code does — an unacknowledged row is simply left untouched. |
+| 0.6.0 | 2026-08-20 | Sprint 54 (cross-cutting fix): §3's "Storage full" row built — `disk_space_2`-backed free-disk-space detection plus the designed low-storage warning, both unit- and widget-tested. Of the 10 named failure scenarios, only "Token expired while queued" remains a genuinely unverified real gap. |

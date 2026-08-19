@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/app/home_screen.dart';
 import 'package:mobile/app/providers.dart';
 import 'package:mobile/core/database/database.dart';
+import 'package:mobile/core/storage/storage_providers.dart';
 import 'package:mobile/core/store_context/store_context_providers.dart';
 import 'package:mobile/core/sync/sync_dto.dart';
 import 'package:mobile/core/sync/sync_providers.dart';
@@ -37,6 +38,8 @@ void main() {
           ),
           storeContextProvider.overrideWith((ref) async => 'fake-store-id'),
           autoSyncOnStartProvider.overrideWith((ref) async {}),
+          // Sprint 54 — otherwise touches disk_space_2's real platform channel, unavailable here.
+          isStorageCriticallyLowProvider.overrideWith((ref) async => false),
         ],
         child: const MaterialApp(home: HomeScreen()),
       ),
@@ -57,6 +60,8 @@ void main() {
           appDatabaseProvider.overrideWithValue(AppDatabase(NativeDatabase.memory())),
           storeContextProvider.overrideWith((ref) async => 'fake-store-id'),
           autoSyncOnStartProvider.overrideWith((ref) async {}),
+          // Sprint 54 — otherwise touches disk_space_2's real platform channel, unavailable here.
+          isStorageCriticallyLowProvider.overrideWith((ref) async => false),
         ],
         child: const MaterialApp(home: HomeScreen()),
       ),
@@ -80,6 +85,8 @@ void main() {
           appDatabaseProvider.overrideWithValue(db),
           storeContextProvider.overrideWith((ref) async => 'fake-store-id'),
           autoSyncOnStartProvider.overrideWith((ref) async {}),
+          // Sprint 54 — otherwise touches disk_space_2's real platform channel, unavailable here.
+          isStorageCriticallyLowProvider.overrideWith((ref) async => false),
           syncRepositoryProvider.overrideWithValue(fakeRepository),
         ],
         child: const MaterialApp(home: HomeScreen()),
@@ -107,6 +114,8 @@ void main() {
           appDatabaseProvider.overrideWithValue(AppDatabase(NativeDatabase.memory())),
           storeContextProvider.overrideWith((ref) async => 'fake-store-id'),
           autoSyncOnStartProvider.overrideWith((ref) async {}),
+          // Sprint 54 — otherwise touches disk_space_2's real platform channel, unavailable here.
+          isStorageCriticallyLowProvider.overrideWith((ref) async => false),
           canViewReportsProvider.overrideWith((ref) async => true),
         ],
         child: const MaterialApp(home: HomeScreen()),
@@ -126,6 +135,8 @@ void main() {
           appDatabaseProvider.overrideWithValue(AppDatabase(NativeDatabase.memory())),
           storeContextProvider.overrideWith((ref) async => 'fake-store-id'),
           autoSyncOnStartProvider.overrideWith((ref) async {}),
+          // Sprint 54 — otherwise touches disk_space_2's real platform channel, unavailable here.
+          isStorageCriticallyLowProvider.overrideWith((ref) async => false),
           canViewReportsProvider.overrideWith((ref) async => false),
         ],
         child: const MaterialApp(home: HomeScreen()),
@@ -145,6 +156,8 @@ void main() {
           appDatabaseProvider.overrideWithValue(AppDatabase(NativeDatabase.memory())),
           storeContextProvider.overrideWith((ref) async => 'fake-store-id'),
           autoSyncOnStartProvider.overrideWith((ref) async {}),
+          // Sprint 54 — otherwise touches disk_space_2's real platform channel, unavailable here.
+          isStorageCriticallyLowProvider.overrideWith((ref) async => false),
           // A never-completing Future (no Timer involved, unlike
           // Future.delayed) so the test doesn't leave a pending timer behind.
           canViewReportsProvider.overrideWith((ref) => Completer<bool>().future),
@@ -155,5 +168,48 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(const Key('go_to_reports_button')), findsNothing);
+  });
+
+  // Sprint 54 (docs/13-offline-sync/failure-scenarios.md §3, tier 3).
+  testWidgets('shows the low-storage warning when the probe reports critically low', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(AppDatabase(NativeDatabase.memory())),
+          storeContextProvider.overrideWith((ref) async => 'fake-store-id'),
+          autoSyncOnStartProvider.overrideWith((ref) async {}),
+          isStorageCriticallyLowProvider.overrideWith((ref) async => true),
+        ],
+        child: const MaterialApp(home: HomeScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('low_storage_warning')), findsOneWidget);
+    expect(
+      find.text('Storage is almost full. Sales may stop saving reliably — free up space now.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('hides the low-storage warning when the probe reports comfortable free space', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(AppDatabase(NativeDatabase.memory())),
+          storeContextProvider.overrideWith((ref) async => 'fake-store-id'),
+          autoSyncOnStartProvider.overrideWith((ref) async {}),
+          isStorageCriticallyLowProvider.overrideWith((ref) async => false),
+        ],
+        child: const MaterialApp(home: HomeScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('low_storage_warning')), findsNothing);
   });
 }
