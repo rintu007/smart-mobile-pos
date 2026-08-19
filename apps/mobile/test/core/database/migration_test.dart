@@ -50,6 +50,9 @@ void main() {
       raw.execute('ALTER TABLE sales DROP COLUMN customer_id');
       raw.execute('DROP TABLE customers');
       raw.execute('ALTER TABLE sales DROP COLUMN created_at');
+      // Sprint 56's from<10 block adds this column; undo it too so the reconstructed database
+      // matches a genuine v3 shape rather than one missing only the pre-Sprint-56 additions.
+      raw.execute('ALTER TABLE device_identity DROP COLUMN client_device_id');
       raw.execute('PRAGMA user_version = 3');
       raw.close();
 
@@ -86,6 +89,9 @@ void main() {
       raw.execute('DROP TABLE paired_printer_cache');
       raw.execute('ALTER TABLE shop_settings_cache DROP COLUMN footer_message');
       raw.execute("INSERT INTO shop_settings_cache (id) VALUES ('current')");
+      // Sprint 56's from<10 block adds this column; undo it too so the reconstructed database
+      // matches a genuine v8 shape rather than one missing only the pre-Sprint-56 additions.
+      raw.execute('ALTER TABLE device_identity DROP COLUMN client_device_id');
       raw.execute('PRAGMA user_version = 8');
       raw.close();
 

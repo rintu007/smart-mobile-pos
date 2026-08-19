@@ -381,6 +381,19 @@ every request from any currently-installed mobile build until it also sends the 
 confirmed with the founder that no live reliance on today's backend makes this safe; mobile wiring
 is deliberately deferred to a follow-up sprint, not bundled in under time pressure.
 
+**Cross-cutting fix, [Sprint 56](sprint-56.md) (not a numbered item — the mobile half of the same
+gap, the deferred follow-up Sprint 55 named):** `client_device_id` generated once per install and
+persisted locally (a new nullable column on the existing `device_identity` table, alongside the
+invoice-numbering `shortId`), registered via `POST /auth/register-device` on sign-in and,
+best-effort, on every launch with an existing session, sent as the `X-Device-Id` header on every
+subsequent request, with a `DEVICE_REVOKED` response forcing an immediate local sign-out. Found and
+fixed two real bugs surfaced by its own verification, not by inspection: a test-only historical
+schema needed the new migration step undone too (the same "fresh onCreate schema doesn't match a
+genuine historical shape" gap Sprint 51 first found); and a transient `register-device` failure was
+letting `SignInController` report a successful sign-in as a failed one — now swallowed,
+best-effort, matching `main.dart`'s own established pattern. 273/273 mobile tests (266 pre-existing
++ 7 new), `flutter analyze` clean.
+
 ## 6. Ordering rule, restated
 
 Every dependency column above traces directly to
@@ -445,3 +458,4 @@ specifically.
 | 0.51.0 | 2026-08-20 | Cross-cutting fix, Sprint 53 (not a numbered M4 item, founder-confirmed to build storage-full handling): found tier 1 (proactive pruning) was never actually built — inbound-sync.md §4's stock_movements retention window (current + prior financial year) was decided but the server pull stayed unfiltered since Sprint 36 and nothing ever pruned the local cache. Both fixed: `stockMovementsRetentionCutoff` bounds the server pull (server clock); `_pruneStaleStockMovements` prunes the local cache every sync (device clock, unconditional, a deliberate simplification over the originally-implied threshold-gating). Corrected a second stale claim: "cached product images" was never a real feature. Tier 3 (disk-space detection, warning UI) remains real, separately-scoped future work. 218/218 web unit tests (215 pre-existing + 3 new), 260/260 mobile tests (258 pre-existing + 2 new), `tsc`/`eslint`/`flutter analyze` all clean. |
 | 0.52.0 | 2026-08-20 | Cross-cutting fix, Sprint 54 (not a numbered M4 item, founder-confirmed): tier 3 built — `disk_space_2`-backed free-disk-space detection (100 MB threshold, fails open on a probe error), the designed low-storage warning shown persistently on `HomeScreen`. Package chosen after checking pub.dev directly (Sprint 48's own SQLCipher diligence). Storage-full is now the 6th of 10 named failure scenarios with real coverage; only "Token expired while queued" remains. 266/266 mobile tests (260 pre-existing + 6 new), `flutter analyze` clean, real Android debug build confirmed. |
 | 0.53.0 | 2026-08-20 | Cross-cutting fix, Sprint 55 (not a numbered M4 item, server half only): device registration/revocation built — `devices` table, `POST /auth/register-device`/`GET /devices`/`PATCH /devices/{id}/revoke`, `requireSession`'s per-request check via a new `X-Device-Id` header. Closes Sprint 43's OWASP finding for `authorisation-model.md §2`. Verified against a real Postgres connection (98/98 integration checks including the RLS deliberate-break-and-fix cycle; `devices` is the isolation suite's 20th table). Found a real rollout risk before merging (would reject every currently-installed mobile build's requests) — confirmed with the founder that no live reliance makes this safe now; mobile wiring deferred to a follow-up sprint. 227/227 web unit tests (218 pre-existing + 9 new), `tsc`/`eslint` clean. |
+| 0.54.0 | 2026-08-20 | Cross-cutting fix, Sprint 56 (not a numbered M4 item, mobile half of Sprint 55's same gap): `client_device_id` generated/persisted locally, registered on sign-in and on launch (best-effort), sent as `X-Device-Id` on every request, `DEVICE_REVOKED` forces local sign-out. Found and fixed two real bugs: a migration test's reconstructed historical schema needed updating for the new column (same class of gap Sprint 51 found), and a transient register-device failure was wrongly surfacing a successful sign-in as failed — now swallowed, best-effort. 273/273 mobile tests (266 pre-existing + 7 new), `flutter analyze` clean. |
