@@ -1,8 +1,11 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/database/database.dart';
 import 'package:mobile/core/database/tables/stock_movements.dart';
+import 'package:sqlite3/sqlite3.dart';
 
 void main() {
   late AppDatabase db;
@@ -97,5 +100,35 @@ void main() {
     expect(lineItems, hasLength(1));
     expect(movements, hasLength(1));
     expect(movements.single.movementType, MovementType.sale);
+  });
+
+  // Sprint 48 (docs/12-security/data-protection.md §3, OWASP M9) — proves the actual guarantee
+  // this sprint exists to deliver, not just that `PRAGMA key` runs without error: data written
+  // through a keyed connection is genuinely unreadable by a connection that never supplies the
+  // key. Uses `NativeDatabase(file, setup: ...)` directly — the same primitive
+  // `AppDatabase.encrypted`'s `_openConnection` configures via `DriftNativeOptions.setup`
+  // (confirmed against drift_flutter 0.3.1's own `native.dart` source), so this exercises the
+  // real mechanism without depending on drift_flutter's own isolate/path-resolution plumbing,
+  // which is that package's tested responsibility, not this project's.
+  test('data written with an encryption key is unreadable without it', () async {
+    final tempDir = Directory.systemTemp.createTempSync('app_database_encryption_test');
+    addTearDown(() => tempDir.deleteSync(recursive: true));
+    final dbFile = File('${tempDir.path}/enc.sqlite');
+    const key = 'ab1234ef00112233445566778899aabbccddeeff00112233445566778899aa';
+
+    final encryptedDb = AppDatabase(
+      NativeDatabase(dbFile, setup: (db) => db.execute("PRAGMA key = \"x'$key'\"")),
+    );
+    await encryptedDb.into(encryptedDb.products).insert(
+      ProductsCompanion.insert(id: 'p1', name: 'Widget', priceMinorUnits: 100),
+    );
+    await encryptedDb.close();
+
+    final unkeyedDb = sqlite3.open(dbFile.path);
+    addTearDown(unkeyedDb.close);
+    expect(
+      () => unkeyedDb.select('SELECT * FROM sqlite_master'),
+      throwsA(isA<SqliteException>()),
+    );
   });
 }

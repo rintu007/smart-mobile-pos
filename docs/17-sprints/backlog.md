@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.45.0
+> **Version:** 0.46.0
 > **Last updated:** 2026-08-19
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
@@ -290,6 +290,18 @@ plaintext `SharedPreferences` on Android. Built `SecureLocalStorage` (`core/auth
 No migration from the old plaintext value — a dated decision, no real installed base exists yet.
 Like Sprints 45/46, this carried no production-configuration risk and was safe to close immediately.
 
+**Cross-cutting fix, [Sprint 48](sprint-48.md) (not a numbered item — closes finding M9 from item
+8's OWASP review):** on-device database encryption. `data-protection.md §3` decided on SQLCipher
+since Phase 12 but deferred the exact integration package to actual implementation time; the
+ecosystem had moved since then (`sqlcipher_flutter_libs` is now a no-op stub) — the real
+integration is a `pubspec.yaml` declaration (`package:sqlite3` 3.x's native-hooks mechanism), not a
+plugin dependency. Built `getOrCreateDatabaseEncryptionKey` and `AppDatabase.encrypted`, keyed via
+SQLCipher's raw-key `PRAGMA key` form. Unlike Sprints 45–47, this carried real risk to local test
+data (not just a trivial re-sign-in), so a legacy plaintext database file is detected and reset
+once rather than migrated, and the fix was verified against a real Android debug build
+(`libsqlcipher.so` confirmed bundled in the APK) plus a dedicated test proving unkeyed reads
+genuinely fail, not just that no error is thrown.
+
 ## 6. Ordering rule, restated
 
 Every dependency column above traces directly to
@@ -346,3 +358,4 @@ specifically.
 | 0.43.0 | 2026-08-19 | Cross-cutting fix, Sprint 45 (not a numbered M4 item): rate limiting built for the 3 endpoint classes reachable from this codebase (mutating/read/sync-push — Postgres-backed fixed-window counter, `requirePermission`, no external service), closing item 8's finding #2. Found the Auth class is architecturally unreachable from this codebase at all (sign-in never touches an `apps/web` Route Handler) — a real, named gap, not fixed, needing a Supabase-side configuration check. Found and corrected a real 500-vs-200 sync-push-batch-cap drift in `rate-limiting.md`. 90/90 integration checks, 211/211 unit tests, `tsc`/`eslint` clean. |
 | 0.44.0 | 2026-08-19 | Cross-cutting fix, Sprint 46 (not a numbered M4 item): customer-erasure anonymisation built (`POST /customers/{id}/erase`, Owner only), closing item 8's finding M6 — `privacy.md §4`'s design, fully specified since Phase 12, had zero implementation. Nulls `name`/`phone`, sets a new `erased_at` marker, preserves an existing `deactivated_at` rather than overwriting it. Found and fixed a related gap: `deactivated_at` had never been exposed in any customer API response at all. 94/94 integration checks, 215/215 unit tests, `tsc`/`eslint` clean. |
 | 0.45.0 | 2026-08-19 | Cross-cutting fix, Sprint 47 (not a numbered M4 item): mobile secure token storage built (`SecureLocalStorage`, `flutter_secure_storage`-backed), closing item 8's finding M1 — the session had been sitting in plaintext `SharedPreferences` on Android despite `flutter_secure_storage` already being a dependency. No migration from the old plaintext value. Found and fixed a deprecated `flutter_secure_storage` config option via `flutter analyze`. 244/244 mobile tests (239 pre-existing + 5 new), `flutter analyze` clean. |
+| 0.46.0 | 2026-08-19 | Cross-cutting fix, Sprint 48 (not a numbered M4 item): on-device database encryption built (SQLCipher via `package:sqlite3` 3.x's native-hooks mechanism, `AppDatabase.encrypted`), closing item 8's finding M9 — the local database had been plain, unencrypted SQLite despite `data-protection.md §3` deciding on SQLCipher since Phase 12. Found the anticipated `sqlcipher_flutter_libs` plugin is now a no-op stub; the real integration is a `pubspec.yaml` hook declaration instead. A legacy plaintext database file is reset once on first launch after upgrade rather than migrated, unlike Sprints 46/47's trivially-reset data. Verified against a real Android debug build (`libsqlcipher.so` confirmed bundled) and a dedicated unkeyed-read-fails test. 252/252 mobile tests (244 pre-existing + 8 new), `flutter analyze` clean. |

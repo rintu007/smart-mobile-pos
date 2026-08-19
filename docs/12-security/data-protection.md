@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 12 — Security Design
-> **Version:** 0.2.0
+> **Version:** 0.3.0
 > **Last updated:** 2026-08-19
 > **Owner:** Security Engineer / CTO
 > **Approved by:** _pending_
@@ -46,17 +46,50 @@ key), stored exclusively in the platform's secure storage (`FlutterSecureStorage
 Keystore / iOS Keychain — already in [project-vision.md](../01-vision/project-vision.md)'s tech
 stack). The key never appears in application code, configuration, or the database file itself.
 
-*(The exact SQLCipher-for-Drift integration package is confirmed against current Flutter/Drift
-ecosystem documentation at Phase 18, per this documentation set's standing practice of not
-committing to unverified tool specifics — the architectural decision made now is encryption with a
-platform-secure-storage-held key; the specific package is a Phase 18 verification, same treatment
-as [ADR-0007](../adr/ADR-0007-client-generated-uuid-primary-keys.md)'s UUID tooling.)*
+**Status: built, Sprint 48.** The Phase 18 package verification promised above is done: as of
+`package:sqlite3` 3.x, there is no separate Flutter plugin to add at all —
+`sqlcipher_flutter_libs`, the package this document originally expected to depend on, is a no-op
+stub since 0.7.0 (confirmed by reading its own bundled README, not assumed from its continued
+presence in `pubspec.lock` as a transitive dependency). `package:sqlite3` now resolves its native
+library through Dart's own hooks/native-assets build system, and selecting the SQLCipher
+precompiled binary is a `pubspec.yaml` declaration, not a dependency:
 
-**Status: not yet built** — found unimplemented Sprint 43's OWASP checklist review (M9); no
-SQLCipher package exists in `pubspec.yaml`, the local Drift database is currently plain, unencrypted
-SQLite. Real, bounded future mobile engineering (SQLCipher's Drift integration, plus a decision on
-what happens to an already-installed unencrypted database on upgrade) — not fixed alongside §3a
-below, which is a narrower, separate concern.
+```yaml
+hooks:
+  user_defines:
+    sqlite3:
+      source: sqlcipher
+```
+
+At runtime, `core/database/database.dart`'s `AppDatabase.encrypted(encryptionKey)` opens the
+database via `drift_flutter`'s `DriftNativeOptions.setup` callback, executing
+`PRAGMA key = "x'<64 hex chars>'"` — SQLCipher's *raw-key* form, not a passphrase, since
+`getOrCreateDatabaseEncryptionKey` (`core/database/database_encryption_key.dart`) already generates
+256 bits of real randomness; running that through PBKDF2 (which passphrase-mode key derivation
+does) adds cost without adding security when the input is already a uniform random key. The key
+itself is generated once on first launch and stored via the same `SecureKeyValueStore` seam §3a
+uses (`FlutterSecureStorageAdapter`, now public for this second caller), under its own storage key
+distinct from the session token's.
+
+**What happens to an already-installed unencrypted database on upgrade** (the decision this
+section's original draft named as still open): this is the first sprint this app has ever set a
+SQLCipher key, so any database file already present at the target path predates encryption and is
+guaranteed plaintext. Rather than issue `PRAGMA key` against a plaintext file (undefined,
+corruption-risking behaviour) or build bespoke SQLCipher plaintext-export migration machinery (real,
+separate scope, disproportionate to this pre-pilot, no-real-installed-base product per
+`release-checklist.md`), `core/database/legacy_database_reset.dart` detects a legacy plaintext file
+on startup and deletes it once, so `drift` recreates a fresh encrypted one at the same path — the
+same "no migration path, pre-pilot, accepted one-time reset" call §3a already made for the session
+token, extended here to the one case where it actually risks real local test/demo data rather than
+a trivial re-sign-in.
+
+**Verified, not just assumed to work:** built and confirmed against a real `flutter build apk
+--debug --target-platform android-arm64` — `libsqlcipher.so` is genuinely present in the resulting
+APK (`unzip -l`), not silently falling back to plain SQLite. A dedicated test
+(`test/core/database/database_test.dart`) opens a database through the same keyed-connection
+mechanism `AppDatabase.encrypted` uses, writes a row, then reopens the same file with a bare
+`sqlite3.open()` (no key) and confirms the read fails — proof the actual guarantee holds, not just
+that `PRAGMA key` runs without error.
 
 ## 3a. Session-token storage (Sprint 47) — a related but distinct concern from §3's database key
 
@@ -117,3 +150,4 @@ substitute for simply not holding payment credentials in the first place.
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | On-device SQLCipher encryption decided, key handling via platform secure storage specified, encryption-vs-unsynced-data trade-off stated and justified rather than hidden. |
 | 0.2.0 | 2026-08-19 | §3 marked not-yet-built (M9, found unimplemented Sprint 43). New §3a: session-token storage split out as its own decision, distinct from §3's database key — built Sprint 47 (`flutter_secure_storage`, no migration from the old plaintext value, a dated decision given no real installed base exists yet). |
+| 0.3.0 | 2026-08-19 | §3 built, Sprint 48: SQLCipher via `package:sqlite3` 3.x's native-hooks mechanism (no separate Flutter plugin — `sqlcipher_flutter_libs` is a no-op stub post-3.x), raw-key `PRAGMA key`, key generated once and stored via the same `SecureKeyValueStore` seam §3a uses. Legacy plaintext database reset (not migrated) on first launch after upgrade — the open question this section's original draft named. Verified against a real Android debug build and a dedicated unkeyed-read-fails test. |

@@ -11,8 +11,11 @@ abstract class SecureKeyValueStore {
   Future<void> delete({required String key});
 }
 
-class _FlutterSecureStorageAdapter implements SecureKeyValueStore {
-  const _FlutterSecureStorageAdapter(this._storage);
+/// Public since Sprint 48 — [getOrCreateDatabaseEncryptionKey] in `core/database/` is a second,
+/// independent caller (a different key, same underlying platform secure storage), not just
+/// [SecureLocalStorage]'s own internal default.
+class FlutterSecureStorageAdapter implements SecureKeyValueStore {
+  const FlutterSecureStorageAdapter(this._storage);
 
   final FlutterSecureStorage _storage;
 
@@ -41,7 +44,7 @@ class SecureLocalStorage extends LocalStorage {
   // `encryptedSharedPreferences` and auto-migrates to its own custom ciphers by default; passing it
   // is a no-op the package itself now warns against (found via `flutter analyze`, not assumed).
   SecureLocalStorage({SecureKeyValueStore? store})
-    : _store = store ?? _FlutterSecureStorageAdapter(const FlutterSecureStorage());
+    : _store = store ?? FlutterSecureStorageAdapter(const FlutterSecureStorage());
 
   final SecureKeyValueStore _store;
 

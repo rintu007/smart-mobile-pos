@@ -21,6 +21,16 @@ version: 1.0.0+1
 environment:
   sdk: ^3.12.2
 
+# Sprint 48 (docs/12-security/data-protection.md §3, OWASP M9) — package:sqlite3 3.x resolves its
+# native library through Dart's hooks/native-assets build system rather than a separate Flutter
+# plugin package; selecting the SQLCipher precompiled binary here is the entire integration, no
+# `sqlcipher_flutter_libs` dependency needed (that package is a no-op stub post-3.x, see its own
+# README). Confirmed against the installed package:sqlite3 3.5.0 source (doc/hook.md), not assumed.
+hooks:
+  user_defines:
+    sqlite3:
+      source: sqlcipher
+
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
 # consider running `flutter pub upgrade --major-versions`. Alternatively,
@@ -45,6 +55,7 @@ dependencies:
   freezed_annotation: ^3.1.0
   json_annotation: ^4.12.0
   drift_flutter: ^0.3.1
+  sqlite3: ^3.0.0
   supabase_flutter: ^2.16.0
   uuid: ^4.6.0
   esc_pos_utils_plus: ^2.0.4
