@@ -3,6 +3,10 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../app/providers.dart';
+import '../../../../core/database/device_identity_repository.dart';
+import '../../../../core/network/device_registration_api.dart';
+import '../../../../core/store_context/store_context_providers.dart';
 import '../../data/repositories/supabase_auth_repository.dart';
 import '../../domain/repositories/auth_repository.dart';
 
@@ -28,11 +32,26 @@ class SignInController extends AsyncNotifier<void> {
 
   Future<void> signIn({required String email, required String password}) async {
     state = const AsyncLoading();
-    state = await AsyncValue.guard(
-      () => ref
+    state = await AsyncValue.guard(() async {
+      await ref
           .read(authRepositoryProvider)
-          .signInWithPassword(email: email, password: password),
-    );
+          .signInWithPassword(email: email, password: password);
+
+      // Sprint 56 (docs/11-api/authentication.md §2) — "every subsequent API request is rejected
+      // until this step has completed once per install." `main.dart`'s own bootstrap only
+      // registers on launch if a session *already* existed; a fresh interactive sign-in has none
+      // at that point, so it registers here instead, right after the sign-in call itself succeeds.
+      // Best-effort, matching `main.dart`'s own swallowed-failure pattern for the same call: a
+      // transient failure here must not surface as "sign-in failed" when the credentials were
+      // actually valid — the very next authenticated call would surface `DEVICE_REVOKED` anyway if
+      // registration genuinely never succeeds.
+      try {
+        final deviceIdentity = await ensureDeviceIdentity(ref.read(appDatabaseProvider));
+        await registerDevice(ref.read(apiClientProvider), deviceIdentity.clientDeviceId);
+      } catch (_) {
+        // Deliberately swallowed — see docstring above.
+      }
+    });
   }
 }
 

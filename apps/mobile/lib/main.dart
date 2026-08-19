@@ -10,7 +10,12 @@ import 'core/auth/secure_local_storage.dart';
 import 'core/config/env.dart';
 import 'core/database/database.dart';
 import 'core/database/database_encryption_key.dart';
+import 'core/database/device_identity_repository.dart';
 import 'core/database/legacy_database_reset.dart';
+import 'core/network/api_client.dart';
+import 'core/network/device_registration_api.dart';
+import 'core/store_context/store_context_providers.dart';
+import 'features/authentication/presentation/providers/auth_providers.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,15 +40,40 @@ Future<void> main() async {
   final databaseEncryptionKey = await getOrCreateDatabaseEncryptionKey(
     FlutterSecureStorageAdapter(const FlutterSecureStorage()),
   );
+  final db = AppDatabase.encrypted(databaseEncryptionKey);
+
+  // Sprint 56 (docs/11-api/authentication.md §2/§4, docs/12-security/owasp-checklist.md A01) —
+  // resolved once at startup, purely locally, regardless of sign-in state (this is a local
+  // identity, not a network call): the value every subsequent request's `X-Device-Id` header
+  // carries. If a session already exists (an app relaunch, not a fresh sign-in), also (re-)register
+  // it now — best-effort, matching `autoSyncOnStartProvider`'s own swallowed-failure pattern below;
+  // a transient failure here isn't fatal, since the very next authenticated call would surface
+  // `DEVICE_REVOKED` anyway if registration genuinely never succeeds. A *fresh* interactive
+  // sign-in registers separately, from `SignInController.signIn()` itself, since no session exists
+  // yet at this point in that case.
+  final deviceIdentity = await ensureDeviceIdentity(db);
+  if (Supabase.instance.client.auth.currentSession != null) {
+    try {
+      final dio = buildApiClient(clientDeviceId: deviceIdentity.clientDeviceId);
+      await registerDevice(dio, deviceIdentity.clientDeviceId);
+    } catch (_) {
+      // Deliberately swallowed — see docstring above.
+    }
+  }
 
   runApp(
     ProviderScope(
       overrides: [
         appDatabaseProvider.overrideWith((ref) {
-          final db = AppDatabase.encrypted(databaseEncryptionKey);
           ref.onDispose(db.close);
           return db;
         }),
+        apiClientProvider.overrideWith(
+          (ref) => buildApiClient(
+            clientDeviceId: deviceIdentity.clientDeviceId,
+            onDeviceRevoked: () => ref.read(authRepositoryProvider).signOut(),
+          ),
+        ),
       ],
       child: const SmartPosXApp(),
     ),

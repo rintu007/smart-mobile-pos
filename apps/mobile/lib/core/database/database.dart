@@ -68,7 +68,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.encrypted(String encryptionKey) : super(_openConnection(encryptionKey));
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   // The first schema change was Sprint 20 (schemaVersion 1 -> 2); Sprint 21
   // (backlog.md item 5) adds `sku`/`barcode` to `products` for the till's
@@ -135,6 +135,14 @@ class AppDatabase extends _$AppDatabase {
           await m.addColumn(shopSettingsCache, shopSettingsCache.footerMessage);
         }
         await m.createTable(pairedPrinterCache);
+      }
+      if (from < 10) {
+        // Sprint 56 (docs/07-database/schema-server.md's `devices` table, built Sprint 55) — a
+        // simple `addColumn` on a table that was part of the original v1 `onCreate` schema and is
+        // never re-created by any later `createTable` call, unlike Sprint 50's `shop_settings_cache`
+        // finding — no duplicate-column guard needed here, nothing else in this migration chain
+        // ever creates `device_identity` fresh.
+        await m.addColumn(deviceIdentity, deviceIdentity.clientDeviceId);
       }
     },
   );

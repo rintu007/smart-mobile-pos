@@ -1,16 +1,15 @@
-import 'dart:math';
-
 import 'package:drift/drift.dart';
 
 import '../database/database.dart';
+import '../database/device_identity_repository.dart';
 
 /// ADR-0008's local half: `{device_short_id}-{financial_year}-{sequence}`,
 /// generated entirely locally from a per-device counter — no canonical
-/// number, no server round-trip. Deliberately narrower than the full ADR:
-/// `device_short_id` here is a local-only identity (`DeviceIdentity`), not
-/// backed by a registered `devices` row yet (Authentication's
-/// device-registration slice isn't built) — see sprint-09.md's own
-/// dated note.
+/// number, no server round-trip. `device_short_id` comes from the same
+/// `DeviceIdentity` row the real, server-registered `client_device_id` now
+/// also lives on (`ensureDeviceIdentity`, Sprint 56) — a local-only identity
+/// on its own until Authentication's device-registration slice landed
+/// (Sprint 55), see sprint-09.md's own dated note for the original gap.
 ///
 /// Callers run this from inside their own `AppDatabase.transaction` block
 /// (same convention as `DriftProductRepository`) — Drift routes queries made
@@ -21,41 +20,11 @@ class InvoiceNumberGenerator {
 
   final AppDatabase _db;
 
-  static const _deviceRowId = 'current';
-  static const _shortIdAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  static const _shortIdLength = 6;
-
   Future<String> next({DateTime? now}) async {
-    final deviceShortId = await _ensureDeviceShortId();
+    final deviceIdentity = await ensureDeviceIdentity(_db);
     final financialYear = _financialYearFor(now ?? DateTime.now());
     final sequence = await _nextSequence(financialYear);
-    return '$deviceShortId-$financialYear-${sequence.toString().padLeft(6, '0')}';
-  }
-
-  Future<String> _ensureDeviceShortId() async {
-    final existing = await (_db.select(
-      _db.deviceIdentity,
-    )..where((t) => t.id.equals(_deviceRowId))).getSingleOrNull();
-    if (existing != null) return existing.shortId;
-
-    final generated = _generateShortId();
-    await _db
-        .into(_db.deviceIdentity)
-        .insert(
-          DeviceIdentityCompanion.insert(
-            id: _deviceRowId,
-            shortId: generated,
-          ),
-        );
-    return generated;
-  }
-
-  String _generateShortId() {
-    final random = Random.secure();
-    return List.generate(
-      _shortIdLength,
-      (_) => _shortIdAlphabet[random.nextInt(_shortIdAlphabet.length)],
-    ).join();
+    return '${deviceIdentity.shortId}-$financialYear-${sequence.toString().padLeft(6, '0')}';
   }
 
   /// India's financial year rolls over April 1 — identifiers.md §3.

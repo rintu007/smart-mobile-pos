@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,6 +16,9 @@ import 'package:mobile/features/pos/presentation/providers/pos_providers.dart';
 // overrides for both — a real in-memory Drift DB (matching
 // drift_sale_repository_test.dart's own precedent of exercising real SQL,
 // not a fake, for the persistence layer itself), and a fixed store id.
+// Sprint 56: `saleRepositoryProvider` also reads `apiClientProvider` directly (for the sale
+// lookup callbacks), which now has no default implementation — these tests never trigger a
+// real request through it, so a plain unconfigured `Dio()` is enough to satisfy construction.
 void main() {
   const coffee = Product(id: 'product-1', name: 'Filter coffee', priceMinorUnits: 1500);
   const sugar = Product(id: 'product-2', name: 'Sugar', priceMinorUnits: 500);
@@ -27,6 +31,7 @@ void main() {
       overrides: [
         appDatabaseProvider.overrideWithValue(db),
         storeContextProvider.overrideWith((ref) async => storeId),
+        apiClientProvider.overrideWithValue(Dio()),
       ],
     );
   }

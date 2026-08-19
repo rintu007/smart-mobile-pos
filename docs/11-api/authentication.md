@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 11 — API Design
-> **Version:** 0.2.0
+> **Version:** 0.3.0
 > **Last updated:** 2026-08-20
 > **Owner:** Principal Next.js Engineer / CTO
 > **Approved by:** _pending_
@@ -85,6 +85,16 @@ it's missing entirely, not just if the device it names is revoked — a missing 
 revocation are treated identically, since the mobile client's own response to either is the same
 (force a local sign-out, §5).
 
+**Built, Sprint 56 — the mobile side.** `client_device_id` is generated once per install (a UUID,
+persisted in the local `device_identity` table alongside the existing invoice-numbering `shortId`)
+and resolved at app startup regardless of sign-in state, since it is a purely local identity. It is
+registered via `POST /auth/register-device` both on a fresh interactive sign-in and, best-effort, on
+every app launch that already has a session — a transient registration failure is swallowed rather
+than surfaced as a sign-in error, since the very next authenticated call would surface
+`DEVICE_REVOKED` anyway if registration genuinely never succeeded. Every subsequent request carries
+it as the `X-Device-Id` header via the shared `Dio` client; a `DEVICE_REVOKED` response triggers an
+immediate local sign-out, per §5.
+
 **This check is the API path's specific defence; it does not extend to Realtime.** Per
 [system-context.md](../04-srs/system-context.md)'s standing TB-2 finding (Realtime relies on RLS
 alone, with no API-layer backup), a revoked device's direct Realtime subscription remains
@@ -114,3 +124,4 @@ model and the revocation guarantee, which are the parts a later phase cannot saf
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial token model: Custom Access Token Hook for tenant_id injection, refresh rotation, per-request device revocation check, explicit TB-2 Realtime exposure-window acknowledgement. |
 | 0.2.0 | 2026-08-20 | Sprint 55 — device registration/revocation built (`POST /auth/register-device`, `GET /devices`, `PATCH /devices/{id}/revoke`, `requireSession`'s per-request check), closing the OWASP review's other flagged authorisation-model.md §2 gap. §4's previously-unspecified "how `client_device_id` is presented" resolved as a new `X-Device-Id` header — a Custom Access Token Hook claim was considered and rejected, since a newly-registered device's id isn't known at token-mint time. |
+| 0.3.0 | 2026-08-20 | Sprint 56 — mobile side wired: `client_device_id` generated once per install and persisted locally, registered on sign-in and on launch (best-effort, swallowed on failure), sent as `X-Device-Id` on every request, and a `DEVICE_REVOKED` response forces an immediate local sign-out. |
