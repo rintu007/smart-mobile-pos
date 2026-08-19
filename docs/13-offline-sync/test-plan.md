@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 13 — Offline Synchronisation
-> **Version:** 0.4.0
+> **Version:** 0.5.0
 > **Last updated:** 2026-08-20
 > **Owner:** CTO / Principal Flutter Engineer
 > **Approved by:** _pending_
@@ -49,7 +49,7 @@ different test venues, only discovered while actually building the suite against
 | Scenario | Venue | Status |
 | --- | --- | --- |
 | Server rejects one item in a batch | Server — a real Postgres/`pushOperations` integration test, no new infra | **Built**, `apps/web/integration-tests/sync-failure-scenarios.test.ts` |
-| Connectivity lost mid-batch | Server half: identical to idempotent-replay's "ambiguous-acknowledgement" case (§1) — already-committed operations stay committed on a retry. Client half (scheduling the retry itself after a real severed connection): mobile SyncEngine, needs a live server + fault-injecting proxy in front of it | Server half **built** (§1); client half **deferred**, needs infra not yet built |
+| Connectivity lost mid-batch | Server half: identical to idempotent-replay's "ambiguous-acknowledgement" case (§1) — already-committed operations stay committed on a retry. Client half: the actual property that matters (sync-api.md §3's "every operation gets its own verdict" contract; an operation missing from the response is left safely untouched, not lost or corrupted) is a pure client-side unit-testable concern — no live server or fault-injecting proxy actually needed, that framing conflated the literal fault-injection mechanism with what's being verified | Server half **built** (§1); client half **Built, Sprint 52** (`sync_repository_test.dart`'s "a partial batch response" group) |
 | App killed mid-sync | Mobile-only (`outbound_queue`/Drift, app-process lifecycle) | **Built, Sprint 50.** No server code path involved — a `SyncRepository` test simulating a push call that throws mid-flight, proving the row is left untouched and safely resent by a fresh repository instance on the next cycle, the mobile equivalent of "app relaunched." Found and corrected a real doc/code gap while writing it: the client never persists a distinct `Syncing` status (state-machines.md's own dated correction). |
 | Device rebooted with a full queue | Mobile-only, same reasoning | **Built, Sprint 50** — same test, same reasoning failure-scenarios.md §1 itself already gives for treating these two rows identically. |
 | Schema version mismatch after an update | Mobile-only (Drift's own versioned-migration mechanism) | **Built, Sprint 51 (`migration_test.dart`) — and found a real, previously-undetected production bug in the same pass.** `Migrator.createTable` builds a table from its *current* Dart shape, not the shape it had when that call was originally written — a table created in one `onUpgrade` step and altered in a later one (`shop_settings_cache`, Sprint 37 creation + Sprint 39 column add) breaks with an unhandled duplicate-column error for any device jumping both steps in one update, permanently locking it out of its own local database. Fixed with a guarded `addColumn`; see [schema-local.md](../07-database/schema-local.md#schema-migration-safety--a-real-bug-found-sprint-51-not-a-hypothetical-rule) for the full account and the standing rule for future migrations. |
@@ -69,12 +69,17 @@ database.
 **Corrected further, Sprint 51:** "Schema version mismatch" turned out to be buildable the same way
 — and writing it found a real, previously-undetected bug that would have permanently locked a real
 device out of its own local database for a specific upgrade path (see the row above and
-schema-local.md's own account). The remaining mobile-only row ("Storage full") and the two
-that genuinely need infrastructure this project doesn't have yet (the client half of "Connectivity
-lost mid-batch," needing a mobile `integration_test` + fault-injecting proxy; "Token expired while
-queued," needing the full local Supabase CLI stack) are still real, tracked gaps, not silently
-dropped — candidates for a dedicated future item, the same way Sprint 40 named the Realtime
-extension rather than silently building a fake stand-in for it.
+schema-local.md's own account).
+
+**Corrected once more, Sprint 52:** the client half of "Connectivity lost mid-batch" — the one row
+this document had specifically named as needing a live server + fault-injecting proxy — also turned
+out not to need either. The actual client-side guarantee (an operation missing from an otherwise
+well-formed response is left safely untouched) is exercised with a fake push function, the same
+technique the two rows above already used; no real severed connection is needed to prove the code
+handles a response shaped that way correctly. The remaining mobile-only row ("Storage full") and
+"Token expired while queued" (needing the full local Supabase CLI stack) are still real, tracked
+gaps, not silently dropped — candidates for a dedicated future item, the same way Sprint 40 named
+the Realtime extension rather than silently building a fake stand-in for it.
 
 ## 4. Failure-injection tooling
 
@@ -108,3 +113,4 @@ loss or duplication) is exactly as invisible-until-it-happens as a tenant-isolat
 | 0.2.0 | 2026-08-19 | Sprint 41 (backlog.md M4 item 6) built §1's three idempotent-replay cases and §2's 2-device-scale rows (all 4) plus the N-device fuzzed case (nightly-only) for real, against a real Postgres connection, no toxiproxy needed for any of it — replay/order-independence are server-observable properties. §2's N-device row corrected: no `adjustment` sync-push operation type exists, fuzzed across `opening`/`sale` only. §3 reclassified by actual test venue (server / mobile-only / needs the full Supabase stack / already-proven-no-test-needed) — "one test per row" conflated three different venues; only 1 of the 10 rows was actually buildable as a server integration test this sprint. |
 | 0.3.0 | 2026-08-19 | Sprint 50 (cross-cutting fix, not a re-opening of item 6): §3's "App killed mid-sync"/"Device rebooted with a full queue" rows built — both testable with existing `flutter test` infrastructure alone, no new tooling needed, once actually attempted rather than assumed to need the same infra as the genuinely-deferred rows. Found and corrected a real doc/code gap in the same pass: the mobile client never persists the `Syncing` transitional status state-machines.md's Sync Item diagram specifies. |
 | 0.4.0 | 2026-08-20 | Sprint 51 (cross-cutting fix): §3's "Schema version mismatch" row built (`migration_test.dart`, this project's first migration test) — and found a real, previously-undetected production bug in the same pass: a table created in one `onUpgrade` step and altered in a later one broke with an unhandled duplicate-column error for any device jumping both steps in one update, permanently losing access to its own local database. Fixed; full account in schema-local.md. |
+| 0.5.0 | 2026-08-20 | Sprint 52 (cross-cutting fix): §3's "Connectivity lost mid-batch" client-half row built — it did not need the live server + fault-injecting proxy this document had specifically named for it; the actual client-side guarantee is exercised with a fake partial push response, no different in kind from Sprints 50/51's own technique. Found and corrected a third instance of the same doc-vs-code gap those two sprints found: failure-scenarios.md's "operations not yet acknowledged return to FailedRetrying" is not literally what the code does — an unacknowledged row is simply left untouched. |
