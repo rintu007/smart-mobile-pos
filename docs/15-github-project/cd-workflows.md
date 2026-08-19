@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 15 — GitHub Project
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-31
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-20
 > **Owner:** DevOps Engineer / CTO
 > **Approved by:** _pending_
 
@@ -21,9 +21,22 @@ deploy `apps/web` automatically. Every pull request additionally gets its own **
 [repository-setup.md §3](repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around),
 can exercise the actual change against a live preview URL, not only read the diff.
 
-**No manual deployment step exists anywhere in this path** — per this phase's rule, a step a human
-has to remember to run is a step that eventually gets forgotten under time pressure, exactly the
-condition a release is most likely to happen under.
+**Corrected 2026-08-20 (found while merging Sprint 55, not by inspection):** this claim is true for
+schema *migrations* (`prisma migrate deploy`, run automatically as part of Vercel's own build step)
+but was never true for Row-Level Security. RLS policies live in `supabase/sql/*.sql`, deliberately
+kept outside Prisma's migration flow (`tenancy-model.md §2`) — CI only ever applies these files
+against the ephemeral `fast-integration` test container (`integration-tests/setup/apply-sql.mjs`),
+**never** against the real project. Every numbered file from `001_` through `019_` has, in practice,
+required a human to run it against the real Supabase SQL editor by hand after merging — confirmed
+by `implementation-log.md`'s own repeated "applied live" entries — exactly the "a step a human has
+to remember to run is a step that eventually gets forgotten" risk this section's own rule warns
+against, previously true of this path without this section ever admitting it. **No automated fix
+built this pass** — a genuine CD mechanism (a Supabase CLI step in the Vercel build, or a GitHub
+Action running `apply-sql.mjs`-equivalent against the real `DATABASE_URL` on merge) is real,
+separately-scoped follow-up work, named here rather than silently left unfixed a second time. Until
+then: **any PR that adds a new `supabase/sql/*.sql` file is not actually deployed until someone
+manually applies that file to the real project** — this is the one manual step this document should
+have named all along.
 
 ## 2. Android build, signing, and distribution
 
@@ -75,3 +88,4 @@ during a real incident.
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-31 | Vercel git-push deployment; Android signing via GitHub encrypted secrets, never committed; auto-incremented build numbering; rollback mechanism per component; rehearsal flagged honestly as a pending Phase 18 action. |
+| 0.2.0 | 2026-08-20 | Corrected §1's "no manual deployment step exists" claim, found while merging Sprint 55's `019_rls_devices.sql`: true for Prisma migrations, never true for RLS — `supabase/sql/*.sql` has always needed a human to apply it to the real project by hand, confirmed by `implementation-log.md`'s own repeated "applied live" history for every prior numbered file. Named as a real, unfixed gap (a genuine CD mechanism for this is separately-scoped future work), not silently corrected away. |
