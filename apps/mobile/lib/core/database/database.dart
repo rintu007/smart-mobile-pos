@@ -120,7 +120,20 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(shopSettingsCache);
       }
       if (from < 9) {
-        await m.addColumn(shopSettingsCache, shopSettingsCache.footerMessage);
+        // Sprint 50 fix (found while writing this app's first migration test, not by
+        // inspection): `m.createTable` always builds a table from its *current* Dart
+        // definition, not the shape it had when that createTable call was first written — so a
+        // device jumping straight from before schema v8 to v9 (skipping ever being at exactly
+        // v8) already gets `footer_message` from the `from < 8` block's createTable above, and
+        // this addColumn would then fail with a duplicate-column error, unhandled, on every
+        // launch. Guarded here rather than left to crash a real upgrade this project had no test
+        // to catch until now.
+        final hasFooterMessage = await customSelect(
+          "SELECT COUNT(*) AS c FROM pragma_table_info('shop_settings_cache') WHERE name = 'footer_message'",
+        ).getSingle();
+        if (hasFooterMessage.read<int>('c') == 0) {
+          await m.addColumn(shopSettingsCache, shopSettingsCache.footerMessage);
+        }
         await m.createTable(pairedPrinterCache);
       }
     },

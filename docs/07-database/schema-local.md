@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 07 — Database Design
-> **Version:** 0.1.5
-> **Last updated:** 2026-08-14
+> **Version:** 0.1.6
+> **Last updated:** 2026-08-20
 > **Owner:** Principal Flutter Engineer / PostgreSQL Architect
 > **Approved by:** _pending_
 
@@ -108,6 +108,39 @@ are scoped to what a single device's cache can answer correctly. If this proves 
 real usage patterns are known, widening the local cache is a Phase 13 tuning decision, not a schema
 redesign — the server schema already holds the full history regardless.
 
+## Schema-migration safety — a real bug found Sprint 51, not a hypothetical rule
+
+`database.dart`'s `MigrationStrategy.onUpgrade` had never been tested against a real upgrade path
+until Sprint 51's first migration test — which found a genuine, previously-invisible bug: **`Drift`'s
+`Migrator.createTable(x)` always builds table `x` from its *current* Dart definition, not the shape
+it had at the historical point that `createTable` call was originally written.** Concretely: Sprint
+37 (schema v7→v8) wrote `await m.createTable(shopSettingsCache)`; Sprint 39 (v8→v9) later added a
+new column to that same table and wrote `await m.addColumn(shopSettingsCache, ...footerMessage)`
+right after it. Any device upgrading straight from *before* v8 to v9 in one jump — skipping ever
+being at exactly v8 — hit `createTable` building `shop_settings_cache` with `footer_message` already
+present (since that's the live class shape), then the very next line tried to add that column again:
+an unhandled `SqliteException`, on every single app launch, until the local database was deleted.
+This is not a cosmetic issue — a real device that happened to update across that exact version
+boundary would have its **entire local database, including unsynced sales, become permanently
+inaccessible** with no error message a Cashier could act on.
+
+**Fixed** by guarding the `from < 9` block's `addColumn` behind a real `pragma_table_info` check
+(does the column already exist? skip if so) rather than assuming it never does — proven both ways by
+`apps/mobile/test/core/database/migration_test.dart` (a genuine pre-v8 device correctly gets the
+column added exactly once; a genuine v8 device that already has it via the fresh-install path is
+correctly skipped).
+
+**Standing rule for every future migration, not just this one instance:** if a table is created in
+one `onUpgrade` step and altered again in any *later* step, the later step's `addColumn`/similar call
+**must** be guarded the same way — `m.createTable` at the earlier step will already include the later
+column once any device jumps both steps at once, which is always possible (this project rebuilds and
+re-serves APKs at irregular intervals, not the same cadence as sprints landing schema changes). The
+alternative, more thorough fix — Drift's own `VersionedSchema`/`drift_dev schema generate` tooling,
+which lets `createTable` reproduce a table's exact historical shape at each step — was judged
+materially larger scope for this sprint (no historical schema snapshots have ever been captured in
+this repository) and is named here as the real, more durable fix for whenever migration count grows
+enough to make per-case guards unwieldy, not silently assumed unnecessary forever.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -118,3 +151,4 @@ redesign — the server schema already holds the full history regardless.
 | 0.1.3 | 2026-08-02 | Sprint 09: `local_provisional_sequence` built. Added `device_identity`, a local-only table not previously listed in this document — the local half of ADR-0008's device-scoped numbering, needed the moment a real mobile write path (the till screen) had to produce a real invoice number. |
 | 0.1.4 | 2026-08-14 | **Correction, found building Sprint 20:** `categories`/`units` were grouped with `products` as "full local read/write copy... queued via outbound_queue," but the sync engine never gained a `category.create`/`unit.create` push type. Split their divergence-table row out from `products`' own and corrected it to match `shop_settings`' already-approved "read cache, online-only write" shape instead. |
 | 0.1.5 | 2026-08-14 | **Correction, found building Sprint 30's Hold/Resume:** `sales`/`sale_line_items`/`sale_payments` were grouped under "Immutable event... never edited after creation," but a draft/held `sales` row is genuinely mutated locally before completion (navigation-model.md §4's continuous auto-persistence, hold/resume itself). Split into their own "Immutable event once completed" row — immutability begins only once `status` first becomes `'completed'`, mirroring schema-server.md's own trigger exactly. |
+| 0.1.6 | 2026-08-20 | Sprint 51 — new "Schema-migration safety" section: a real bug found and fixed, not a hypothetical rule. `Migrator.createTable` builds a table from its *current* Dart shape, not its historical one, so a table created in one `onUpgrade` step and altered in a later one breaks for any device that jumps both steps at once — found via this project's first migration test, which any real device skipping schema v8 would have hit as a permanently-inaccessible local database. Fixed with a guarded `addColumn`; the standing rule for future migrations stated explicitly, not left implicit. |
