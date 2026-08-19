@@ -231,15 +231,42 @@ function decodeCursor(cursor: string): ProductCursor {
 }
 
 /**
+ * docs/13-offline-sync/inbound-sync.md §4 — "a rolling window covering the current and prior
+ * financial year," decided there but never actually implemented until Sprint 53 (the pull below
+ * called `listStockMovements` with no `dateFrom` at all — found while building storage-full
+ * handling, tracing back why the local cache had no bound). Mirrors pos/repository.ts's own
+ * `financialYearFor` exactly (April 1 rollover, UTC) rather than importing it — that function is
+ * module-private there, and this is the only other call site so far.
+ */
+export function stockMovementsRetentionCutoff(now: Date): Date {
+  const currentFyStartYear = now.getUTCMonth() >= 3 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
+  return new Date(Date.UTC(currentFyStartYear - 1, 3, 1));
+}
+
+/**
  * docs/modules/sync-engine/specification.md#4-api-contract — GET /sync/pull, entity_type=stock_movements.
  * Added Sprint 36 (backlog.md M4 item 1). Reuses stock-movements/repository.ts's own
- * `listStockMovements` unfiltered — the same tenant-scoped, `(created_at, id)`-cursor, `limit + 1`
+ * `listStockMovements` — the same tenant-scoped, `(created_at, id)`-cursor, `limit + 1`
  * peek query GET /stock-movements already relies on, no dedicated sync-only query needed here
- * (unlike sales, below, which does need one for its line items).
+ * (unlike sales, below, which does need one for its line items). Bounded to the current + prior
+ * financial year since Sprint 53 — see `stockMovementsRetentionCutoff` above. `now` is an optional
+ * trailing param (defaults to the real clock) purely for test injection, the same shape every
+ * other optional-trailing-param precedent in this codebase already uses — not a design choice a
+ * real caller needs to think about.
  */
-export async function pullStockMovements(tenantId: string, cursor: string | undefined, limit: number) {
+export async function pullStockMovements(
+  tenantId: string,
+  cursor: string | undefined,
+  limit: number,
+  now: Date = new Date(),
+) {
   const decodedCursor = cursor ? decodeStockMovementCursor(cursor) : null;
-  const fetched = await stockMovementsRepository.listStockMovements(tenantId, {}, decodedCursor, limit);
+  const fetched = await stockMovementsRepository.listStockMovements(
+    tenantId,
+    { dateFrom: stockMovementsRetentionCutoff(now) },
+    decodedCursor,
+    limit,
+  );
   const hasMore = fetched.length > limit;
   const rows = hasMore ? fetched.slice(0, limit) : fetched;
   const lastRow = rows[rows.length - 1];

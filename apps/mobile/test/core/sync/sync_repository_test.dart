@@ -2,6 +2,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/core/database/database.dart' hide Product;
+import 'package:mobile/core/database/tables/stock_movements.dart';
 import 'package:mobile/core/sync/sync_dto.dart';
 import 'package:mobile/core/sync/sync_repository.dart';
 
@@ -474,6 +475,62 @@ void main() {
 
       final movements = await db.select(db.stockMovements).get();
       expect(movements, hasLength(1));
+    });
+
+    // Sprint 53 (docs/13-offline-sync/inbound-sync.md §4) — the local cache is meant to hold only
+    // the current + prior financial year; nothing ever enforced that locally before now.
+    group('retention pruning (Sprint 53)', () {
+      test('a stock_movement from well outside the retention window is pruned on the next sync', () async {
+        await db
+            .into(db.stockMovements)
+            .insert(
+              StockMovementsCompanion.insert(
+                id: 'stale-movement',
+                productId: 'p1',
+                quantityDelta: -1,
+                movementType: MovementType.sale,
+                createdAt: Value(DateTime(2020, 1, 1)),
+              ),
+            );
+
+        final repo = SyncRepository(
+          db,
+          (operations) async => const SyncPushResponse([]),
+          ({cursor}) async => const SyncPullPage(products: [], nextCursor: null),
+          ({cursor}) async => const StockMovementPullPage(movements: [], nextCursor: null, hasMore: false),
+        );
+
+        await repo.syncNow();
+
+        final remaining = await db.select(db.stockMovements).get();
+        expect(remaining, isEmpty);
+      });
+
+      test('a stock_movement within the current financial year survives', () async {
+        await db
+            .into(db.stockMovements)
+            .insert(
+              StockMovementsCompanion.insert(
+                id: 'recent-movement',
+                productId: 'p1',
+                quantityDelta: -1,
+                movementType: MovementType.sale,
+                createdAt: Value(DateTime.now().subtract(const Duration(days: 1))),
+              ),
+            );
+
+        final repo = SyncRepository(
+          db,
+          (operations) async => const SyncPushResponse([]),
+          ({cursor}) async => const SyncPullPage(products: [], nextCursor: null),
+          ({cursor}) async => const StockMovementPullPage(movements: [], nextCursor: null, hasMore: false),
+        );
+
+        await repo.syncNow();
+
+        final remaining = await db.select(db.stockMovements).get();
+        expect(remaining.map((m) => m.id), contains('recent-movement'));
+      });
     });
   });
 

@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 13 — Offline Synchronisation
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-31
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-20
 > **Owner:** Principal Flutter Engineer
 > **Approved by:** _pending_
 
@@ -68,8 +68,30 @@ retained locally; older movements remain on the server, retrievable if a report 
 (a back-office, online concern, per [schema-local.md](../07-database/schema-local.md)'s "not
 designed to run entirely offline" scoping) but never bloat the till's local cache indefinitely.
 
+**Built, Sprint 53** — found unbuilt while investigating storage-full handling
+([failure-scenarios.md §3](failure-scenarios.md#3-resolving-the-storage-full-open-item)): this
+decision had never actually been implemented on either side. `GET /sync/pull`'s
+`entity_type=stock_movements` handler pulled every movement ever created, unfiltered, since
+Sprint 36; nothing ever removed an already-pulled row from the local cache either. Both are fixed
+now: `sync/service.ts`'s `pullStockMovements` bounds its query to `stockMovementsRetentionCutoff`
+(server clock, current + prior financial year, UTC — matching `pos/repository.ts`'s own
+`financialYearFor`), and `SyncRepository._pruneStaleStockMovements` deletes local rows outside that
+same window after every pull. The two sides deliberately use **different clocks**: the server bound
+uses the server's own clock (matching this phase's own "server time is authoritative for anything
+that matters" rule, [clock-and-ordering.md §3](clock-and-ordering.md#3-what-is-ordered-by-server-time--everything-that-matters-financially-or-causally));
+the local prune uses the device's own clock, a deliberate exception since this is a purely local
+cache-size decision with no financial or cross-device consequence
+([clock-and-ordering.md §2](clock-and-ordering.md#2-what-is-ordered-by-device-time--display-only)'s
+"device time is fine for local-only purposes" rule extended here to a new case). One accepted
+consequence, named rather than silently risked: a device that hasn't synced across a financial-year
+rollover boundary will silently skip forward past whatever it fell behind on, never receiving it —
+an acceptable outcome given this cache was never designed to guarantee full history
+([schema-local.md](../07-database/schema-local.md)'s own "not designed to run entirely offline"
+scoping for tenant-wide reporting already establishes this).
+
 ## Change Log
 
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-31 | Cursor-persistence atomicity specified; initial hydration designed as the same pull mechanism with a prioritised entity order, not a second endpoint; local stock-movement retention window decided (current + prior financial year). |
+| 0.2.0 | 2026-08-20 | Sprint 53 — §4's retention window built: `pullStockMovements`'s server-side query was unfiltered since Sprint 36 despite this decision, and nothing ever pruned an already-pulled row locally. Both fixed — server bound uses server time, local prune uses device time (a deliberate, low-stakes exception, reasoned explicitly). Found while investigating storage-full handling (failure-scenarios.md §3). |

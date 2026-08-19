@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 13 — Offline Synchronisation
-> **Version:** 0.4.0
+> **Version:** 0.5.0
 > **Last updated:** 2026-08-20
 > **Owner:** CTO / Principal Flutter Engineer
 > **Approved by:** _pending_
@@ -59,15 +59,26 @@ correctly identified this as a business-process question, not a data one — **r
 [assumptions-and-dependencies.md](../04-srs/assumptions-and-dependencies.md) left this genuinely
 undesigned. **Resolved here, tiered:**
 
-1. **Proactive pruning, before the device is ever actually full.** The local read caches with a
+1. **Proactive pruning, before the device is ever actually full.** The local read cache with a
    defined retention window (`stock_movements`, per [inbound-sync.md §4](inbound-sync.md#4-bounded-local-history-restated-as-this-phases-own-decision))
-   and cached product images are pruned automatically once free storage drops below a warning
-   threshold — this is the one class of local data that can shrink without losing anything not
-   already safely on the server.
+   is pruned back to that window automatically — this is the one class of local data that can
+   shrink without losing anything not already safely on the server. **Built, Sprint 53** — see
+   inbound-sync.md §4's own account. Corrected in the same pass: this paragraph originally said
+   pruning happens "once free storage drops below a warning threshold" and named "cached product
+   images" as a second thing to prune — neither survived contact with what's actually buildable.
+   Product image caching was never built as a V1 feature at all (there is no image field anywhere
+   in the local or server `products` schema), so there is nothing there to prune. And gating
+   pruning on a storage-threshold check would have made it depend on tier 3's not-yet-built
+   disk-space detection for no real benefit — there's no reason to keep more than the current +
+   prior financial year around even when storage is plentiful, since older data stays retrievable
+   from the server on demand. Pruning now runs unconditionally, every sync cycle, decoupled entirely
+   from tier 3.
 2. **`outbound_queue` is never pruned to make room.** Unsynced operations are the one thing this
    entire phase exists to protect; they are never discarded to free space, even under storage
    pressure — restated from [outbound-queue.md §1](outbound-queue.md#1-durability)'s durability
-   guarantee, which storage pressure does not get to override.
+   guarantee, which storage pressure does not get to override. Confirmed still true after Sprint
+   53's changes: `_pruneStaleStockMovements` only ever touches `stock_movements`, never
+   `outbound_queue`.
 3. **If free storage is still critically low after step 1** (a genuinely full device, not merely an
    uncleaned cache), the product does **not** silently fail to record a sale. Per this phase's
    "never stop selling" objective being physically bounded by real disk space, the honest fallback
@@ -75,7 +86,9 @@ undesigned. **Resolved here, tiered:**
    space now."* — surfaced persistently (not a dismiss-and-forget toast) via
    [sync-ui.md](sync-ui.md), rather than the alternative of a sale silently failing to persist with
    no visible cause. A warned, informed Cashier who can still technically lose a sale to a genuinely
-   full disk is a materially better outcome than a silent, undetected loss.
+   full disk is a materially better outcome than a silent, undetected loss. **Still not built** —
+   real disk-space detection and the warning UI itself remain separately-scoped future work, named
+   here rather than folded into Sprint 53 alongside the (unrelated, already-buildable) pruning fix.
 
 ## 4. Resolving the Realtime-outage fallback
 
@@ -97,3 +110,4 @@ framing that Realtime is a latency optimisation, never a correctness dependency.
 | 0.2.0 | 2026-08-19 | Sprint 50 — "App killed mid-sync"/"Device rebooted with a full queue" rows corrected: the mobile client never writes a distinct `Syncing` status (found while writing the first test to actually exercise an interrupted push), so the real recovery mechanism is simpler than originally described — an interrupted row is left untouched and naturally re-selected next cycle, not detected as a distinct stale state. Both rows now have real, direct test coverage (`sync_repository_test.dart`), closing 2 of the 9 previously-unverified failure scenarios named in test-plan.md §3/release-checklist.md §2. |
 | 0.3.0 | 2026-08-20 | Sprint 51 — "Schema version mismatch after an update" row corrected: writing this project's first migration test found the migration itself could fail outright for a real upgrade path (a table created in one `onUpgrade` step, altered in a later one — any device jumping both at once hit an unhandled duplicate-column error, permanently losing access to its own local database). Fixed; full account in schema-local.md. Closes a 3rd of the 9 previously-unverified failure scenarios. |
 | 0.4.0 | 2026-08-20 | Sprint 52 — "Connectivity lost mid-batch" row corrected: the client half doesn't need a live server/fault-injecting proxy after all — it's the same "the doc describes an explicit state transition the code doesn't actually take" gap found twice already this run of sprints. An unacknowledged operation is simply left untouched (not moved to `FailedRetrying`), proven directly with a fake partial push response. Closes a 4th of the 9 previously-unverified failure scenarios. |
+| 0.5.0 | 2026-08-20 | Sprint 53 — §3's storage-full tier 1 (proactive pruning) built: `stock_movements` is now genuinely bounded to the current + prior financial year, both server-side (the pull) and locally (a new prune step). Corrected two stale claims in the same pass: pruning was never actually threshold-gated (now deliberately unconditional, decoupled from tier 3), and "cached product images" was never a real feature to prune in the first place. Tier 3 (disk-space detection + warning UI) remains real, separately-scoped future work. |
