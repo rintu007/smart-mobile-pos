@@ -6,6 +6,7 @@ import {
   createCustomer,
   updateCustomer,
   deactivateCustomer,
+  eraseCustomer,
   listCustomers,
   getPurchaseHistory,
   listConflicts,
@@ -42,6 +43,7 @@ function customerRow(overrides: Partial<{
   name: string | null;
   phone: string | null;
   deactivatedAt: Date | null;
+  erasedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
@@ -52,6 +54,7 @@ function customerRow(overrides: Partial<{
     name: "Ramesh Kumar",
     phone: "9876543210",
     deactivatedAt: null,
+    erasedAt: null,
     createdAt: new Date("2026-08-16T00:00:00Z"),
     updatedAt: new Date("2026-08-16T00:00:00Z"),
     createdBy: userId,
@@ -95,6 +98,8 @@ describe("createCustomer", () => {
       phone: "9876543210",
       created_at: "2026-08-16T00:00:00.000Z",
       updated_at: "2026-08-16T00:00:00.000Z",
+      deactivated_at: null,
+      erased_at: null,
     });
   });
 
@@ -476,6 +481,71 @@ describe("deactivateCustomer", () => {
     vi.mocked(repository.findCustomerById).mockResolvedValue(null);
 
     await expect(deactivateCustomer(tenantId, customerId)).rejects.toMatchObject({
+      status: 404,
+      code: "NOT_FOUND",
+    });
+  });
+});
+
+describe("eraseCustomer", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("nulls name/phone, sets erased_at, and also deactivates a still-active customer", async () => {
+    vi.mocked(repository.findCustomerById).mockResolvedValue(customerRow() as never);
+    vi.mocked(repository.eraseCustomer).mockResolvedValue(
+      customerRow({
+        name: null,
+        phone: null,
+        erasedAt: new Date("2026-08-19T00:00:00Z"),
+        deactivatedAt: new Date("2026-08-19T00:00:00Z"),
+      }) as never,
+    );
+
+    const result = await eraseCustomer(tenantId, customerId);
+
+    // deactivatedAtIfUnset is a real Date, not null, since this customer wasn't deactivated yet.
+    expect(repository.eraseCustomer).toHaveBeenCalledWith(customerId, expect.any(Date));
+    expect(result.name).toBeNull();
+    expect(result.phone).toBeNull();
+    expect(result.erased_at).toBe("2026-08-19T00:00:00.000Z");
+  });
+
+  it("preserves an already-deactivated customer's own deactivated_at rather than overwriting it", async () => {
+    const originalDeactivation = new Date("2026-08-10T00:00:00Z");
+    vi.mocked(repository.findCustomerById).mockResolvedValue(
+      customerRow({ deactivatedAt: originalDeactivation }) as never,
+    );
+    vi.mocked(repository.eraseCustomer).mockResolvedValue(
+      customerRow({
+        name: null,
+        phone: null,
+        deactivatedAt: originalDeactivation,
+        erasedAt: new Date("2026-08-19T00:00:00Z"),
+      }) as never,
+    );
+
+    await eraseCustomer(tenantId, customerId);
+
+    // null second argument — the repository is told not to touch deactivatedAt at all.
+    expect(repository.eraseCustomer).toHaveBeenCalledWith(customerId, null);
+  });
+
+  it("is an idempotent no-op on an already-erased customer", async () => {
+    vi.mocked(repository.findCustomerById).mockResolvedValue(
+      customerRow({ name: null, phone: null, erasedAt: new Date("2026-08-19T00:00:00Z") }) as never,
+    );
+
+    await eraseCustomer(tenantId, customerId);
+
+    expect(repository.eraseCustomer).not.toHaveBeenCalled();
+  });
+
+  it("rejects a nonexistent customer with NOT_FOUND", async () => {
+    vi.mocked(repository.findCustomerById).mockResolvedValue(null);
+
+    await expect(eraseCustomer(tenantId, customerId)).rejects.toMatchObject({
       status: 404,
       code: "NOT_FOUND",
     });

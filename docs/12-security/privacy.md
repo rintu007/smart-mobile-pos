@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 12 — Security Design
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-30
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-19
 > **Owner:** Security Engineer / CTO
 > **Approved by:** _pending_
 
@@ -68,6 +68,18 @@ elsewhere in this schema (a sale outlives a deactivated customer record, per
 [schema-server.md](../07-database/schema-server.md)'s `ON DELETE SET NULL` note) extended one step
 further, deliberately, to satisfy an erasure request without touching ledger integrity.
 
+**Built Sprint 46 (backlog.md, cross-cutting fix — found unbuilt during Sprint 43's OWASP checklist
+review, M6):** `POST /api/v1/customers/{id}/erase`
+([customers.md](../11-api/endpoints/customers.md)), Owner-only — a step stricter than `DELETE`'s
+Manager+Owner gate, since erasure is a data-governance/legal action, not an ordinary back-office one.
+Nulls `name`/`phone`, sets a new explicit `erased_at` marker (distinguishing genuine erasure from a
+customer who simply never had a name/phone set — both nullable already at creation), and also sets
+`deactivated_at` if not already set, since an erased customer has no identifying data left for any
+real workflow to act on correctly. Idempotent (a second request on an already-erased customer is a
+pure no-op) and verified against a real database, including that a historical sale referencing the
+erased customer keeps resolving correctly afterward
+(`apps/web/integration-tests/customer-erasure.test.ts`) — not merely that no error was thrown.
+
 Staff accounts (`users`) are **not** given the same anonymisation path on request — an employee's
 attribution in `audit_log` and completed `sales.created_by` is an accountability record the business
 itself needs to retain (and, per §2, is justified under legitimate business interest, not consent
@@ -88,3 +100,4 @@ already fully specified by Phase 11's existing endpoints.
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Personal data inventory; DPDPA named as the provisional applicable framework (same caveat as all India-specific content); anonymise-not-delete resolution for customer erasure requests, reconciling ADR-0009; export shown to require no new data model. |
+| 0.2.0 | 2026-08-19 | Sprint 46 — §4's anonymise-not-delete resolution, designed since this document's first version but never implemented (found Sprint 43's OWASP review, M6), built as `POST /customers/{id}/erase`, Owner-only, idempotent, verified against a real database including FK-integrity survival. |

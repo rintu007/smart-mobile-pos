@@ -506,6 +506,13 @@ model Customer {
   name          String?
   phone         String?
   deactivatedAt DateTime? @map("deactivated_at") @db.Timestamptz
+  /// Sprint 46 (docs/12-security/privacy.md §4) — an erasure request anonymises this row (`name`/
+  /// `phone` overwritten with `null`) rather than deleting it, so every historical
+  /// `sales.customer_id` FK stays valid; `erasedAt` is the explicit state marker distinguishing
+  /// "genuinely erased" from a customer who simply never had a name/phone set (both nullable at
+  /// creation already), the same explicit-timestamp-over-inferred-state convention every other
+  /// state transition in this schema already uses (`deactivatedAt`, `completedAt`, `resolvedAt`).
+  erasedAt      DateTime? @map("erased_at") @db.Timestamptz
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
   createdBy     String    @map("created_by") @db.Uuid
