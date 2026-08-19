@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 11 — API Design
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-30
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-19
 > **Owner:** Principal Next.js Engineer / DevOps
 > **Approved by:** _pending_
 
@@ -17,12 +17,21 @@ legitimate user could plausibly hit during normal operation is a limit set wrong
 
 ## 1. Limits by endpoint class
 
-| Class | Scope | Limit | Rationale |
-| --- | --- | --- | --- |
-| Auth (`/auth/*` sign-in, OTP request) | Per account, and separately per IP | 5 sign-in attempts/minute per account; 20 OTP requests/hour per account; 30 requests/minute per IP | Brute-force and OTP-spam resistance — sized against attack patterns, not legitimate use, which never approaches this. |
-| Sync push/pull (`/sync/*`) | Per device | 1 push per 5 seconds; push batch capped at 500 operations; pull page capped at 200 rows | A device legitimately syncs in bursts on reconnect, not continuously — this bounds a misbehaving client from hammering the endpoint in a tight loop, not normal opportunistic syncing per [sync-api.md §7](sync-api.md#7-what-triggers-a-sync-cycle). |
-| Mutating endpoints (`/sales`, `/returns`, `/stock-movements`, etc.) | Per device | 60 requests/minute | Far above any realistic human cashier throughput ([tap-count-audit.md](../09-navigation/tap-count-audit.md)'s fastest workflow, WF-002, still takes several seconds of real interaction) — this catches a buggy retry loop, not a fast till. |
-| Read endpoints (`/products`, `/sales`, reports) | Per tenant | 300 requests/minute | Sized with headroom above [cost-model.md](../02-business-requirements/cost-model.md)'s realistic per-shop transaction assumptions at the scale that document models; protects shared infrastructure from one runaway tenant affecting others on the shared-schema platform ([ADR-0004](../adr/ADR-0004-shared-schema-multi-tenancy.md)). |
+**Corrected Sprint 45 (found while implementing, not by inspection):** the sync push batch cap is
+**200**, not 500 — `sync/schema.ts`'s `syncPushRequestSchema` has enforced `.max(200)` since Sprint
+13; this row had simply never been checked against the code that already existed. "Per device"
+below is implemented as **per authenticated user** (`authUserId`) for the two classes actually built
+— no `devices` table exists anywhere in this schema (`tenant-isolation.md`'s already-named gap),
+the same substitution Sprint 26 (Trading Day) and Sprint 41 (`seed-second-user.ts`) already made for
+the identical missing dimension.
+
+| Class | Scope | Limit | Rationale | Status |
+| --- | --- | --- | --- | --- |
+| Auth (`/auth/*` sign-in, OTP request) | Per account, and separately per IP | 5 sign-in attempts/minute per account; 20 OTP requests/hour per account; 30 requests/minute per IP | Brute-force and OTP-spam resistance — sized against attack patterns, not legitimate use, which never approaches this. | **Cannot be implemented in this codebase.** Sign-in is a direct client call to Supabase Auth (`docs/modules/authentication/specification.md` §1a) — it never reaches an `apps/web` Route Handler, so there is no request here to attach a limit to. This needs Supabase Auth's own platform-side rate limiting (a project-configuration setting, not code); whether it's already active by default has not been separately confirmed. |
+| Sync push (`/sync/push`) | Per device (per user) | 1 push per 5 seconds; push batch capped at **200** operations (corrected) | A device legitimately syncs in bursts on reconnect, not continuously — this bounds a misbehaving client from hammering the endpoint in a tight loop, not normal opportunistic syncing per [sync-api.md §7](sync-api.md#7-what-triggers-a-sync-cycle). | **Built, Sprint 45** — `requirePermission`'s `"sync-push"` class. |
+| Sync pull (`/sync/pull`) | Per tenant | Falls under the generic read-endpoint limit below; pull page capped at 200 rows | This table never gave pull its own numeric per-minute figure, only the already-schema-enforced page-size cap — no separate class was actually specified beyond "read." | Page cap already enforced (Zod, since Sprint 13); the generic read limit applies, **built Sprint 45**. |
+| Mutating endpoints (`/sales`, `/returns`, `/stock-movements`, etc.) | Per device (per user) | 60 requests/minute | Far above any realistic human cashier throughput ([tap-count-audit.md](../09-navigation/tap-count-audit.md)'s fastest workflow, WF-002, still takes several seconds of real interaction) — this catches a buggy retry loop, not a fast till. | **Built, Sprint 45** — `requirePermission`'s default class for any non-`GET` request. |
+| Read endpoints (`/products`, `/sales`, reports) | Per tenant | 300 requests/minute | Sized with headroom above [cost-model.md](../02-business-requirements/cost-model.md)'s realistic per-shop transaction assumptions at the scale that document models; protects shared infrastructure from one runaway tenant affecting others on the shared-schema platform ([ADR-0004](../adr/ADR-0004-shared-schema-multi-tenancy.md)). | **Built, Sprint 45** — `requirePermission`'s default class for any `GET` request. |
 
 ## 2. Response on limit exceeded
 
@@ -51,14 +60,22 @@ expected peak**, not merely present. The concrete design:
   Strategy) test plan item and a Phase 16 milestone gate, not something this documentation phase can
   execute itself.
 
-## 4. What this document does not decide
+## 4. Implementation, decided Sprint 45
 
-Whether rate limiting is enforced at the edge (Vercel/Next.js middleware) or inside each Route
-Handler is an implementation detail for Phase 18 — this document fixes the limits and their
-rationale, which are the parts a later phase should not silently redefine.
+Enforced inside `core/auth/session.ts`'s `requirePermission` — the one function nearly every Route
+Handler already calls to resolve its session — rather than Vercel edge middleware or per-route
+duplication, so no individual endpoint needs to remember to add it. The counter itself is a
+Postgres-backed fixed-window bucket (`rate_limit_buckets`, one row per `(scope, window)`), not an
+external service (Upstash Redis or similar) — consistent with this project's standing
+free/open-source-first constraint (the same reasoning that chose Dependabot over a paid scanner).
+`429 RATE_LIMITED` carries both a `Retry-After` HTTP header and the same figure in the JSON body's
+`details.retry_after_seconds`, via a new `ApiError.headers` field and a shared `errorResponse()`
+helper (`core/errors/api-error.ts`) — the first error in this codebase that needed a real header,
+not only a body field.
 
 ## Change Log
 
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial rate limits by endpoint class; Supavisor transaction-mode pooling design with the 10× load-test requirement tracked forward to Phase 14/16. |
+| 0.2.0 | 2026-08-19 | Sprint 45 — mutating/read/sync-push classes built (Postgres-backed fixed-window counter in `requirePermission`, no external service). Corrected the sync push batch cap (200, not 500 — the code has said 200 since Sprint 13). Found and named a real architectural gap: the Auth class cannot be implemented in this codebase at all, since sign-in is a direct client call to Supabase Auth that never reaches an `apps/web` Route Handler — needs Supabase's own platform-side configuration, not code. "Per device" implemented as "per user," the same substitution already established elsewhere for the missing `devices` table. |

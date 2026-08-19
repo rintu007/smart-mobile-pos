@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/core/auth/session";
-import { ApiError } from "@/core/errors/api-error";
+import { ApiError, errorResponse } from "@/core/errors/api-error";
 import { pullProducts, pullStockMovements, pullSales, pullShopSettings } from "@/modules/sync/service";
 import { syncPullQuerySchema } from "@/modules/sync/schema";
 
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
     throw new ApiError(422, "VALIDATION_FAILED", `Unsupported entity_type: ${parsed.data.entity_type}`);
   } catch (error) {
     if (error instanceof ApiError) {
-      return NextResponse.json(error.toResponseBody(), { status: error.status });
+      return errorResponse(error);
     }
     throw error;
   }

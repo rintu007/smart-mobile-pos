@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuthenticatedUser } from "@/core/auth/session";
-import { ApiError } from "@/core/errors/api-error";
+import { ApiError, errorResponse } from "@/core/errors/api-error";
 import { onboard } from "@/modules/identity/service";
 import { onboardingRequestSchema } from "@/modules/identity/schema";
 
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     if (error instanceof ApiError) {
-      return NextResponse.json(error.toResponseBody(), { status: error.status });
+      return errorResponse(error);
     }
     throw error;
   }

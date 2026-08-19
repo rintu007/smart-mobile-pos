@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.42.0
+> **Version:** 0.43.0
 > **Last updated:** 2026-08-19
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
@@ -262,6 +262,17 @@ already tracked; the other three (the nightly suite's first real scheduled run s
 findings) are new information surfaced by this same pass, not previously named as open risks against
 this specific gate.
 
+**Cross-cutting fix, [Sprint 45](sprint-45.md) (not a numbered item — closes finding #2 from item
+8's OWASP review):** rate limiting, fully specified in
+[rate-limiting.md](../11-api/rate-limiting.md) since Phase 11, was entirely unimplemented. Built for
+the 3 endpoint classes actually reachable from this codebase (mutating/read/sync-push — a
+Postgres-backed fixed-window counter inside `requirePermission`, no external service). Found the
+Auth class (sign-in/OTP) is architecturally unreachable from this codebase at all — sign-in never
+touches an `apps/web` Route Handler — a real, named gap needing a Supabase-side configuration check,
+not code. Unlike the RLS finding (item 8's other flagged risk, deliberately left open pending founder
+input since a wrong fix risks an outage), this one carried no such risk and was safe to close
+immediately.
+
 ## 6. Ordering rule, restated
 
 Every dependency column above traces directly to
@@ -315,3 +326,4 @@ specifically.
 | 0.40.0 | 2026-08-19 | Item 7 (nightly CI pipeline) done — [Sprint 42](sprint-42.md): new `.github/workflows/nightly.yml` (N-device fuzzed composition, 100 runs, the only nightly-deferred content items 5/6 actually produced) plus `.github/dependabot.yml` (npm/pub/github-actions, weekly). Found item 5 has no distinct slow subset ready at all (its one deferred piece, the Realtime extension, needs the full Supabase CLI stack); found `ci-pipeline.md §3`'s "full failure-scenario suite"/"extended property-based tests" rows have no code to run on any tier — the former because Sprint 41 already found only 1 of 10 scenarios is server-testable, the latter because no property-based suite was ever built despite `test-strategy.md §1` claiming DR-008/DR-013 coverage from it (corrected to the real unit-test coverage that does exist). No `release-candidate.yml` exists to gate on a nightly failure, so built a standing-GitHub-issue-on-failure mechanism instead; found `type:defect`/`priority:P0` labels (project-board.md §3) were never actually created in the repo, substituted the stock `bug` label. `tsc`/`eslint`/`vitest`/production build all clean. **M4 now has items 8–9 remaining.** |
 | 0.41.0 | 2026-08-19 | Item 8 (OWASP checklist review against the real build) done — [Sprint 43](sprint-43.md): every one of `owasp-checklist.md`'s 20 rows re-verified against real code, not the design docs it cited. **The single most significant finding of this project so far**: row-level security is very likely inert for all real production API traffic — no `FORCE ROW LEVEL SECURITY` exists anywhere, and no code ever sets `request.jwt.claims` on the app's own database connection, so the "defence in depth" second layer `tenant-isolation.md`/`tenancy-model.md` have claimed since Phase 07/12 may not actually protect anything beyond the API's own tenant-scoping logic — flagged for the founder, deliberately not fixed, since a wrong change risks a full production outage. Also found rate limiting is entirely unimplemented despite `identity-and-sessions.md §6` claiming it. Fixed in the same pass: missing `next.config.ts` security headers, and a real DR-025 audit-log-coverage gap (3 of 4 `stock_movements` types plus settings changes had no paired `audit_log` entry at all) — first self-identified in Sprint 12's own implementation-log entry and never subsequently closed across 15 sprints, closed now across 5 repository functions, verified against a real database. Four further real gaps named, not fixed (mobile session storage falls back to plaintext, the local Drift database is unencrypted, customer-erasure anonymisation is designed but unbuilt, the Android release build signs with the debug keystore — founder-blocked). `tsc`/`eslint`/`vitest`/production build all clean. **M4 now has item 9 remaining.** |
 | 0.42.0 | 2026-08-19 | Cross-cutting closeout, Sprint 44 (not a numbered M4 item): `release-checklist.md §2`, M4's own actual exit criterion, checked against Sprints 40–43's real results for the first time — two stale rows corrected (22 tables/Realtime → 19 tables, Realtime out of pilot scope; "all 10 failure scenarios" → "server-testable failure scenarios," since 9 of 10 have zero verification of any kind on record); the OWASP row's wording tightened so unresolved critical findings can't silently satisfy it. Honest conclusion recorded: this product is not pilot-ready today — four checklist rows unresolved, three newly surfaced by this pass. |
+| 0.43.0 | 2026-08-19 | Cross-cutting fix, Sprint 45 (not a numbered M4 item): rate limiting built for the 3 endpoint classes reachable from this codebase (mutating/read/sync-push — Postgres-backed fixed-window counter, `requirePermission`, no external service), closing item 8's finding #2. Found the Auth class is architecturally unreachable from this codebase at all (sign-in never touches an `apps/web` Route Handler) — a real, named gap, not fixed, needing a Supabase-side configuration check. Found and corrected a real 500-vs-200 sync-push-batch-cap drift in `rate-limiting.md`. 90/90 integration checks, 211/211 unit tests, `tsc`/`eslint` clean. |

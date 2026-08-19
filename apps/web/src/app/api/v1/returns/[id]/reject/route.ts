@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/core/auth/session";
-import { ApiError } from "@/core/errors/api-error";
+import { ApiError, errorResponse } from "@/core/errors/api-error";
 import { rejectReturn } from "@/modules/returns/service";
 import { rejectReturnRequestSchema } from "@/modules/returns/schema";
 
@@ -27,7 +27,7 @@ export async function POST(
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof ApiError) {
-      return NextResponse.json(error.toResponseBody(), { status: error.status });
+      return errorResponse(error);
     }
     throw error;
   }

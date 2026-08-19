@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/core/auth/session";
-import { ApiError } from "@/core/errors/api-error";
+import { ApiError, errorResponse } from "@/core/errors/api-error";
 import { pushOperations } from "@/modules/sync/service";
 import { syncPushRequestSchema } from "@/modules/sync/schema";
 
@@ -10,7 +10,14 @@ import { syncPushRequestSchema } from "@/modules/sync/schema";
 
 export async function POST(request: NextRequest) {
   try {
-    const { authUserId, tenantId } = await requirePermission(request, ["cashier", "manager", "owner"]);
+    // "sync-push" (Sprint 45, docs/11-api/rate-limiting.md §1) — 1 push per 5s per device, far
+    // tighter than the generic 60/min mutating-endpoint default `requirePermission` would otherwise
+    // infer from this route's own POST method.
+    const { authUserId, tenantId } = await requirePermission(
+      request,
+      ["cashier", "manager", "owner"],
+      "sync-push",
+    );
 
     const body = await request.json();
     const parsed = syncPushRequestSchema.safeParse(body);
@@ -24,7 +31,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof ApiError) {
-      return NextResponse.json(error.toResponseBody(), { status: error.status });
+      return errorResponse(error);
     }
     throw error;
   }
