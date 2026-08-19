@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.46.0
+> **Version:** 0.47.0
 > **Last updated:** 2026-08-19
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
@@ -302,6 +302,18 @@ once rather than migrated, and the fix was verified against a real Android debug
 (`libsqlcipher.so` confirmed bundled in the APK) plus a dedicated test proving unkeyed reads
 genuinely fail, not just that no error is thrown.
 
+**Cross-cutting closeout, [Sprint 49](sprint-49.md) (not a numbered item — a direct consequence of
+Sprints 45–48's own findings, the same shape Sprint 44 itself took):** with four more of item 8's
+OWASP findings now closed, `release-checklist.md §2` (M4's actual exit criterion) was checked
+against Sprints 45–48's real results for the first time since Sprint 44's own pass. One row
+genuinely flips to satisfied — `nightly.yml` has now really fired on its own schedule and passed,
+confirmed via `gh run list`, not assumed. One row's wording was corrected rather than left stale:
+general rate limiting is built (Sprint 45), narrowing the remaining OWASP gap to sign-in
+specifically (architecturally unreachable, needs a Supabase-side check). RLS and the 9 unverified
+failure scenarios were re-confirmed unchanged rather than silently assumed. Honest bottom line,
+unchanged in direction but smaller in scope: this product is still not pilot-ready today, now three
+unresolved rows instead of four. No code changes.
+
 ## 6. Ordering rule, restated
 
 Every dependency column above traces directly to
@@ -359,3 +371,4 @@ specifically.
 | 0.44.0 | 2026-08-19 | Cross-cutting fix, Sprint 46 (not a numbered M4 item): customer-erasure anonymisation built (`POST /customers/{id}/erase`, Owner only), closing item 8's finding M6 — `privacy.md §4`'s design, fully specified since Phase 12, had zero implementation. Nulls `name`/`phone`, sets a new `erased_at` marker, preserves an existing `deactivated_at` rather than overwriting it. Found and fixed a related gap: `deactivated_at` had never been exposed in any customer API response at all. 94/94 integration checks, 215/215 unit tests, `tsc`/`eslint` clean. |
 | 0.45.0 | 2026-08-19 | Cross-cutting fix, Sprint 47 (not a numbered M4 item): mobile secure token storage built (`SecureLocalStorage`, `flutter_secure_storage`-backed), closing item 8's finding M1 — the session had been sitting in plaintext `SharedPreferences` on Android despite `flutter_secure_storage` already being a dependency. No migration from the old plaintext value. Found and fixed a deprecated `flutter_secure_storage` config option via `flutter analyze`. 244/244 mobile tests (239 pre-existing + 5 new), `flutter analyze` clean. |
 | 0.46.0 | 2026-08-19 | Cross-cutting fix, Sprint 48 (not a numbered M4 item): on-device database encryption built (SQLCipher via `package:sqlite3` 3.x's native-hooks mechanism, `AppDatabase.encrypted`), closing item 8's finding M9 — the local database had been plain, unencrypted SQLite despite `data-protection.md §3` deciding on SQLCipher since Phase 12. Found the anticipated `sqlcipher_flutter_libs` plugin is now a no-op stub; the real integration is a `pubspec.yaml` hook declaration instead. A legacy plaintext database file is reset once on first launch after upgrade rather than migrated, unlike Sprints 46/47's trivially-reset data. Verified against a real Android debug build (`libsqlcipher.so` confirmed bundled) and a dedicated unkeyed-read-fails test. 252/252 mobile tests (244 pre-existing + 8 new), `flutter analyze` clean. |
+| 0.47.0 | 2026-08-19 | Cross-cutting closeout, Sprint 49 (not a numbered M4 item): `release-checklist.md §2` re-checked against Sprints 45–48's real results. Nightly-suite row flips to satisfied — `nightly.yml` confirmed genuinely fired on its own `schedule` trigger and passed, via `gh run list`, not assumed. OWASP row's stale "rate limiting unimplemented" wording corrected to the narrower, accurate sign-in-specific architectural gap now that general rate limiting is built (Sprint 45). RLS and the 9 unverified failure scenarios re-confirmed unchanged. Bottom line: still not pilot-ready today, now three unresolved rows instead of four. No code changes. |
