@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 12 — Security Design
-> **Version:** 0.3.0
+> **Version:** 0.4.0
 > **Last updated:** 2026-08-19
 > **Owner:** Security Engineer / CTO
 > **Approved by:** _pending_
@@ -83,7 +83,7 @@ production risk — flagged for the founder rather than silently deferred.
 | M3 | Insecure Authentication/Authorisation | Same as A01/A07 — one model, not a separate mobile-specific one | **CONFIRMED**, same caveats as A01/A07 (mobile calls the identical Bearer-token endpoints as every other client; no separate/weaker path exists). |
 | M4 | Insufficient Input/Output Validation | [input-validation.md](input-validation.md) — server-authoritative, client validation is UX-only | **CONFIRMED** (spot check — 14 of 15 `apps/web/src/modules/*` directories have a Zod `schema.ts`). |
 | M5 | Insecure Communication | TLS, per A02 above | **CONFIRMED**, same platform-reliance caveat as A02. |
-| M6 | Inadequate Privacy Controls | [privacy.md](privacy.md) — inventory, lawful basis, anonymise-on-erasure | **GAP, not fixed this pass.** `privacy.md §4`'s anonymise-on-erasure resolution is fully designed (null `name`/`phone`, keep the row/id for FK integrity) but **has zero implementation** — confirmed by grep for `anonymi[sz]e`/`erasure`/`gdpr` across both apps, zero hits; `customers/service.ts`'s `deactivateCustomer` only sets `deactivatedAt`, never touches `name`/`phone`. A real, bounded, but genuinely new endpoint to build (not a same-pass patch — it's request-handling, permissioning, and probably worth a beat of founder input given `privacy.md §2`'s own "provisional, pending legal review" framing around DPDPA applicability). |
+| M6 | Inadequate Privacy Controls | [privacy.md](privacy.md) — inventory, lawful basis, anonymise-on-erasure | **Fixed, Sprint 46.** `privacy.md §4`'s anonymise-on-erasure resolution, fully designed since Phase 12 but never implemented (confirmed by grep at the time — zero hits for `anonymi[sz]e`/`erasure`/`gdpr` across both apps), is now built: `POST /customers/{id}/erase` (Owner only), verified against a real database including FK-integrity survival. `privacy.md §2`'s "provisional, pending legal review" framing around DPDPA applicability still stands — this closes the *engineering* gap, not the separate legal-review item, which remains open and untouched. |
 | M7 | Insufficient Binary Protections | Assumed hostile by design — no business logic or secret ever lives client-side | **CONFIRMED.** `apps/mobile/lib/core/config/env.dart` only ever embeds the Supabase anon key and API base URL (both public-by-design); no service-role key or other secret found anywhere in `apps/mobile/lib`. |
 | M8 | Security Misconfiguration | Same as A05 | **GAP, not fixed this pass.** `apps/mobile/android/app/build.gradle.kts` signs the **release** build with the debug keystore (`// TODO: Add your own signing config for the release build. // Signing with the debug keys for now`) — a real, concrete misconfiguration, but fixing it needs a real, founder-owned production keystore and its credentials, which this session cannot generate — the same category of founder-blocked action as MTS-01's printer hardware. No ProGuard/R8 minification configured either, informational rather than a hard finding. |
 | M9 | Insecure Data Storage | [data-protection.md §3](data-protection.md#3-on-device-storage-encryption) — SQLCipher-encrypted local database | **GAP, not fixed this pass.** No SQLCipher package exists in `pubspec.yaml` at all; `core/database/database.dart`'s `driftDatabase(name: 'smart_pos_x')` is a plain, unencrypted SQLite file. Combined with M1, a lost/stolen/rooted device exposes both the session token and the full local sales/customer database in plaintext. Real mobile engineering work (SQLCipher's Drift integration, a migration path for already-installed unencrypted databases) — not a same-pass patch. |
@@ -92,9 +92,10 @@ production risk — flagged for the founder rather than silently deferred.
 ## What this checklist confirms, and what it doesn't
 
 **11 of 20 categories are genuinely CONFIRMED** against real code (A03, A04, A06, A08, A10, M2, M3,
-M4, M5, M7, and the no-homegrown-crypto half of M10). **3 real gaps have now been fixed** (security
+M4, M5, M7, and the no-homegrown-crypto half of M10). **4 real gaps have now been fixed** (security
 headers and the DR-025 audit-log coverage gap, Sprint 43; mutating/read/sync-push rate limiting,
-Sprint 45). **7 real gaps remain, named and not silently deferred**:
+Sprint 45; customer-erasure anonymisation, Sprint 46). **6 real gaps remain, named and not silently
+deferred**:
 
 1. **RLS's likely-inert defence-in-depth layer** — carries genuine production risk, needs founder
    input before any fix is attempted.
@@ -102,10 +103,9 @@ Sprint 45). **7 real gaps remain, named and not silently deferred**:
    needs a Supabase-side configuration check, not code.
 3. **Mobile secure token storage** (M1) — real, bounded future engineering.
 4. **On-device database encryption** (M9) — real, bounded future engineering.
-5. **Customer-data anonymisation-on-erasure** (M6) — real, bounded future engineering.
-6. **Alerting/monitoring infrastructure** (A09) — unbuilt, consistent with `incident-response.md`'s
+5. **Alerting/monitoring infrastructure** (A09) — unbuilt, consistent with `incident-response.md`'s
    own already-stated Phase 18 deferral.
-7. **Android release signing** (M8) — founder-owned action this session cannot perform (needs real
+6. **Android release signing** (M8) — founder-owned action this session cannot perform (needs real
    production signing credentials).
 
 This table is a snapshot of 2026-08-19 — it does not replace the actual verification work still to
@@ -119,3 +119,4 @@ still holds).
 | 0.1.0 | 2026-07-31 | Full OWASP Top 10 and Mobile Top 10 traceability against this phase's and Phase 11's existing controls; no new gaps found. |
 | 0.2.0 | 2026-08-19 | Sprint 43 (backlog.md M4 item 8) — every row re-verified against the real, running code, not the design docs cited as evidence. Found RLS is very likely inert for all real production traffic (no `FORCE ROW LEVEL SECURITY` anywhere, no code ever sets `request.jwt.claims` on the app's own connection) — flagged as the single most significant finding, deliberately not fixed pending founder confirmation of the real production database role, since a wrong fix risks a full outage. Found rate limiting is entirely unimplemented despite being claimed. Found and fixed a real DR-025 audit-log coverage gap (3 of 4 stock-movement types, plus settings changes, had no paired audit_log entry at all) across five repository functions, verified against a real database. Found and fixed missing `next.config.ts` security headers. Found four further real, named gaps not fixed this pass: mobile session storage falls back to plaintext `SharedPreferences` (M1), the local Drift database is unencrypted (M9), customer-erasure anonymisation is fully designed but has zero implementation (M6), and the Android release build signs with the debug keystore (M8, founder-blocked on real signing credentials). No alerting/monitoring infrastructure exists (A09), consistent with incident-response.md's own already-stated Phase 18 deferral. |
 | 0.3.0 | 2026-08-19 | Sprint 45 — the rate-limiting gap from Sprint 43's finding #2 closed for the 3 classes actually reachable from this codebase (mutating/read/sync-push, a Postgres-backed fixed-window counter in `requirePermission`). Found while building it: the sign-in rate-limit class cannot be implemented in this codebase at all, since sign-in is a direct client call to Supabase Auth that never reaches an `apps/web` Route Handler — a real, previously-unnamed architectural gap, not just an unimplemented one. A07's row and the summary counts corrected accordingly. |
+| 0.4.0 | 2026-08-19 | Sprint 46 — M6's customer-erasure gap closed: `POST /customers/{id}/erase` (Owner only), verified against a real database including FK-integrity survival. M6's row and the summary counts corrected accordingly. |

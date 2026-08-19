@@ -152,6 +152,25 @@ export function deactivateCustomer(id: string) {
   return prisma.customer.update({ where: { id }, data: { deactivatedAt: new Date() } });
 }
 
+// Sprint 46 (docs/12-security/privacy.md §4) — anonymises rather than deletes: `name`/`phone`
+// overwritten with `null`, the row's own `id` untouched, so every historical `sales.customer_id`
+// FK stays valid. `deactivatedAtIfUnset` is the service layer's own decision (not this function's)
+// about whether to also deactivate — passed as `null` when the customer is already deactivated, so
+// a genuinely earlier deactivation timestamp is never overwritten by this call. Idempotent: the
+// caller checks `erasedAt` before calling this, same short-circuit shape as `deactivateCustomer`
+// above.
+export function eraseCustomer(id: string, deactivatedAtIfUnset: Date | null) {
+  return prisma.customer.update({
+    where: { id },
+    data: {
+      name: null,
+      phone: null,
+      erasedAt: new Date(),
+      ...(deactivatedAtIfUnset ? { deactivatedAt: deactivatedAtIfUnset } : {}),
+    },
+  });
+}
+
 export interface CustomerCursor {
   updatedAt: Date;
   id: string;

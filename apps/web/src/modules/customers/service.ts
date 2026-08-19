@@ -15,6 +15,8 @@ function formatCustomer(customer: {
   phone: string | null;
   createdAt: Date;
   updatedAt: Date;
+  deactivatedAt?: Date | null;
+  erasedAt?: Date | null;
 }) {
   return {
     id: customer.id,
@@ -22,6 +24,14 @@ function formatCustomer(customer: {
     phone: customer.phone,
     created_at: customer.createdAt.toISOString(),
     updated_at: customer.updatedAt.toISOString(),
+    // Both added Sprint 46 (privacy.md §4) — a related, previously-unexposed gap found in the same
+    // pass: this response never surfaced deactivation status at all, even though `DELETE
+    // /customers/{id}` has set it since Sprint 31. Optional on the input type since not every
+    // caller's own Prisma select includes them (list/purchase-history queries don't need either);
+    // every real customer row has both columns, so `null` here only means "this caller didn't
+    // select it," never a meaningful "status unknown" signal.
+    deactivated_at: customer.deactivatedAt?.toISOString() ?? null,
+    erased_at: customer.erasedAt?.toISOString() ?? null,
   };
 }
 
@@ -306,6 +316,27 @@ export async function deactivateCustomer(tenantId: string, id: string) {
 
   const deactivated = await repository.deactivateCustomer(id);
   return formatCustomer(deactivated);
+}
+
+/**
+ * docs/modules/customers/specification.md#4-api-contract — POST /api/v1/customers/{id}/erase.
+ * Owner-only (Route Handler's own `requirePermission`, not here) — a real erasure request is a
+ * data-governance/legal-compliance action (privacy.md §2), a step further than "deactivate a
+ * customer," which any Manager can already do for ordinary business reasons. Idempotent: an
+ * already-erased customer returns its existing (already-anonymised) state unchanged, the same
+ * short-circuit shape `deactivateCustomer` below already establishes.
+ */
+export async function eraseCustomer(tenantId: string, id: string) {
+  const existing = await repository.findCustomerById(tenantId, id);
+  if (!existing) {
+    throw new ApiError(404, "NOT_FOUND", `Customer ${id} not found.`);
+  }
+  if (existing.erasedAt) {
+    return formatCustomer(existing);
+  }
+
+  const erased = await repository.eraseCustomer(id, existing.deactivatedAt ? null : new Date());
+  return formatCustomer(erased);
 }
 
 /**

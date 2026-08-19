@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 11 — API Design
-> **Version:** 0.2.0
-> **Last updated:** 2026-08-16
+> **Version:** 0.3.0
+> **Last updated:** 2026-08-19
 > **Owner:** Principal Next.js Engineer
 > **Approved by:** _pending_
 
@@ -19,6 +19,7 @@ keeps customer management minimal in V1 (name, phone, purchase lookup), not a fu
 | `POST /customers` | Cashier, Manager, Owner | Not yet — online-only this sprint (§ implementation note below) | Creation | **Built Sprint 31.** Deliberately open to Cashier — a walk-in customer is captured inline during checkout, under queue pressure, and must not require a Manager to be present. |
 | `PATCH /customers/{id}` | Cashier, Manager, Owner | Not yet — online-only this sprint | State-transition | **Built Sprint 31**, plain last-write-wins — the conflict-resolution field-merge policy (§ implementation note) is separate, later scope. |
 | `DELETE /customers/{id}` | Manager, Owner | Not yet — online-only this sprint | State-transition | **Built Sprint 31**, idempotent (live-verified). Soft delete; existing `sales.customer_id` references are set null on the *next* sale involving that customer, not retroactively — a completed sale's historical record is immutable regardless of the customer record's later state, per [sales.md](sales.md). |
+| `POST /customers/{id}/erase` | **Owner only** | Not yet — online-only | State-transition | **Built Sprint 46** (`docs/12-security/privacy.md §4`). A genuine data-erasure request — stricter than `DELETE`'s Manager+Owner gate, since this is a data-governance/legal action, not an ordinary back-office one. Anonymises `name`/`phone` to `null` (the row/id survive, so historical `sales.customer_id` FKs stay valid); sets `deactivated_at` too if not already set. Idempotent — a second request on an already-erased customer is a no-op. |
 | `GET /customers/{id}/purchase-history` | Any authenticated role | Read cached | N/A | **Built Sprint 31.** Cursor-paginated list of the customer's `sales`, ordered `(completed_at, id)` desc, `status = 'completed'` only — [FR-051](../../03-functional-requirements/functional-requirements.md). |
 
 ## Implementation note (Sprint 31, [customers/specification.md](../../modules/customers/specification.md))
@@ -52,9 +53,14 @@ one of the two is, so a customer record is never created with no way to ever loo
   "name": "Ramesh Kumar",
   "phone": "9876543210",
   "created_at": "2026-07-30T09:25:00Z",
-  "updated_at": "2026-07-30T09:25:00Z"
+  "updated_at": "2026-07-30T09:25:00Z",
+  "deactivated_at": null,
+  "erased_at": null
 }
 ```
+
+`deactivated_at`/`erased_at` added Sprint 46 — present (nullable) on every customer object this
+module returns, not only `POST /customers/{id}/erase`'s own response.
 
 ## Errors specific to this module
 
@@ -69,3 +75,4 @@ one of the two is, so a customer record is never created with no way to ever loo
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial customer endpoint set: minimal CRM, phone lookup, purchase history. |
 | 0.2.0 | 2026-08-16 | All five endpoints built and live-verified (12/12) — Sprint 31, backlog.md M3 item 1. Online-only this sprint (no sync-push operation type yet, named explicitly); `POST /sales` does not yet accept `customer_id`. |
+| 0.3.0 | 2026-08-19 | Sprint 46: `POST /customers/{id}/erase` built (privacy.md §4's already-designed anonymise-not-delete resolution, found unimplemented during Sprint 43's OWASP review). `deactivated_at`/`erased_at` added to every customer object's response shape — `deactivated_at` had never been exposed at all, a related gap found in the same pass. |

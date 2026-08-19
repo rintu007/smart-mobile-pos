@@ -9,8 +9,8 @@
 > to the same merge-aware logic, `customer_field_conflicts`, `GET /customers/conflicts`,
 > `POST /customers/conflicts/{id}/resolve`, and the mobile edit/conflict-resolution screens
 > (Sprint 35, backlog.md M3 item 5 — **M3's last item**).
-> **Version:** 0.4.0
-> **Last updated:** 2026-08-16
+> **Version:** 0.5.0
+> **Last updated:** 2026-08-19
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
 
@@ -207,6 +207,32 @@ Till-screen icon family (`pos_customer_conflicts_button`) mirrors the returns-ap
 Sprint 34 already established, reusing the identical swallowed-403-means-no-badge mechanism for a
 Cashier.
 
+## 1d. Sprint 46 — Customer erasure (found unbuilt during Sprint 43's OWASP checklist review)
+
+[privacy.md §4](../../12-security/privacy.md#4-deletion--reconciling-erasure-rights-with-ledger-immutability)
+fully designed the anonymise-not-delete resolution for a customer erasure request since Phase 12 —
+Sprint 43's OWASP-checklist-against-real-code review (backlog.md M4 item 8) found it had never
+actually been implemented, alongside the equally-unimplemented on-device encryption and mobile
+secure-storage gaps that document's finding M6 named. This item closes that specific gap.
+
+`POST /customers/{id}/erase`, **Owner only** — one level stricter than `DELETE`'s Manager+Owner
+gate, since this is a real data-governance/legal-compliance action a shop's Owner should decide, not
+an ordinary back-office judgment call like deactivation. No request body: the target id travels via
+the URL, and there is nothing else to supply — an erasure request either anonymises the row or is an
+idempotent replay of one already done, no partial form exists.
+
+Server: `name`/`phone` overwritten with `null`, a new `erased_at` timestamp column set, and
+`deactivated_at` set too if it wasn't already (§2's own new bullet explains why). The response shape
+for every customer object (not only this endpoint's own) gains `deactivated_at`/`erased_at` — a
+related, previously-unexposed gap found in the same pass: this API had never surfaced deactivation
+status at all, despite `DELETE /customers/{id}` setting it since Sprint 31.
+
+**Mobile UI is explicitly out of scope this sprint** — no screen exists anywhere in this product for
+an Owner to *initiate* an erasure request; the realistic V1 flow is a customer's request reaching the
+Owner outside the app entirely (a phone call, a message) and the Owner acting on it via a future
+admin surface. Building that surface is real, separate, undiscussed scope — this item closes the
+*server-side capability* privacy.md §4 already designed, not a new UI feature.
+
 ## 2. Business rules
 
 - **A customer record needs at least one of `name`/`phone`** — `CUSTOMER_IDENTIFIER_REQUIRED`
@@ -239,6 +265,14 @@ Cashier.
   isolation" stance already established for ordinary `PATCH`.
 - **Resolving a conflict accepts only one of the two recorded candidate values** — no free-text
   override, matching the worked example's own "a single tap to pick one."
+- **Erasure anonymises, never deletes (Sprint 46, §1d).** `POST /customers/{id}/erase` overwrites
+  `name`/`phone` with `null` and sets `erased_at`; the row's own `id` survives so historical
+  `sales.customer_id` FKs stay valid, per [privacy.md §4](../../12-security/privacy.md#4-deletion--reconciling-erasure-rights-with-ledger-immutability).
+  Deliberately bypasses `assertHasIdentifier` (§2's own "at least one of name/phone" rule) — an
+  erased customer legitimately has neither, the one documented exception to that rule. Also sets
+  `deactivated_at` if not already set (an erased customer has no identifying data left for any real
+  workflow to search, add to a sale, or show in the picker by). Idempotent, same shape as
+  deactivation.
 
 ## 3. Database tables and relationships
 
@@ -248,7 +282,8 @@ New table: `customers`, matching schema-server.md's documented shape exactly: `i
 column list doesn't name it explicitly — every other Client-editable, PATCH-capable Tier 1 table
 (`shop_settings`) already carries one, and [backlog.md M3 item 5](../../17-sprints/backlog.md#4-m3--fully-decomposed-2026-08-16-now-that-m2-has-reached-this-point)'s
 conflict-resolution merge policy needs it to exist as a real column later — adding it now avoids a
-second migration purely to bolt it on.
+second migration purely to bolt it on. `erased_at` (nullable, Sprint 46, §1d) added later — the
+explicit state marker §2's own erasure bullet explains.
 
 Index: `(tenant_id, phone) WHERE deactivated_at IS NULL` (unique) — the return-by-phone lookup
 (FR-062) and inline checkout search (FR-052), and the actual mechanism behind §2's uniqueness rule.
@@ -280,6 +315,7 @@ conflicts queue. RLS: tenant-scoped, standard template.
 | `GET /api/v1/customers` | **Built this sprint.** Any authenticated role. Filter: `phone` (exact match). Cursor-paginated on `(updated_at, id)`, matching `products`'s own convention. Excludes deactivated customers (§2). |
 | `PATCH /api/v1/customers/{id}` | **Upgraded Sprint 35 (§1c) — breaking contract change, no prior mobile caller existed.** Cashier, Manager, Owner. Merge-aware: `base_updated_at`, `base_name`, `base_phone`, `name`, `phone` (all required — §5). Per-field 3-way merge against the concurrently-current row; a genuine same-field conflict is not applied, recorded in `customer_field_conflicts` instead, response still `200` (the fields that weren't in conflict still applied). |
 | `DELETE /api/v1/customers/{id}` | **Built this sprint.** Manager, Owner only. Soft delete (§2), idempotent. |
+| `POST /api/v1/customers/{id}/erase` | **Built Sprint 46 (§1d).** Owner only. Anonymises `name`/`phone` to `null` (row/id survive), sets `erased_at` and `deactivated_at` (if unset). Idempotent. |
 | `GET /api/v1/customers/{id}/purchase-history` | **Built this sprint.** Any authenticated role. Cursor-paginated `sales` for this customer, `status = 'completed'` only (§2), ordered `(completed_at, id)` desc. |
 | `POST /api/v1/sales` | **Extended Sprint 32.** `customer_id` accepted as an optional field, per §1a. When supplied, must resolve to a real `customers` row under the caller's tenant (`NOT_FOUND` otherwise) — deactivated customers are still valid targets (§2's soft-delete stance: a deactivated customer can still complete a sale in progress, only future *lookup* excludes them). |
 | `POST /api/v1/sync/push` (`customer.create`) | **Built Sprint 32** — §1a. Dispatches to the same `customersService.createCustomer` `POST /customers` already calls, per sync-api.md §1. |
@@ -289,11 +325,14 @@ conflicts queue. RLS: tenant-scoped, standard template.
 
 Route files: `customers/route.ts` (POST, GET — a static top-level file, no dynamic sibling risk),
 `customers/[id]/route.ts` (PATCH, DELETE), `customers/[id]/purchase-history/route.ts`,
-`customers/conflicts/route.ts` (GET), `customers/conflicts/[id]/resolve/route.ts` (POST) — the
-`conflicts/` pair are static siblings of `customers/[id]/route.ts`, not nested under it, applying
-Sprint 23/24's own static-vs-dynamic routing lesson proactively from the start (the same lesson
-`POST /users/invite` learned the hard way — a literal `conflicts` segment must never fall through to
-`[id]`'s own dynamic match).
+`customers/[id]/erase/route.ts` (POST, §1d), `customers/conflicts/route.ts` (GET),
+`customers/conflicts/[id]/resolve/route.ts` (POST) — the `conflicts/` pair are static siblings of
+`customers/[id]/route.ts`, not nested under it, applying Sprint 23/24's own static-vs-dynamic routing
+lesson proactively from the start (the same lesson `POST /users/invite` learned the hard way — a
+literal `conflicts` segment must never fall through to `[id]`'s own dynamic match); `erase/` *is*
+nested under `[id]/`, the same unambiguous shape `returns/[id]/approve/route.ts` already uses (a
+static child of a dynamic segment carries no collision risk, unlike two static top-level siblings
+of a dynamic one).
 
 ## 5. Validation rules (client and server)
 
@@ -520,3 +559,4 @@ this document's existing rows don't already cover.
 | 0.2.0 | 2026-08-16 | Built and live-verified (12/12). Found and fixed a real bug live: a Zod `.refine()` for "at least one of name/phone" always returned the generic `VALIDATION_FAILED` instead of the documented `CUSTOMER_IDENTIFIER_REQUIRED` — removed in favour of the service-layer check that already existed, §5. Permission matrix's missing edit/deactivate rows corrected in the same PR (§11). |
 | 0.3.0 | 2026-08-16 | §1a added — written to drive Sprint 32 (M3 item 2, Customers mobile): `customer.create` sync-push (reusing `product.create`'s exact shape), `POST /sales` accepting an optional `customer_id`, and the mobile UI itself — `CustomerPickerSheet` (a bottom sheet, per FR-050's own "without leaving the sale screen" wording taken literally) plus full `/customers`/`/customers/:id` routes for browsing. Reads stay direct-fetch-and-cache (Categories/Units' own shape), not a new sync-pull cursor — named as a deliberate, disciplined scope boundary. |
 | 0.4.0 | 2026-08-16 | §1c added — written to drive Sprint 35 (M3 item 5, **M3's last item**): the conflict-resolution field-merge policy live end to end. Found a real design gap while writing this spec: `base_updated_at` alone can't support the field-level 3-way merge conflict-resolution.md §3 describes, since the server has no field-level edit history — resolved by having the client send each field's own base value alongside its new value, a genuine, dated contract change to `PATCH /customers/{id}` (no prior mobile caller existed to break). New `customer_field_conflicts` table, `GET /customers/conflicts`/`POST /customers/conflicts/{id}/resolve` (Manager/Owner, online-only), `customer.update` as the sync engine's first `.update` operation type of any kind. Mobile gains its first customer-edit screen and a conflict-resolution screen, both reusing the badge/no-role-awareness patterns Sprint 34 already established for Returns. |
+| 0.5.0 | 2026-08-19 | §1d added — written to drive Sprint 46: customer erasure, found unimplemented during Sprint 43's OWASP checklist review (M6) despite `privacy.md §4` fully designing it since Phase 12. `POST /customers/{id}/erase` (Owner only), `erased_at` column, `deactivated_at`/`erased_at` now exposed on every customer response (a related, previously-unexposed gap found in the same pass). Mobile UI explicitly out of scope — no admin surface exists yet for an Owner to initiate a request. |
