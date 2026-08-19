@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 13 — Offline Synchronisation
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-31
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-19
 > **Owner:** CTO / Principal Flutter Engineer
 > **Approved by:** _pending_
 
@@ -19,8 +19,8 @@ resolved here: [Finding 1](../06-workflows/offline-workflows.md#finding-1--offli
 
 | Scenario | Expected behaviour |
 | --- | --- |
-| **App killed mid-sync** | The in-flight batch's operations remain at `Syncing` in `outbound_queue` (durably persisted, per [outbound-queue.md §1](outbound-queue.md#1-durability)). On next launch, the Sync Engine treats any `Syncing` row found at startup as ambiguous and resends it — safe by [idempotency.md](idempotency.md), never duplicated. |
-| **Device rebooted with a full queue** | No different from an app kill, from the queue's perspective — durability is at the database-file level, unaffected by a reboot. The Sync Engine resumes draining on next launch/connectivity, per its normal trigger conditions ([sync-architecture.md §4](sync-architecture.md#4-what-opportunistic-not-scheduled-means-concretely)). |
+| **App killed mid-sync** | **Corrected, Sprint 50** (test-plan.md §3's own row now Built, not Deferred): the in-flight batch's operations are durably persisted in `outbound_queue` (per [outbound-queue.md §1](outbound-queue.md#1-durability)), but not at a distinct `Syncing` status — `SyncRepository` never writes one (see [state-machines.md](../06-workflows/state-machines.md#sync-item)'s matching correction); a row selected for the current attempt simply stays `Queued`/`FailedRetrying` until a real server result is known. On next launch, the Sync Engine's normal queued/failed-retrying selection picks the row up exactly as it would have on the first attempt — no separate "detect a stale Syncing row" step needed — and resends it, safe by the server's own id-keyed upsert ([idempotency.md](idempotency.md)), never duplicated. Proven directly: `apps/mobile/test/core/sync/sync_repository_test.dart`'s "a push call interrupted mid-flight" group. |
+| **Device rebooted with a full queue** | No different from an app kill, from the queue's perspective — durability is at the database-file level, unaffected by a reboot. Same corrected mechanism and same test coverage as the row above. |
 | **Connectivity lost mid-batch** | Operations not yet acknowledged return to `FailedRetrying` ([state-machines.md](../06-workflows/state-machines.md#sync-item)); operations already acknowledged before the connection dropped stay `Synced` — the per-operation result shape in [sync-api.md §3](../11-api/sync-api.md#3-partial-failure-semantics--every-operation-gets-its-own-verdict) means a partial batch response (if any was received before the drop) is applied per-operation, not discarded wholesale. |
 | **Server rejects one item in a batch** | The rejected operation moves to `Rejected` (terminal) or stays queued for retry, per [outbound-queue.md §5](outbound-queue.md#5-poison-message-handling)'s two-condition split; every other operation in the same batch is unaffected, per [sync-api.md §3](../11-api/sync-api.md#3-partial-failure-semantics--every-operation-gets-its-own-verdict). |
 | **Device clock wrong by hours or days** | No financial or ordering impact — proven in [clock-and-ordering.md §4](clock-and-ordering.md#4-what-this-means-for-a-device-with-a-badly-wrong-clock--the-failure-scenario-itself); the only visible symptom is a cosmetically wrong local timestamp in a list/receipt preview until the next sync corrects the on-screen display context. |
@@ -94,3 +94,4 @@ framing that Realtime is a latency optimisation, never a correctness dependency.
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-31 | All 10 named failure scenarios given defined behaviour; Finding 1 resolved via sync_rejections-backed Owner review; storage-full resolved with a 3-tier response ending in an honest warning, never silent loss; Realtime-outage fallback confirmed closed by the existing background-timer trigger. |
+| 0.2.0 | 2026-08-19 | Sprint 50 — "App killed mid-sync"/"Device rebooted with a full queue" rows corrected: the mobile client never writes a distinct `Syncing` status (found while writing the first test to actually exercise an interrupted push), so the real recovery mechanism is simpler than originally described — an interrupted row is left untouched and naturally re-selected next cycle, not detected as a distinct stale state. Both rows now have real, direct test coverage (`sync_repository_test.dart`), closing 2 of the 9 previously-unverified failure scenarios named in test-plan.md §3/release-checklist.md §2. |

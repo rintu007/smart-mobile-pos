@@ -138,6 +138,72 @@ void main() {
     expect(sentIds, isNot(contains('op-3')));
   });
 
+  // Sprint 50 (docs/13-offline-sync/failure-scenarios.md §1, test-plan.md §3) — "App killed
+  // mid-sync" and "Device rebooted with a full queue" are the same scenario from the queue's
+  // perspective (failure-scenarios.md's own words), both mobile-only, both testable without any
+  // new infrastructure: neither needs a live server, a fault-injecting proxy, or a physical
+  // device — only proving that an interrupted push leaves the queue in a state the next sync
+  // cycle recovers from correctly.
+  group('a push call interrupted mid-flight (failure-scenarios.md §1)', () {
+    test('leaves the row untouched, and it is safely resent on the next sync cycle', () async {
+      await enqueue(clientOperationId: 'op-1', entityType: 'sale.create');
+
+      final repoThatDies = SyncRepository(
+        db,
+        (operations) async => throw Exception('connection severed mid-attempt'),
+        ({cursor}) async => const SyncPullPage(products: [], nextCursor: null),
+      );
+
+      await expectLater(repoThatDies.syncNow(), throwsException);
+
+      // Found while writing this test: `_pushQueuedOperations` never writes a transitional
+      // 'syncing' status before calling `_pushOperations` — despite state-machines.md's Sync
+      // Item diagram specifying a Queued -> Syncing transition "connectivity available, attempt
+      // begins." An interrupted push simply leaves the row exactly as it was; there is no
+      // separate "stale Syncing row" to detect on relaunch. See the dated correction in
+      // state-machines.md and failure-scenarios.md §1 for the real mechanism this proves.
+      final untouchedRow = await queueRow('op-1');
+      expect(untouchedRow.status, 'queued');
+      expect(untouchedRow.attemptCount, 0);
+
+      // The next sync cycle — the mobile equivalent of "app relaunched" or "device rebooted" —
+      // is a fresh `SyncRepository` reading from the same durable table; it selects this row
+      // exactly as it would have on the very first attempt, no different handling required.
+      var sentIds = <String>[];
+      final repoAfterRestart = SyncRepository(
+        db,
+        (operations) async {
+          sentIds = operations.map((op) => op.clientOperationId).toList();
+          return SyncPushResponse([
+            SyncPushOperationResult(clientOperationId: 'op-1', status: 'accepted'),
+          ]);
+        },
+        ({cursor}) async => const SyncPullPage(products: [], nextCursor: null),
+      );
+
+      await repoAfterRestart.syncNow();
+
+      expect(sentIds, ['op-1']);
+      expect((await queueRow('op-1')).status, 'synced');
+    });
+
+    test('a failed_retrying row interrupted again is still safely resent, attemptCount unchanged', () async {
+      await enqueue(clientOperationId: 'op-1', entityType: 'sale.create', status: 'failed_retrying', attemptCount: 2);
+
+      final repoThatDiesAgain = SyncRepository(
+        db,
+        (operations) async => throw Exception('connection severed mid-attempt'),
+        ({cursor}) async => const SyncPullPage(products: [], nextCursor: null),
+      );
+
+      await expectLater(repoThatDiesAgain.syncNow(), throwsException);
+
+      final untouchedRow = await queueRow('op-1');
+      expect(untouchedRow.status, 'failed_retrying');
+      expect(untouchedRow.attemptCount, 2);
+    });
+  });
+
   test('does not call push at all when nothing is queued', () async {
     var pushCalled = false;
     final repo = SyncRepository(

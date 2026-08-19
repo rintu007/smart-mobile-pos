@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.47.0
+> **Version:** 0.48.0
 > **Last updated:** 2026-08-19
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
@@ -314,6 +314,19 @@ failure scenarios were re-confirmed unchanged rather than silently assumed. Hone
 unchanged in direction but smaller in scope: this product is still not pilot-ready today, now three
 unresolved rows instead of four. No code changes.
 
+**Cross-cutting fix, [Sprint 50](sprint-50.md) (not a numbered item, not a re-opening of item 6):**
+2 of the 9 unverified offline failure scenarios named in test-plan.md §3 — "App killed mid-sync,"
+"Device rebooted with a full queue" — turned out to be fully testable with existing `flutter test`
+infrastructure, no new tooling needed, once actually attempted rather than assumed to need the same
+infra as the genuinely-deferred rows. Found and corrected a real doc/code gap while writing the
+test: the mobile client's `SyncRepository` never writes the `Syncing` transitional status
+state-machines.md's own Sync Item diagram specifies — the safety guarantee still holds, via a
+simpler real mechanism (an interrupted row is left untouched and naturally resent next cycle,
+server-side idempotent upsert making the resend safe), corrected across state-machines.md,
+failure-scenarios.md, test-plan.md, and the `outbound_queue` table's own docstring. Narrows, but
+does not flip, `release-checklist.md`'s failure-scenarios row (5 of 10 scenarios now genuinely
+unverified, down from 9).
+
 ## 6. Ordering rule, restated
 
 Every dependency column above traces directly to
@@ -372,3 +385,4 @@ specifically.
 | 0.45.0 | 2026-08-19 | Cross-cutting fix, Sprint 47 (not a numbered M4 item): mobile secure token storage built (`SecureLocalStorage`, `flutter_secure_storage`-backed), closing item 8's finding M1 — the session had been sitting in plaintext `SharedPreferences` on Android despite `flutter_secure_storage` already being a dependency. No migration from the old plaintext value. Found and fixed a deprecated `flutter_secure_storage` config option via `flutter analyze`. 244/244 mobile tests (239 pre-existing + 5 new), `flutter analyze` clean. |
 | 0.46.0 | 2026-08-19 | Cross-cutting fix, Sprint 48 (not a numbered M4 item): on-device database encryption built (SQLCipher via `package:sqlite3` 3.x's native-hooks mechanism, `AppDatabase.encrypted`), closing item 8's finding M9 — the local database had been plain, unencrypted SQLite despite `data-protection.md §3` deciding on SQLCipher since Phase 12. Found the anticipated `sqlcipher_flutter_libs` plugin is now a no-op stub; the real integration is a `pubspec.yaml` hook declaration instead. A legacy plaintext database file is reset once on first launch after upgrade rather than migrated, unlike Sprints 46/47's trivially-reset data. Verified against a real Android debug build (`libsqlcipher.so` confirmed bundled) and a dedicated unkeyed-read-fails test. 252/252 mobile tests (244 pre-existing + 8 new), `flutter analyze` clean. |
 | 0.47.0 | 2026-08-19 | Cross-cutting closeout, Sprint 49 (not a numbered M4 item): `release-checklist.md §2` re-checked against Sprints 45–48's real results. Nightly-suite row flips to satisfied — `nightly.yml` confirmed genuinely fired on its own `schedule` trigger and passed, via `gh run list`, not assumed. OWASP row's stale "rate limiting unimplemented" wording corrected to the narrower, accurate sign-in-specific architectural gap now that general rate limiting is built (Sprint 45). RLS and the 9 unverified failure scenarios re-confirmed unchanged. Bottom line: still not pilot-ready today, now three unresolved rows instead of four. No code changes. |
+| 0.48.0 | 2026-08-19 | Cross-cutting fix, Sprint 50 (not a numbered M4 item, not a re-opening of item 6): "App killed mid-sync"/"Device rebooted with a full queue" failure scenarios built with existing `flutter test` infrastructure alone. Found and corrected a real doc/code gap: the mobile client never writes the `Syncing` transitional status state-machines.md specifies — corrected there, in failure-scenarios.md, test-plan.md, and the `outbound_queue` table's docstring. Narrows (does not flip) release-checklist.md's failure-scenarios row: 5 of 10 scenarios remain genuinely unverified, down from 9. 254/254 mobile tests (252 pre-existing + 2 new), `flutter analyze` clean. |

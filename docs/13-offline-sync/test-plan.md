@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 13 — Offline Synchronisation
-> **Version:** 0.2.0
+> **Version:** 0.3.0
 > **Last updated:** 2026-08-19
 > **Owner:** CTO / Principal Flutter Engineer
 > **Approved by:** _pending_
@@ -50,8 +50,8 @@ different test venues, only discovered while actually building the suite against
 | --- | --- | --- |
 | Server rejects one item in a batch | Server — a real Postgres/`pushOperations` integration test, no new infra | **Built**, `apps/web/integration-tests/sync-failure-scenarios.test.ts` |
 | Connectivity lost mid-batch | Server half: identical to idempotent-replay's "ambiguous-acknowledgement" case (§1) — already-committed operations stay committed on a retry. Client half (scheduling the retry itself after a real severed connection): mobile SyncEngine, needs a live server + fault-injecting proxy in front of it | Server half **built** (§1); client half **deferred**, needs infra not yet built |
-| App killed mid-sync | Mobile-only (`outbound_queue`/Drift, app-process lifecycle) | **Deferred** — no server code path exists to test |
-| Device rebooted with a full queue | Mobile-only, same reasoning | **Deferred** |
+| App killed mid-sync | Mobile-only (`outbound_queue`/Drift, app-process lifecycle) | **Built, Sprint 50.** No server code path involved — a `SyncRepository` test simulating a push call that throws mid-flight, proving the row is left untouched and safely resent by a fresh repository instance on the next cycle, the mobile equivalent of "app relaunched." Found and corrected a real doc/code gap while writing it: the client never persists a distinct `Syncing` status (state-machines.md's own dated correction). |
+| Device rebooted with a full queue | Mobile-only, same reasoning | **Built, Sprint 50** — same test, same reasoning failure-scenarios.md §1 itself already gives for treating these two rows identically. |
 | Schema version mismatch after an update | Mobile-only (Drift's own versioned-migration mechanism) | **Deferred** — not a sync-engine adversarial case at all |
 | Storage full | Mobile-only (on-device disk pressure), no server involvement whatsoever | **Deferred** |
 | Token expired while queued | Needs a real Supabase Auth (GoTrue) JWT issuance/expiry — the full local Supabase CLI stack Sprint 40 already named and deferred for the Realtime extension, for the same reason | **Deferred**, same infra gap as Sprint 40's Realtime deferral |
@@ -59,10 +59,16 @@ different test venues, only discovered while actually building the suite against
 | Same account on two devices | [failure-scenarios.md §1](failure-scenarios.md#1-the-named-scenarios) itself already resolves this as "not a failure at all" | Nothing to test |
 | Queue older than server retention | [failure-scenarios.md §1](failure-scenarios.md#1-the-named-scenarios) itself already resolves this as "not applicable... no retention job exists" | Nothing to test |
 
-The genuinely mobile-only and Supabase-stack-dependent rows are real, tracked gaps — named here, not
-silently dropped — but building a mobile `integration_test` + toxiproxy harness, or the full local
-Supabase CLI stack, is materially larger scope than backlog item 6's own 4-person-day estimate
-covers. Both are candidates for a dedicated future item, the same way Sprint 40 named the Realtime
+**Corrected, Sprint 50 (cross-cutting fix, not a re-opening of backlog item 6):** two of the
+mobile-only rows above ("App killed mid-sync," "Device rebooted with a full queue") turned out to
+be buildable with the same `flutter test`/Drift infrastructure this suite already uses — no
+`integration_test` package, toxiproxy, or physical device needed, since both scenarios are fully
+reproducible by simulating an interrupted `SyncRepository.syncNow()` call against a real in-memory
+database. The remaining mobile-only rows ("Schema version mismatch," "Storage full") and the two
+that genuinely need infrastructure this project doesn't have yet (the client half of "Connectivity
+lost mid-batch," needing a mobile `integration_test` + fault-injecting proxy; "Token expired while
+queued," needing the full local Supabase CLI stack) are still real, tracked gaps, not silently
+dropped — candidates for a dedicated future item, the same way Sprint 40 named the Realtime
 extension rather than silently building a fake stand-in for it.
 
 ## 4. Failure-injection tooling
@@ -95,3 +101,4 @@ loss or duplication) is exactly as invisible-until-it-happens as a tenant-isolat
 | --- | --- | --- |
 | 0.1.0 | 2026-07-31 | Idempotent-replay and concurrent-composition test cases specified with assertions; all 10 named failure scenarios mapped to dedicated adversarial tests; fault-injecting proxy approach specified; CI-gate status established matching Phase 12's precedent. |
 | 0.2.0 | 2026-08-19 | Sprint 41 (backlog.md M4 item 6) built §1's three idempotent-replay cases and §2's 2-device-scale rows (all 4) plus the N-device fuzzed case (nightly-only) for real, against a real Postgres connection, no toxiproxy needed for any of it — replay/order-independence are server-observable properties. §2's N-device row corrected: no `adjustment` sync-push operation type exists, fuzzed across `opening`/`sale` only. §3 reclassified by actual test venue (server / mobile-only / needs the full Supabase stack / already-proven-no-test-needed) — "one test per row" conflated three different venues; only 1 of the 10 rows was actually buildable as a server integration test this sprint. |
+| 0.3.0 | 2026-08-19 | Sprint 50 (cross-cutting fix, not a re-opening of item 6): §3's "App killed mid-sync"/"Device rebooted with a full queue" rows built — both testable with existing `flutter test` infrastructure alone, no new tooling needed, once actually attempted rather than assumed to need the same infra as the genuinely-deferred rows. Found and corrected a real doc/code gap in the same pass: the mobile client never persists the `Syncing` transitional status state-machines.md's Sync Item diagram specifies. |

@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 06 — Business Workflows
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-30
+> **Version:** 0.1.1
+> **Last updated:** 2026-08-19
 > **Owner:** Business Analyst / CTO
 > **Approved by:** _pending_
 
@@ -117,6 +117,20 @@ stateDiagram-v2
 | **FailedRetrying** | ✕ retries go directly back to Syncing, not through Queued | retry, after checking whether the operation already landed via its idempotency key ([DR-022](../03-functional-requirements/business-rules.md)) | ✕ must go through Syncing to get an ack | ✕ no-op | ✕ must go through Syncing again |
 | **Rejected** | ✕ terminal for this item | ✕ terminal | ✕ terminal | ✕ terminal | ✕ no-op — if the underlying cause is fixed, a **new** operation is queued, this one is not resurrected |
 
+**Correction, Sprint 50 (found while writing the mobile app's first test to actually exercise an
+interrupted push):** the mobile client's `SyncRepository` never writes a distinct `Syncing` row —
+the row selected for the current attempt stays `Queued`/`FailedRetrying` for the entire network
+call and is updated only once a real per-operation server result is known. This diagram's `Queued
+→ Syncing` transition is therefore not literally implemented as a separate persisted state; it
+remains accurate as the *conceptual* lifecycle (there genuinely is a period where an attempt is
+in flight), just not as a distinct database write. The safety guarantee this diagram exists to
+protect still holds, by a simpler real mechanism: an interrupted attempt leaves the row exactly as
+it was, so it is naturally re-selected and resent on the next sync cycle — no separate "detect a
+stale Syncing row" step is needed, and correctness against a duplicate resend comes from the
+server's own id-keyed upsert ([idempotency.md](../13-offline-sync/idempotency.md)), not a
+client-side pre-retry check. See [failure-scenarios.md §1](../13-offline-sync/failure-scenarios.md#1-the-named-scenarios)'s
+own matching correction and `apps/mobile/lib/core/database/tables/outbound_queue.dart`'s docstring.
+
 The `FailedRetrying → Syncing` retry **must** check the idempotency key against the server before
 assuming the prior attempt failed — an ambiguous network outcome (request sent, response lost) is
 not the same as a confirmed failure, and retrying blindly is exactly the double-submission risk
@@ -136,3 +150,4 @@ not the same as a confirmed failure, and retrying blindly is exactly the double-
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial 4 exhaustive state machines (Sale, Return, Trading Day, Sync Item); Purchase Order and Delivery deferred. |
+| 0.1.1 | 2026-08-19 | Sprint 50 — Sync Item's `Queued → Syncing` transition corrected: not a distinct persisted state in the actual mobile implementation, found while writing the first test to exercise an interrupted push. The conceptual lifecycle and safety guarantee both still hold, via a simpler real mechanism stated in the correction. |
