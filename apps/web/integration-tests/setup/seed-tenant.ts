@@ -35,6 +35,7 @@ export async function seedTenant(prisma: PrismaClient, label: string) {
     invoiceSequenceId: randomUUID(),
     userStoreRoleId: randomUUID(),
     customerFieldConflictId: randomUUID(),
+    deviceId: randomUUID(),
   };
 
   await prisma.$transaction(async (tx) => {
@@ -190,6 +191,14 @@ export async function seedTenant(prisma: PrismaClient, label: string) {
         field: "phone",
         currentSetBy: ids.userId,
         attemptedSetBy: ids.userId,
+      },
+    });
+    await tx.device.create({
+      data: {
+        id: ids.deviceId,
+        userId: ids.userId,
+        clientDeviceId: `install-${label}`,
+        createdBy: ids.userId,
       },
     });
   });

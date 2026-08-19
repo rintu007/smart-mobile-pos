@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.52.0
+> **Version:** 0.53.0
 > **Last updated:** 2026-08-20
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
@@ -369,6 +369,18 @@ answers. Storage-full is now the 6th of the 10 named failure scenarios with real
 coverage — only "Token expired while queued" remains a genuinely unverified real gap, needing the
 full local Supabase CLI stack this project doesn't have.
 
+**Cross-cutting fix, [Sprint 55](sprint-55.md) (not a numbered item — server half only, closes
+Sprint 43's OWASP finding for `authorisation-model.md §2`'s device-revocation step):** `devices`
+table, `POST /auth/register-device`/`GET /devices`/`PATCH /devices/{id}/revoke`, and
+`requireSession`'s per-request `devices.revoked_at` check via a new `X-Device-Id` header, all built
+exactly as `schema-server.md`/`authentication.md`/`identity.md` already designed. Verified against
+a real Postgres connection with the same RLS deliberate-break-and-fix rigor Sprint 40 established
+(98/98 integration checks, `devices` added to the cross-tenant isolation suite as its 20th real
+table). Found a genuine rollout risk before merging — this hard check would immediately reject
+every request from any currently-installed mobile build until it also sends the new header —
+confirmed with the founder that no live reliance on today's backend makes this safe; mobile wiring
+is deliberately deferred to a follow-up sprint, not bundled in under time pressure.
+
 ## 6. Ordering rule, restated
 
 Every dependency column above traces directly to
@@ -432,3 +444,4 @@ specifically.
 | 0.50.0 | 2026-08-20 | Cross-cutting fix, Sprint 52 (not a numbered M4 item): the client half of "Connectivity lost mid-batch" built (`sync_repository_test.dart`) — the one row test-plan.md had specifically said needed a live server + fault-injecting proxy, found not to. Third instance of the same doc-vs-code gap Sprints 50/51 found: failure-scenarios.md's "return to FailedRetrying" is not literally what the code does. Corrected. Narrows release-checklist.md's failure-scenarios row further: 3 of 10 scenarios remain genuinely unverified, down from 4. 258/258 mobile tests (256 pre-existing + 2 new), `flutter analyze` clean. |
 | 0.51.0 | 2026-08-20 | Cross-cutting fix, Sprint 53 (not a numbered M4 item, founder-confirmed to build storage-full handling): found tier 1 (proactive pruning) was never actually built — inbound-sync.md §4's stock_movements retention window (current + prior financial year) was decided but the server pull stayed unfiltered since Sprint 36 and nothing ever pruned the local cache. Both fixed: `stockMovementsRetentionCutoff` bounds the server pull (server clock); `_pruneStaleStockMovements` prunes the local cache every sync (device clock, unconditional, a deliberate simplification over the originally-implied threshold-gating). Corrected a second stale claim: "cached product images" was never a real feature. Tier 3 (disk-space detection, warning UI) remains real, separately-scoped future work. 218/218 web unit tests (215 pre-existing + 3 new), 260/260 mobile tests (258 pre-existing + 2 new), `tsc`/`eslint`/`flutter analyze` all clean. |
 | 0.52.0 | 2026-08-20 | Cross-cutting fix, Sprint 54 (not a numbered M4 item, founder-confirmed): tier 3 built — `disk_space_2`-backed free-disk-space detection (100 MB threshold, fails open on a probe error), the designed low-storage warning shown persistently on `HomeScreen`. Package chosen after checking pub.dev directly (Sprint 48's own SQLCipher diligence). Storage-full is now the 6th of 10 named failure scenarios with real coverage; only "Token expired while queued" remains. 266/266 mobile tests (260 pre-existing + 6 new), `flutter analyze` clean, real Android debug build confirmed. |
+| 0.53.0 | 2026-08-20 | Cross-cutting fix, Sprint 55 (not a numbered M4 item, server half only): device registration/revocation built — `devices` table, `POST /auth/register-device`/`GET /devices`/`PATCH /devices/{id}/revoke`, `requireSession`'s per-request check via a new `X-Device-Id` header. Closes Sprint 43's OWASP finding for `authorisation-model.md §2`. Verified against a real Postgres connection (98/98 integration checks including the RLS deliberate-break-and-fix cycle; `devices` is the isolation suite's 20th table). Found a real rollout risk before merging (would reject every currently-installed mobile build's requests) — confirmed with the founder that no live reliance makes this safe now; mobile wiring deferred to a follow-up sprint. 227/227 web unit tests (218 pre-existing + 9 new), `tsc`/`eslint` clean. |

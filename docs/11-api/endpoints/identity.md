@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 11 — API Design
-> **Version:** 0.3.1
-> **Last updated:** 2026-08-14
+> **Version:** 0.4.0
+> **Last updated:** 2026-08-20
 > **Owner:** Principal Next.js Engineer
 > **Approved by:** _pending_
 
@@ -107,6 +107,12 @@ identity that already fully exists in this system — not a later linking step.
 
 ## Devices
 
+**Built, Sprint 55** — Sprint 43's OWASP checklist review flagged this whole section as a real,
+unaddressed gap (`authorisation-model.md §2`'s step 2 had no `devices` table to check against).
+Built exactly as already designed here, plus one previously-unspecified detail resolved while
+implementing: `client_device_id` is presented on every request via a new `X-Device-Id` header
+(`authentication.md §4`'s own dated correction).
+
 | Method & path | Permission | Offline | Idempotent | Notes |
 | --- | --- | --- | --- | --- |
 | `POST /auth/register-device` | Any authenticated user (self only) | No — this is the connectivity-establishing call itself | Creation mechanism (`client_device_id` is itself the natural dedup key — a second call with the same `client_device_id` updates `last_seen_at` rather than creating a duplicate row) | See [authentication.md §2](../authentication.md#2-issuance-flow). |
@@ -143,3 +149,4 @@ implemented and live-verified as Manager+Owner.
 | 0.2.0 | 2026-08-01 | Added the Onboarding section (`POST /api/v1/onboarding`) — a genuine gap found at Phase 18 implementation time: nothing in this phase previously specified how the very first tenant/store/user rows are created, only the sign-in flow for an identity that already has them. |
 | 0.3.0 | 2026-08-14 | Sprint 23: `GET/POST/PATCH/DELETE /users*` and `GET /audit-log` all built and live-verified. Onboarding now also creates the initial `owner` role row. `POST /users/invite`'s mechanism corrected — no separate "pending record" state, Supabase Admin's `inviteUserByEmail` creates the real identity synchronously. Audit log's Permission cell corrected from "Owner" to "Manager, Owner" (a stale Phase-11 cell, inconsistent with permission-matrix.md/audit-model.md's own already-established rule). Added `EMAIL_ALREADY_REGISTERED`. |
 | 0.3.1 | 2026-08-14 | Sprint 25: onboarding now also creates a default `shop_settings` row (backlog.md M2 item 1). Response shape confirmed unchanged — a real BigInt-serialization bug found live during this sprint's own implementation was fixed by keeping the existing response shape, not by adding the new row to it. |
+| 0.4.0 | 2026-08-20 | Sprint 55: `POST /auth/register-device`, `GET /devices`, `PATCH /devices/{id}/revoke` built and verified against a real Postgres connection (RLS deliberate-break-and-fix cycle, 98/98 integration checks). Closes Sprint 43's OWASP finding for `authorisation-model.md §2`'s device-revocation step. |

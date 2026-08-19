@@ -15,12 +15,14 @@ import { seedTenant, type SeededTenant } from "./setup/seed-tenant";
  * who obtained direct Postgres access somehow would, never going through `apps/web/src`'s own
  * service-layer code at all.
  *
- * **19 of the 22 tables tenant-isolation.md §2 lists are covered here** — the 19 that actually
- * exist in the built schema (`product_variants`/`batches`/`idempotency_keys`/`sync_rejections`/
- * `devices` don't exist yet, a separate, already-named gap; schema.prisma's own header comment).
- * Two real tables tenant-isolation.md's own checklist never listed (`invoice_sequences`,
- * `customer_field_conflicts`, added Sprint 24/35 after that doc was written) are included here —
- * found and corrected in the same pass, per this project's own established practice.
+ * **20 of the 22 originally-listed tables are covered here** — `product_variants`/`batches`/
+ * `idempotency_keys`/`sync_rejections` don't exist in the built schema at all (V2+/V4 stubs, or
+ * never built; schema.prisma's own header comment). `devices` was the fifth, until Sprint 55 built
+ * it — added here in the same pass, the same "parent-join" shape as `sale_line_items`/
+ * `sale_payments`/`return_line_items`, just via `users` instead of `sales`/`returns`. Two real
+ * tables the original checklist never listed (`invoice_sequences`, `customer_field_conflicts`,
+ * added Sprint 24/35 after that doc was written) are included here too — found and corrected in
+ * the same pass, per this project's own established practice.
  *
  * **Store-level second-dimension scoping (tenancy-model.md §4's "overlay" category) is
  * deliberately not tested here** — no such second RLS policy dimension exists in any of
@@ -70,6 +72,10 @@ const TABLES: TableSpec[] = [
     idColumn: "id",
     idFrom: (t) => t.returnLineItemId,
   },
+  // Sprint 55 — `devices` (docs/07-database/schema-server.md) joins via `user_id` to `users`
+  // rather than `sale_id`/`return_id` to `sales`/`returns`, but the test shape below doesn't care
+  // which parent a row joins through, only that RLS enforces one — no new category needed.
+  { table: "devices", category: "parent-join", idColumn: "id", idFrom: (t) => t.deviceId },
 ];
 
 let prisma: PrismaClient;

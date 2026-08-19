@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 11 — API Design
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-30
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-20
 > **Owner:** Principal Next.js Engineer / CTO
 > **Approved by:** _pending_
 
@@ -73,6 +73,18 @@ API request therefore performs a lightweight lookup — `devices.revoked_at IS N
 device's next API call is rejected with `DEVICE_REVOKED` (see
 [error-catalogue.md](error-catalogue.md)) regardless of how much time is left on its access token.
 
+**Built, Sprint 55 — the exact "presented" mechanism, left unspecified here, is now decided:** a
+custom `X-Device-Id` request header, sent alongside `Authorization: Bearer <token>` on every API
+call the mobile client makes. This is the first custom header this codebase has ever needed — the
+alternative (a Custom Access Token Hook claim, matching how `tenant_id` is injected) was considered
+and rejected: `client_device_id` isn't known at token-mint time for a *newly registered* device on
+its very first sign-in (register-device is itself the call that creates the row, necessarily after
+the token already exists), so it can't be embedded as a JWT claim the same way `tenant_id` is.
+`core/auth/session.ts`'s `requireSession` reads this header and rejects with `DEVICE_REVOKED` if
+it's missing entirely, not just if the device it names is revoked — a missing header and a genuine
+revocation are treated identically, since the mobile client's own response to either is the same
+(force a local sign-out, §5).
+
 **This check is the API path's specific defence; it does not extend to Realtime.** Per
 [system-context.md](../04-srs/system-context.md)'s standing TB-2 finding (Realtime relies on RLS
 alone, with no API-layer backup), a revoked device's direct Realtime subscription remains
@@ -101,3 +113,4 @@ model and the revocation guarantee, which are the parts a later phase cannot saf
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial token model: Custom Access Token Hook for tenant_id injection, refresh rotation, per-request device revocation check, explicit TB-2 Realtime exposure-window acknowledgement. |
+| 0.2.0 | 2026-08-20 | Sprint 55 — device registration/revocation built (`POST /auth/register-device`, `GET /devices`, `PATCH /devices/{id}/revoke`, `requireSession`'s per-request check), closing the OWASP review's other flagged authorisation-model.md §2 gap. §4's previously-unspecified "how `client_device_id` is presented" resolved as a new `X-Device-Id` header — a Custom Access Token Hook claim was considered and rejected, since a newly-registered device's id isn't known at token-mint time. |

@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 12 — Security Design
-> **Version:** 0.1.1
-> **Last updated:** 2026-08-19
+> **Version:** 0.1.2
+> **Last updated:** 2026-08-20
 > **Owner:** Security Engineer / CTO
 > **Approved by:** _pending_
 
@@ -50,6 +50,13 @@ one-device-per-user would be actively wrong for this product's real usage patter
 
 ## 5. Revocation — the security guarantee, restated precisely
 
+**Built, Sprint 55** — this section described the intended guarantee since this phase was written;
+Sprint 43's OWASP review found it had never actually been implemented (`authorisation-model.md
+§2`'s step 2, `core/auth/session.ts`'s own docstring said so plainly). Both halves now exist:
+`POST /api/v1/auth/register-device`/`GET /api/v1/devices`/`PATCH /api/v1/devices/{id}/revoke`, and
+`requireSession` checking `devices.revoked_at` on every request via a new `X-Device-Id` header
+(authentication.md §4's own dated correction covers the header choice, previously unspecified).
+
 Per this phase's exit criterion, **a lost or stolen device can have its sessions revoked
 server-side.** The precise guarantee: within one API request round-trip after an Owner revokes a
 device ([authentication.md §5](../11-api/authentication.md#5-revocation-flow)), that device's next
@@ -81,3 +88,4 @@ standalone scope for a future sprint, not fixed in this pass.
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Token lifetimes justified, reuse detection and multi-device stance stated, revocation guarantee precisely scoped (hard for API, bounded-not-instant for Realtime), lockout-vs-rate-limit trade-off decided. |
 | 0.1.1 | 2026-08-19 | §6 corrected (Sprint 43, backlog.md M4 item 8): rate limiting is a design claim, not yet implemented anywhere in code — flagged as a real gap, not fixed this pass. |
+| 0.1.2 | 2026-08-20 | §5 — device revocation built (Sprint 55), closing the OWASP review's other flagged gap from `authorisation-model.md §2` step 2. Confirmed against a real Postgres connection with the RLS suite's own deliberate-break-and-fix cycle, not just unit tests. |
