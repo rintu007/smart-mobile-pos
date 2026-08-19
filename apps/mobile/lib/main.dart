@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/router.dart';
 import 'app/theme.dart';
+import 'core/auth/secure_local_storage.dart';
 import 'core/config/env.dart';
 
 Future<void> main() async {
@@ -14,6 +15,11 @@ Future<void> main() async {
   await Supabase.initialize(
     url: Env.supabaseUrl,
     publishableKey: Env.supabaseAnonKey,
+    // Sprint 47 (docs/12-security/owasp-checklist.md M1) — without this, supabase_flutter falls
+    // back to its own SharedPreferencesLocalStorage default, plaintext on Android.
+    authOptions: FlutterAuthClientOptions(
+      localStorage: SecureLocalStorage(),
+    ),
   );
   runApp(const ProviderScope(child: SmartPosXApp()));
 }
