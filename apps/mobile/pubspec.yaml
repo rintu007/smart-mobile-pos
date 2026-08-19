@@ -60,6 +60,12 @@ dependencies:
   uuid: ^4.6.0
   esc_pos_utils_plus: ^2.0.4
   print_bluetooth_thermal: ^1.2.2
+  # Sprint 54 (docs/13-offline-sync/failure-scenarios.md §3, tier 3) — free-disk-space detection
+  # for the low-storage warning. Chosen over the original `disk_space` and its `disk_space_plus`
+  # fork after checking pub.dev directly: `disk_space_plus` was last published 14 months ago,
+  # `disk_space_2` 26 days ago with more platforms and a cleaner static API — verified current,
+  # not assumed from name recognition alone, the same diligence Sprint 48 applied to SQLCipher.
+  disk_space_2: ^1.0.13
 
 dev_dependencies:
   flutter_test:

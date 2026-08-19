@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 13 — Offline Synchronisation
-> **Version:** 0.5.0
+> **Version:** 0.6.0
 > **Last updated:** 2026-08-20
 > **Owner:** CTO / Principal Flutter Engineer
 > **Approved by:** _pending_
@@ -86,9 +86,17 @@ undesigned. **Resolved here, tiered:**
    space now."* — surfaced persistently (not a dismiss-and-forget toast) via
    [sync-ui.md](sync-ui.md), rather than the alternative of a sale silently failing to persist with
    no visible cause. A warned, informed Cashier who can still technically lose a sale to a genuinely
-   full disk is a materially better outcome than a silent, undetected loss. **Still not built** —
-   real disk-space detection and the warning UI itself remain separately-scoped future work, named
-   here rather than folded into Sprint 53 alongside the (unrelated, already-buildable) pruning fix.
+   full disk is a materially better outcome than a silent, undetected loss. **Built, Sprint 54** —
+   `core/storage/device_storage_probe.dart` (the `disk_space_2` package, chosen over the original,
+   14-months-stale `disk_space`/`disk_space_plus` after checking pub.dev directly), a
+   `criticallyLowStorageThresholdMb` of 100 MB (a deliberately conservative, round, dated decision —
+   this app writes only small text/JSON rows, no media), fails open on a probe error (a false
+   alarm shown to every Cashier is judged worse than one delayed real warning), and the exact
+   warning copy above rendered persistently on `HomeScreen` — no dismiss action, matching "not a
+   dismiss-and-forget toast" literally. `sync-ui.md` itself was never extended with this banner
+   (that document describes the sync-status UI specifically, not app-wide device-health banners) —
+   named here as a real, minor documentation gap rather than silently left implying a UI home that
+   doesn't reflect it.
 
 ## 4. Resolving the Realtime-outage fallback
 
@@ -111,3 +119,4 @@ framing that Realtime is a latency optimisation, never a correctness dependency.
 | 0.3.0 | 2026-08-20 | Sprint 51 — "Schema version mismatch after an update" row corrected: writing this project's first migration test found the migration itself could fail outright for a real upgrade path (a table created in one `onUpgrade` step, altered in a later one — any device jumping both at once hit an unhandled duplicate-column error, permanently losing access to its own local database). Fixed; full account in schema-local.md. Closes a 3rd of the 9 previously-unverified failure scenarios. |
 | 0.4.0 | 2026-08-20 | Sprint 52 — "Connectivity lost mid-batch" row corrected: the client half doesn't need a live server/fault-injecting proxy after all — it's the same "the doc describes an explicit state transition the code doesn't actually take" gap found twice already this run of sprints. An unacknowledged operation is simply left untouched (not moved to `FailedRetrying`), proven directly with a fake partial push response. Closes a 4th of the 9 previously-unverified failure scenarios. |
 | 0.5.0 | 2026-08-20 | Sprint 53 — §3's storage-full tier 1 (proactive pruning) built: `stock_movements` is now genuinely bounded to the current + prior financial year, both server-side (the pull) and locally (a new prune step). Corrected two stale claims in the same pass: pruning was never actually threshold-gated (now deliberately unconditional, decoupled from tier 3), and "cached product images" was never a real feature to prune in the first place. Tier 3 (disk-space detection + warning UI) remains real, separately-scoped future work. |
+| 0.6.0 | 2026-08-20 | Sprint 54 — §3's storage-full tier 3 built: `disk_space_2`-backed low-storage detection (100 MB threshold, fails open on a probe error) and the exact designed warning, shown persistently on `HomeScreen`. Storage-full is now the 6th of the 10 named failure scenarios with real automated verification (unit + widget tests); only "Token expired while queued" remains a genuinely unverified real gap. |
