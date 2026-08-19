@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 12 — Security Design
-> **Version:** 0.4.0
+> **Version:** 0.5.0
 > **Last updated:** 2026-08-19
 > **Owner:** Security Engineer / CTO
 > **Approved by:** _pending_
@@ -78,7 +78,7 @@ production risk — flagged for the founder rather than silently deferred.
 
 | # | Category | This project's mitigation | Verified status |
 | --- | --- | --- | --- |
-| M1 | Improper Credential Usage | Tokens in platform secure storage only, never shared preferences/plain files | **GAP, not fixed this pass.** `flutter_secure_storage` is a `pubspec.yaml` dependency but is **never imported or used anywhere** in `apps/mobile/lib` — confirmed by grep. `Supabase.initialize()` (`main.dart`) passes no custom `localStorage`, so the session/JWT falls back to `supabase_flutter`'s default `SharedPreferences`-backed storage — plaintext on Android, not Keychain/Keystore-backed. Wiring `flutter_secure_storage` in is real, bounded mobile work, but changes how existing installs store their session — needs a considered migration, not a same-pass patch. |
+| M1 | Improper Credential Usage | Tokens in platform secure storage only, never shared preferences/plain files | **Fixed, Sprint 47.** `flutter_secure_storage` was a `pubspec.yaml` dependency but was never imported or used anywhere in `apps/mobile/lib` — `Supabase.initialize()` now passes a `SecureLocalStorage` (`core/auth/secure_local_storage.dart`) as its `localStorage`, so the session/JWT is Keystore/Keychain-backed, not `SharedPreferences`-plaintext. No migration from the old plaintext value — a dated decision, since no real installed base exists yet to migrate. |
 | M2 | Inadequate Supply Chain Security | Free/open-source package selections made deliberately | **CONFIRMED** (informational spot check — `pubspec.yaml`/`package.json` dependencies are all actively-maintained, mainstream packages). |
 | M3 | Insecure Authentication/Authorisation | Same as A01/A07 — one model, not a separate mobile-specific one | **CONFIRMED**, same caveats as A01/A07 (mobile calls the identical Bearer-token endpoints as every other client; no separate/weaker path exists). |
 | M4 | Insufficient Input/Output Validation | [input-validation.md](input-validation.md) — server-authoritative, client validation is UX-only | **CONFIRMED** (spot check — 14 of 15 `apps/web/src/modules/*` directories have a Zod `schema.ts`). |
@@ -87,25 +87,24 @@ production risk — flagged for the founder rather than silently deferred.
 | M7 | Insufficient Binary Protections | Assumed hostile by design — no business logic or secret ever lives client-side | **CONFIRMED.** `apps/mobile/lib/core/config/env.dart` only ever embeds the Supabase anon key and API base URL (both public-by-design); no service-role key or other secret found anywhere in `apps/mobile/lib`. |
 | M8 | Security Misconfiguration | Same as A05 | **GAP, not fixed this pass.** `apps/mobile/android/app/build.gradle.kts` signs the **release** build with the debug keystore (`// TODO: Add your own signing config for the release build. // Signing with the debug keys for now`) — a real, concrete misconfiguration, but fixing it needs a real, founder-owned production keystore and its credentials, which this session cannot generate — the same category of founder-blocked action as MTS-01's printer hardware. No ProGuard/R8 minification configured either, informational rather than a hard finding. |
 | M9 | Insecure Data Storage | [data-protection.md §3](data-protection.md#3-on-device-storage-encryption) — SQLCipher-encrypted local database | **GAP, not fixed this pass.** No SQLCipher package exists in `pubspec.yaml` at all; `core/database/database.dart`'s `driftDatabase(name: 'smart_pos_x')` is a plain, unencrypted SQLite file. Combined with M1, a lost/stolen/rooted device exposes both the session token and the full local sales/customer database in plaintext. Real mobile engineering work (SQLCipher's Drift integration, a migration path for already-installed unencrypted databases) — not a same-pass patch. |
-| M10 | Insufficient Cryptography | Platform-standard TLS and platform Keystore/Keychain-backed key storage — no custom cryptographic implementation | **PARTIAL.** Confirmed: no homegrown crypto anywhere (grep for `encrypt`/`decrypt`/`AES`/`crypto\.` across both apps, zero hits) — that half of the claim holds. The other half ("Keystore/Keychain-backed key storage") is undermined by M1/M9 above; nothing is actually stored that way yet. |
+| M10 | Insufficient Cryptography | Platform-standard TLS and platform Keystore/Keychain-backed key storage — no custom cryptographic implementation | **PARTIAL, improved Sprint 47.** Confirmed: no homegrown crypto anywhere (grep for `encrypt`/`decrypt`/`AES`/`crypto\.` across both apps, zero hits) — that half of the claim holds. The session token is now genuinely Keystore/Keychain-backed (M1, fixed). M9's SQLCipher database key is not — still real, bounded future work. |
 
 ## What this checklist confirms, and what it doesn't
 
 **11 of 20 categories are genuinely CONFIRMED** against real code (A03, A04, A06, A08, A10, M2, M3,
-M4, M5, M7, and the no-homegrown-crypto half of M10). **4 real gaps have now been fixed** (security
+M4, M5, M7, and the no-homegrown-crypto half of M10). **5 real gaps have now been fixed** (security
 headers and the DR-025 audit-log coverage gap, Sprint 43; mutating/read/sync-push rate limiting,
-Sprint 45; customer-erasure anonymisation, Sprint 46). **6 real gaps remain, named and not silently
-deferred**:
+Sprint 45; customer-erasure anonymisation, Sprint 46; mobile secure token storage, Sprint 47).
+**5 real gaps remain, named and not silently deferred**:
 
 1. **RLS's likely-inert defence-in-depth layer** — carries genuine production risk, needs founder
    input before any fix is attempted.
 2. **Sign-in rate limiting** — architecturally unreachable from this codebase (found Sprint 45),
    needs a Supabase-side configuration check, not code.
-3. **Mobile secure token storage** (M1) — real, bounded future engineering.
-4. **On-device database encryption** (M9) — real, bounded future engineering.
-5. **Alerting/monitoring infrastructure** (A09) — unbuilt, consistent with `incident-response.md`'s
+3. **On-device database encryption** (M9) — real, bounded future engineering.
+4. **Alerting/monitoring infrastructure** (A09) — unbuilt, consistent with `incident-response.md`'s
    own already-stated Phase 18 deferral.
-6. **Android release signing** (M8) — founder-owned action this session cannot perform (needs real
+5. **Android release signing** (M8) — founder-owned action this session cannot perform (needs real
    production signing credentials).
 
 This table is a snapshot of 2026-08-19 — it does not replace the actual verification work still to
@@ -120,3 +119,4 @@ still holds).
 | 0.2.0 | 2026-08-19 | Sprint 43 (backlog.md M4 item 8) — every row re-verified against the real, running code, not the design docs cited as evidence. Found RLS is very likely inert for all real production traffic (no `FORCE ROW LEVEL SECURITY` anywhere, no code ever sets `request.jwt.claims` on the app's own connection) — flagged as the single most significant finding, deliberately not fixed pending founder confirmation of the real production database role, since a wrong fix risks a full outage. Found rate limiting is entirely unimplemented despite being claimed. Found and fixed a real DR-025 audit-log coverage gap (3 of 4 stock-movement types, plus settings changes, had no paired audit_log entry at all) across five repository functions, verified against a real database. Found and fixed missing `next.config.ts` security headers. Found four further real, named gaps not fixed this pass: mobile session storage falls back to plaintext `SharedPreferences` (M1), the local Drift database is unencrypted (M9), customer-erasure anonymisation is fully designed but has zero implementation (M6), and the Android release build signs with the debug keystore (M8, founder-blocked on real signing credentials). No alerting/monitoring infrastructure exists (A09), consistent with incident-response.md's own already-stated Phase 18 deferral. |
 | 0.3.0 | 2026-08-19 | Sprint 45 — the rate-limiting gap from Sprint 43's finding #2 closed for the 3 classes actually reachable from this codebase (mutating/read/sync-push, a Postgres-backed fixed-window counter in `requirePermission`). Found while building it: the sign-in rate-limit class cannot be implemented in this codebase at all, since sign-in is a direct client call to Supabase Auth that never reaches an `apps/web` Route Handler — a real, previously-unnamed architectural gap, not just an unimplemented one. A07's row and the summary counts corrected accordingly. |
 | 0.4.0 | 2026-08-19 | Sprint 46 — M6's customer-erasure gap closed: `POST /customers/{id}/erase` (Owner only), verified against a real database including FK-integrity survival. M6's row and the summary counts corrected accordingly. |
+| 0.5.0 | 2026-08-19 | Sprint 47 — M1's mobile secure-token-storage gap closed: `Supabase.initialize` now uses a `SecureLocalStorage` backed by `flutter_secure_storage`, replacing the plaintext `SharedPreferences` default. M10's row updated to reflect the session half is now genuinely Keystore/Keychain-backed (the SQLCipher-key half, M9, is not). M1's row and the summary counts corrected accordingly. |
