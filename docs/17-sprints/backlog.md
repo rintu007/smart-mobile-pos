@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.50.0
+> **Version:** 0.51.0
 > **Last updated:** 2026-08-20
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
@@ -347,6 +347,18 @@ what the code does — an unacknowledged row is simply left untouched, deliverin
 safety guarantee via a simpler mechanism. Corrected. Narrows `release-checklist.md`'s
 failure-scenarios row again (3 of 10 scenarios now genuinely unverified, down from 4).
 
+**Cross-cutting fix, [Sprint 53](sprint-53.md) (not a numbered item — founder-confirmed to build
+storage-full handling, which led straight to a foundational gap first):** `inbound-sync.md §4`'s
+`stock_movements` retention window (current + prior financial year) had been decided but never
+implemented on either side — the server pull was unfiltered since Sprint 36, and nothing ever
+pruned an already-pulled row locally. Both fixed: `stockMovementsRetentionCutoff` (server clock)
+bounds the pull; `SyncRepository._pruneStaleStockMovements` (device clock, unconditional) prunes
+the local cache after every sync. Two stale claims in `failure-scenarios.md §3` corrected in the
+same pass: pruning was never threshold-gated in practice (now deliberately unconditional, decoupled
+from the still-unbuilt disk-space-detection tier), and "cached product images" was never a real
+feature to prune. This is the fourth consecutive sprint where checking a design claim directly
+against the code found a real gap.
+
 ## 6. Ordering rule, restated
 
 Every dependency column above traces directly to
@@ -408,3 +420,4 @@ specifically.
 | 0.48.0 | 2026-08-19 | Cross-cutting fix, Sprint 50 (not a numbered M4 item, not a re-opening of item 6): "App killed mid-sync"/"Device rebooted with a full queue" failure scenarios built with existing `flutter test` infrastructure alone. Found and corrected a real doc/code gap: the mobile client never writes the `Syncing` transitional status state-machines.md specifies — corrected there, in failure-scenarios.md, test-plan.md, and the `outbound_queue` table's docstring. Narrows (does not flip) release-checklist.md's failure-scenarios row: 5 of 10 scenarios remain genuinely unverified, down from 9. 254/254 mobile tests (252 pre-existing + 2 new), `flutter analyze` clean. |
 | 0.49.0 | 2026-08-20 | Cross-cutting fix, Sprint 51 (not a numbered M4 item): "Schema version mismatch after an update" built the same way (`migration_test.dart`, this project's first migration test) — and found a real, previously-undetected production bug: a table created in one `onUpgrade` step and altered in a later one broke with an unhandled duplicate-column error for any device jumping both steps in one update, permanently losing access to its own local database. Fixed with a guarded `addColumn`; standing rule for future migrations documented in schema-local.md. Narrows release-checklist.md's failure-scenarios row further: 4 of 10 scenarios remain genuinely unverified, down from 5. 256/256 mobile tests (254 pre-existing + 2 new), `flutter analyze` clean. |
 | 0.50.0 | 2026-08-20 | Cross-cutting fix, Sprint 52 (not a numbered M4 item): the client half of "Connectivity lost mid-batch" built (`sync_repository_test.dart`) — the one row test-plan.md had specifically said needed a live server + fault-injecting proxy, found not to. Third instance of the same doc-vs-code gap Sprints 50/51 found: failure-scenarios.md's "return to FailedRetrying" is not literally what the code does. Corrected. Narrows release-checklist.md's failure-scenarios row further: 3 of 10 scenarios remain genuinely unverified, down from 4. 258/258 mobile tests (256 pre-existing + 2 new), `flutter analyze` clean. |
+| 0.51.0 | 2026-08-20 | Cross-cutting fix, Sprint 53 (not a numbered M4 item, founder-confirmed to build storage-full handling): found tier 1 (proactive pruning) was never actually built — inbound-sync.md §4's stock_movements retention window (current + prior financial year) was decided but the server pull stayed unfiltered since Sprint 36 and nothing ever pruned the local cache. Both fixed: `stockMovementsRetentionCutoff` bounds the server pull (server clock); `_pruneStaleStockMovements` prunes the local cache every sync (device clock, unconditional, a deliberate simplification over the originally-implied threshold-gating). Corrected a second stale claim: "cached product images" was never a real feature. Tier 3 (disk-space detection, warning UI) remains real, separately-scoped future work. 218/218 web unit tests (215 pre-existing + 3 new), 260/260 mobile tests (258 pre-existing + 2 new), `tsc`/`eslint`/`flutter analyze` all clean. |

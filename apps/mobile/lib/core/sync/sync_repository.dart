@@ -206,7 +206,28 @@ class SyncRepository {
     }
 
     await _writeCursor('stock_movements', cursor);
+    await _pruneStaleStockMovements();
     return count;
+  }
+
+  /// Sprint 53 (docs/13-offline-sync/inbound-sync.md §4) — "a rolling window covering the current
+  /// and prior financial year," decided there but never actually applied until now: the server
+  /// pull above was unfiltered (fixed the same sprint, `sync/service.ts`'s own
+  /// `stockMovementsRetentionCutoff`), and nothing ever removed a row locally once synced, so a
+  /// device's local cache grew without bound regardless of what the server sent. Uses the
+  /// device's own clock, not the server's — a deliberate, low-stakes choice: this only decides how
+  /// much *already-synced* local history a device keeps around, never anything financially or
+  /// causally significant (clock-and-ordering.md §2's "device time is fine for local-only
+  /// purposes" rule), and matches this codebase's own existing
+  /// `InvoiceNumberGenerator._financialYearFor` convention (local time, not UTC — a deliberate,
+  /// pre-existing divergence from the server's UTC convention that this sprint doesn't touch).
+  Future<void> _pruneStaleStockMovements() async {
+    final now = DateTime.now();
+    final currentFyStartYear = now.month >= 4 ? now.year : now.year - 1;
+    final cutoff = DateTime(currentFyStartYear - 1, 4, 1);
+    await (_db.delete(
+      _db.stockMovements,
+    )..where((t) => t.createdAt.isSmallerThanValue(cutoff))).go();
   }
 
   /// Sprint 36 (backlog.md M4 item 1). Same resumable-cursor shape as

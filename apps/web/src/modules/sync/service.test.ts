@@ -7,7 +7,14 @@ import * as stockMovementsRepository from "@/modules/stock-movements/repository"
 import * as settingsRepository from "@/modules/settings/repository";
 import { ApiError } from "@/core/errors/api-error";
 import * as repository from "./repository";
-import { pushOperations, pullProducts, pullStockMovements, pullSales, pullShopSettings } from "./service";
+import {
+  pushOperations,
+  pullProducts,
+  pullStockMovements,
+  pullSales,
+  pullShopSettings,
+  stockMovementsRetentionCutoff,
+} from "./service";
 import type { SyncPushRequest } from "./schema";
 
 vi.mock("@/modules/products/service");
@@ -543,6 +550,26 @@ describe("pullProducts", () => {
   });
 });
 
+describe("stockMovementsRetentionCutoff", () => {
+  it("returns the prior financial year's start for a date well within the current FY", () => {
+    expect(stockMovementsRetentionCutoff(new Date("2026-08-15T00:00:00Z"))).toEqual(
+      new Date("2025-04-01T00:00:00Z"),
+    );
+  });
+
+  it("rolls over correctly for a date just before the April 1 FY boundary", () => {
+    expect(stockMovementsRetentionCutoff(new Date("2026-03-31T23:59:59Z"))).toEqual(
+      new Date("2024-04-01T00:00:00Z"),
+    );
+  });
+
+  it("rolls over correctly for a date exactly at the April 1 FY boundary", () => {
+    expect(stockMovementsRetentionCutoff(new Date("2026-04-01T00:00:00Z"))).toEqual(
+      new Date("2025-04-01T00:00:00Z"),
+    );
+  });
+});
+
 describe("pullStockMovements", () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -594,13 +621,23 @@ describe("pullStockMovements", () => {
     expect(result.next_cursor).toBeNull();
   });
 
-  it("passes a tenant-scoped, unfiltered query through to the repository", async () => {
-    vi.mocked(stockMovementsRepository.listStockMovements).mockResolvedValue([]);
+  it(
+    "passes a tenant-scoped query bounded to the current + prior financial year (Sprint 53 — " +
+      "was unfiltered before, inbound-sync.md §4's own retention window was never actually applied)",
+    async () => {
+      vi.mocked(stockMovementsRepository.listStockMovements).mockResolvedValue([]);
+      const now = new Date("2026-08-15T00:00:00Z"); // within FY2026 (started 2026-04-01)
 
-    await pullStockMovements(tenantId, undefined, 50);
+      await pullStockMovements(tenantId, undefined, 50, now);
 
-    expect(stockMovementsRepository.listStockMovements).toHaveBeenCalledWith(tenantId, {}, null, 50);
-  });
+      expect(stockMovementsRepository.listStockMovements).toHaveBeenCalledWith(
+        tenantId,
+        { dateFrom: new Date("2025-04-01T00:00:00Z") },
+        null,
+        50,
+      );
+    },
+  );
 
   it("rejects a malformed cursor with VALIDATION_FAILED rather than crashing", async () => {
     await expect(pullStockMovements(tenantId, "not-a-real-cursor!!", 50)).rejects.toMatchObject({
