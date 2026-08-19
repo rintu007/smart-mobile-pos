@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 12 — Security Design
-> **Version:** 0.5.0
+> **Version:** 0.6.0
 > **Last updated:** 2026-08-19
 > **Owner:** Security Engineer / CTO
 > **Approved by:** _pending_
@@ -86,25 +86,24 @@ production risk — flagged for the founder rather than silently deferred.
 | M6 | Inadequate Privacy Controls | [privacy.md](privacy.md) — inventory, lawful basis, anonymise-on-erasure | **Fixed, Sprint 46.** `privacy.md §4`'s anonymise-on-erasure resolution, fully designed since Phase 12 but never implemented (confirmed by grep at the time — zero hits for `anonymi[sz]e`/`erasure`/`gdpr` across both apps), is now built: `POST /customers/{id}/erase` (Owner only), verified against a real database including FK-integrity survival. `privacy.md §2`'s "provisional, pending legal review" framing around DPDPA applicability still stands — this closes the *engineering* gap, not the separate legal-review item, which remains open and untouched. |
 | M7 | Insufficient Binary Protections | Assumed hostile by design — no business logic or secret ever lives client-side | **CONFIRMED.** `apps/mobile/lib/core/config/env.dart` only ever embeds the Supabase anon key and API base URL (both public-by-design); no service-role key or other secret found anywhere in `apps/mobile/lib`. |
 | M8 | Security Misconfiguration | Same as A05 | **GAP, not fixed this pass.** `apps/mobile/android/app/build.gradle.kts` signs the **release** build with the debug keystore (`// TODO: Add your own signing config for the release build. // Signing with the debug keys for now`) — a real, concrete misconfiguration, but fixing it needs a real, founder-owned production keystore and its credentials, which this session cannot generate — the same category of founder-blocked action as MTS-01's printer hardware. No ProGuard/R8 minification configured either, informational rather than a hard finding. |
-| M9 | Insecure Data Storage | [data-protection.md §3](data-protection.md#3-on-device-storage-encryption) — SQLCipher-encrypted local database | **GAP, not fixed this pass.** No SQLCipher package exists in `pubspec.yaml` at all; `core/database/database.dart`'s `driftDatabase(name: 'smart_pos_x')` is a plain, unencrypted SQLite file. Combined with M1, a lost/stolen/rooted device exposes both the session token and the full local sales/customer database in plaintext. Real mobile engineering work (SQLCipher's Drift integration, a migration path for already-installed unencrypted databases) — not a same-pass patch. |
-| M10 | Insufficient Cryptography | Platform-standard TLS and platform Keystore/Keychain-backed key storage — no custom cryptographic implementation | **PARTIAL, improved Sprint 47.** Confirmed: no homegrown crypto anywhere (grep for `encrypt`/`decrypt`/`AES`/`crypto\.` across both apps, zero hits) — that half of the claim holds. The session token is now genuinely Keystore/Keychain-backed (M1, fixed). M9's SQLCipher database key is not — still real, bounded future work. |
+| M9 | Insecure Data Storage | [data-protection.md §3](data-protection.md#3-on-device-storage-encryption) — SQLCipher-encrypted local database | **Fixed, Sprint 48.** The local database now opens through a SQLCipher-enabled `sqlite3` build (`pubspec.yaml`'s `hooks.user_defines`, `package:sqlite3` 3.x's native-hooks mechanism — no separate `sqlcipher_flutter_libs` plugin, which is a no-op stub post-3.x), keyed via `PRAGMA key` with a 256-bit random value from `getOrCreateDatabaseEncryptionKey`, stored the same way M1's session token is (platform secure storage). Verified live against a real `android-arm64` debug build: `libsqlcipher.so` is genuinely bundled in the APK, and a dedicated test proves data written through a keyed connection is unreadable by a connection that never supplies the key. A pre-existing plaintext database file is detected and reset once on first launch after this update rather than migrated (`legacy_database_reset.dart` — the same "no migration path, pre-pilot" call already made for M1, applied here since it's the one case that risks real local data instead of a trivial re-sign-in). |
+| M10 | Insufficient Cryptography | Platform-standard TLS and platform Keystore/Keychain-backed key storage — no custom cryptographic implementation | **CONFIRMED, Sprint 48.** Confirmed: no homegrown crypto anywhere (grep for `encrypt`/`decrypt`/`AES`/`crypto\.` across both apps, zero hits) — that half of the claim holds. Both halves of this row are now built: the session token (M1, Sprint 47) and the SQLCipher database key (M9, Sprint 48) are both genuinely Keystore/Keychain-backed. |
 
 ## What this checklist confirms, and what it doesn't
 
-**11 of 20 categories are genuinely CONFIRMED** against real code (A03, A04, A06, A08, A10, M2, M3,
-M4, M5, M7, and the no-homegrown-crypto half of M10). **5 real gaps have now been fixed** (security
-headers and the DR-025 audit-log coverage gap, Sprint 43; mutating/read/sync-push rate limiting,
-Sprint 45; customer-erasure anonymisation, Sprint 46; mobile secure token storage, Sprint 47).
-**5 real gaps remain, named and not silently deferred**:
+**12 of 20 categories are genuinely CONFIRMED** against real code (A03, A04, A06, A08, A10, M2, M3,
+M4, M5, M7, M10, plus M9). **6 real gaps have now been fixed** (security headers and the DR-025
+audit-log coverage gap, Sprint 43; mutating/read/sync-push rate limiting, Sprint 45;
+customer-erasure anonymisation, Sprint 46; mobile secure token storage, Sprint 47; on-device
+database encryption, Sprint 48). **4 real gaps remain, named and not silently deferred**:
 
 1. **RLS's likely-inert defence-in-depth layer** — carries genuine production risk, needs founder
    input before any fix is attempted.
 2. **Sign-in rate limiting** — architecturally unreachable from this codebase (found Sprint 45),
    needs a Supabase-side configuration check, not code.
-3. **On-device database encryption** (M9) — real, bounded future engineering.
-4. **Alerting/monitoring infrastructure** (A09) — unbuilt, consistent with `incident-response.md`'s
+3. **Alerting/monitoring infrastructure** (A09) — unbuilt, consistent with `incident-response.md`'s
    own already-stated Phase 18 deferral.
-5. **Android release signing** (M8) — founder-owned action this session cannot perform (needs real
+4. **Android release signing** (M8) — founder-owned action this session cannot perform (needs real
    production signing credentials).
 
 This table is a snapshot of 2026-08-19 — it does not replace the actual verification work still to
@@ -120,3 +119,4 @@ still holds).
 | 0.3.0 | 2026-08-19 | Sprint 45 — the rate-limiting gap from Sprint 43's finding #2 closed for the 3 classes actually reachable from this codebase (mutating/read/sync-push, a Postgres-backed fixed-window counter in `requirePermission`). Found while building it: the sign-in rate-limit class cannot be implemented in this codebase at all, since sign-in is a direct client call to Supabase Auth that never reaches an `apps/web` Route Handler — a real, previously-unnamed architectural gap, not just an unimplemented one. A07's row and the summary counts corrected accordingly. |
 | 0.4.0 | 2026-08-19 | Sprint 46 — M6's customer-erasure gap closed: `POST /customers/{id}/erase` (Owner only), verified against a real database including FK-integrity survival. M6's row and the summary counts corrected accordingly. |
 | 0.5.0 | 2026-08-19 | Sprint 47 — M1's mobile secure-token-storage gap closed: `Supabase.initialize` now uses a `SecureLocalStorage` backed by `flutter_secure_storage`, replacing the plaintext `SharedPreferences` default. M10's row updated to reflect the session half is now genuinely Keystore/Keychain-backed (the SQLCipher-key half, M9, is not). M1's row and the summary counts corrected accordingly. |
+| 0.6.0 | 2026-08-19 | Sprint 48 — M9's on-device database encryption gap closed: the local database now opens through a SQLCipher-enabled `sqlite3` build, keyed via `PRAGMA key` with a 256-bit random value from platform secure storage; verified against a real Android debug build (`libsqlcipher.so` genuinely bundled) and a dedicated test proving unkeyed reads fail. M10 now fully CONFIRMED (both halves built). M9's row and the summary counts corrected accordingly. |

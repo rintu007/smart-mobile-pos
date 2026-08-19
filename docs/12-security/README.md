@@ -20,7 +20,7 @@
 | [`identity-and-sessions.md`](identity-and-sessions.md) | Token lifetimes justified, reuse detection, multi-device stance, precisely-scoped revocation guarantee | 🔵 In review |
 | [`authorisation-model.md`](authorisation-model.md) | 7-step fail-closed evaluation order, 4-layer enforcement table | 🔵 In review |
 | [`tenant-isolation.md`](tenant-isolation.md) | 22-table verification checklist; cross-tenant proof extended to Realtime | 🔵 In review |
-| [`data-protection.md`](data-protection.md) | SQLCipher on-device encryption decided; encryption-vs-unsynced-data trade-off stated | 🔵 In review |
+| [`data-protection.md`](data-protection.md) | SQLCipher on-device encryption built, Sprint 48; encryption-vs-unsynced-data trade-off stated | 🔵 In review |
 | [`input-validation.md`](input-validation.md) | Reject-not-coerce policy; SQL injection/path traversal/XSS closed structurally | 🔵 In review |
 | [`audit-logging.md`](audit-logging.md) | Logged-actions enumeration, grant-level immutability, Owner-only read | 🔵 In review |
 | [`secrets-management.md`](secrets-management.md) | Secret inventory, two-mechanism build-time no-leak verification | 🔵 In review |
