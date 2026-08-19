@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 12 — Security Design
-> **Version:** 0.2.0
+> **Version:** 0.3.0
 > **Last updated:** 2026-08-19
 > **Owner:** Security Engineer / CTO
 > **Approved by:** _pending_
@@ -47,15 +47,17 @@ production risk — flagged for the founder rather than silently deferred.
    zero rows) — this needs the founder to confirm the actual `DATABASE_URL` role Supabase issued
    before any change is made, the same category of "needs information only production access has"
    as the branch-protection setting Sprint 40 also could not apply itself.
-2. **No request-throttling code exists anywhere in this repository.** `identity-and-sessions.md
-   §6`'s claim ("repeated failed sign-in attempts are throttled per-account and per-IP") and
-   `rate-limiting.md`'s own per-endpoint-class limits are entirely unimplemented — confirmed by
-   grep for `rate.?limit|throttle` across `apps/web/src`, zero hits, and no rate-limiting package in
-   `apps/web/package.json`. Nothing in this application's own code stops a brute-force or
-   credential-stuffing attempt against sign-in today; it relies entirely on whatever Supabase Auth's
-   own platform defaults provide, which this project has never separately confirmed. **Not fixed in
-   this PR** — real, standalone scope (middleware, a rate-limit store, endpoint-class-specific
-   limits), not a same-pass fix.
+2. **No request-throttling code existed anywhere in this repository — fixed Sprint 45, with one
+   real architectural limit found while building it.** `rate-limiting.md`'s mutating/read/sync-push
+   classes are now enforced inside `requirePermission` (a Postgres-backed fixed-window counter, no
+   external service — `core/rate-limit/`), verified against a real database. The **Auth class
+   (sign-in/OTP) cannot be implemented in this codebase at all** — found while trying to wire it up:
+   sign-in is a direct client call to Supabase Auth (`docs/modules/authentication/specification.md`
+   §1a), never reaching an `apps/web` Route Handler, so `identity-and-sessions.md §6`'s "repeated
+   failed sign-in attempts are throttled" claim can only ever be true via Supabase Auth's own
+   platform-side configuration — a project setting, not code this repository can add. Whether that
+   platform-level throttling is actually active has not been separately confirmed and remains a
+   real, named gap (see `rate-limiting.md`'s own Sprint 45 correction).
 
 ## OWASP Top 10 (2021)
 
@@ -67,7 +69,7 @@ production risk — flagged for the founder rather than silently deferred.
 | A04 | Insecure Design | This entire 18-phase, design-before-code methodology — a threat model ([threat-model.md](threat-model.md)) produced before implementation, not retrofitted | **CONFIRMED** (process claim, verified against `git log`'s own chronology — the repository's first commit already references pre-existing phase docs it implements). |
 | A05 | Security Misconfiguration | Platform defaults relied on deliberately; RLS enabled unconditionally with no bypass flag ([tenancy-model.md §3](../07-database/tenancy-model.md#3-rls-is-never-bypassed-including-by-the-apis-own-connection)) | **PARTIAL, one piece Fixed Sprint 43.** No committed secrets (`.env.example` only). No CORS config exists (mobile uses Bearer tokens, not cross-origin cookies — largely moot). `next.config.ts` had zero explicit security headers — **fixed this sprint** (`poweredByHeader: false`, `X-Content-Type-Options`/`X-Frame-Options`/`Referrer-Policy`). "RLS has no bypass flag" is technically true (no role has `BYPASSRLS` set) but, per finding #1, misses the table-owner exemption, which has the same practical effect — tracked there, not double-counted here. |
 | A06 | Vulnerable and Outdated Components | Dependency currency is a Phase 14/18 operational concern | **CONFIRMED.** `.github/dependabot.yml` (Sprint 42) is real and complete — npm/pub/github-actions, weekly. |
-| A07 | Identification and Authentication Failures | [identity-and-sessions.md](identity-and-sessions.md) — short access-token TTL, refresh rotation with reuse detection, rate-limited sign-in, no separate account-lockout DoS vector | **GAP on rate-limiting specifically** — see finding #2 above, not fixed this pass. Token TTL/rotation/reuse-detection are real but entirely a Supabase Auth platform default this codebase neither implements nor separately tests — a legitimate architectural choice (identity-and-sessions.md §2 says so explicitly), just not something this repo's own code proves. |
+| A07 | Identification and Authentication Failures | [identity-and-sessions.md](identity-and-sessions.md) — short access-token TTL, refresh rotation with reuse detection, rate-limited sign-in, no separate account-lockout DoS vector | **PARTIAL, mostly Fixed Sprint 45.** Mutating/read/sync-push rate limiting now built (finding #2 above) — see [rate-limiting.md](../11-api/rate-limiting.md). Sign-in specifically remains a **GAP**: architecturally unreachable from this codebase (sign-in never touches `apps/web`), needs Supabase's own platform-side configuration, unconfirmed. Token TTL/rotation/reuse-detection are real but entirely a Supabase Auth platform default this codebase neither implements nor separately tests — a legitimate architectural choice (identity-and-sessions.md §2 says so explicitly), just not something this repo's own code proves. |
 | A08 | Software and Data Integrity Failures | Idempotency keys prevent duplicate/replayed mutations; CI-gated migrations | **CONFIRMED.** Idempotency verified in depth across Sprints 40/41/43 (including a real concurrency-race fix). `fast-integration`'s `prisma migrate deploy` step genuinely runs before any test. |
 | A09 | Security Logging and Monitoring Failures | [audit-logging.md](audit-logging.md) — immutable, enumerated coverage of money/stock/permission actions; [incident-response.md §1](incident-response.md#1-detection)'s concrete alerting signals | **Two real gaps, both found this sprint; the audit-coverage one Fixed Sprint 43.** DR-025 ("every stock movement... produces exactly one corresponding audit-log entry") was unimplemented for 3 of 4 `stock_movements` types (`opening`/`sale`/`return` — only the summary `sale.completed`/`return.completed` entries existed, not one per movement row) and entirely unimplemented for the 4th (`adjustment`) and for settings changes — despite `audit-logging.md`'s own Phase 14 v0.1.1 correction already specifying the per-row requirement, and `implementation-log.md`'s Sprint 12 entry already naming stock-movement audit coverage as "a real, still-open gap" that was never subsequently closed. **Fixed this sprint** across `products/repository.ts`, `pos/repository.ts`, `returns/repository.ts` (both its auto-approval and manual-approval paths), `stock-movements/repository.ts`, and `settings/repository.ts` — verified for real against a real database (`integration-tests/audit-log-coverage.test.ts`). Alerting/monitoring infrastructure (Sentry or equivalent) is a **GAP, not fixed** — zero code or config exists anywhere; `incident-response.md` itself already says this is a future Phase 18 item, not a claim of present coverage. |
 | A10 | Server-Side Request Forgery (SSRF) | No V1 feature accepts a server-fetched URL from client input | **CONFIRMED.** Zero `fetch(` calls anywhere in `apps/web/src` outside tests. |
@@ -90,16 +92,25 @@ production risk — flagged for the founder rather than silently deferred.
 ## What this checklist confirms, and what it doesn't
 
 **11 of 20 categories are genuinely CONFIRMED** against real code (A03, A04, A06, A08, A10, M2, M3,
-M4, M5, M7, and the no-homegrown-crypto half of M10). **4 real gaps were fixed in this same PR**
-(security headers, and the full DR-025 stock-movement/settings audit-log coverage gap). **6 real
-gaps remain, named and not silently deferred**: two carry genuine production risk and need founder
-input before any fix is attempted (RLS's likely-inert defence-in-depth layer, and the complete
-absence of rate limiting); four are real, bounded engineering work for a future sprint (mobile secure
-token storage, on-device database encryption, customer-data anonymisation-on-erasure, and
-alerting/monitoring infrastructure); one is a founder-owned action this session cannot perform
-(a real production Android signing keystore). This table is a snapshot of 2026-08-19 — it does not
-replace the actual verification work still to come (a real penetration test before commercial
-launch, per the original v0.1.0 framing, which still holds).
+M4, M5, M7, and the no-homegrown-crypto half of M10). **3 real gaps have now been fixed** (security
+headers and the DR-025 audit-log coverage gap, Sprint 43; mutating/read/sync-push rate limiting,
+Sprint 45). **7 real gaps remain, named and not silently deferred**:
+
+1. **RLS's likely-inert defence-in-depth layer** — carries genuine production risk, needs founder
+   input before any fix is attempted.
+2. **Sign-in rate limiting** — architecturally unreachable from this codebase (found Sprint 45),
+   needs a Supabase-side configuration check, not code.
+3. **Mobile secure token storage** (M1) — real, bounded future engineering.
+4. **On-device database encryption** (M9) — real, bounded future engineering.
+5. **Customer-data anonymisation-on-erasure** (M6) — real, bounded future engineering.
+6. **Alerting/monitoring infrastructure** (A09) — unbuilt, consistent with `incident-response.md`'s
+   own already-stated Phase 18 deferral.
+7. **Android release signing** (M8) — founder-owned action this session cannot perform (needs real
+   production signing credentials).
+
+This table is a snapshot of 2026-08-19 — it does not replace the actual verification work still to
+come (a real penetration test before commercial launch, per the original v0.1.0 framing, which
+still holds).
 
 ## Change Log
 
@@ -107,3 +118,4 @@ launch, per the original v0.1.0 framing, which still holds).
 | --- | --- | --- |
 | 0.1.0 | 2026-07-31 | Full OWASP Top 10 and Mobile Top 10 traceability against this phase's and Phase 11's existing controls; no new gaps found. |
 | 0.2.0 | 2026-08-19 | Sprint 43 (backlog.md M4 item 8) — every row re-verified against the real, running code, not the design docs cited as evidence. Found RLS is very likely inert for all real production traffic (no `FORCE ROW LEVEL SECURITY` anywhere, no code ever sets `request.jwt.claims` on the app's own connection) — flagged as the single most significant finding, deliberately not fixed pending founder confirmation of the real production database role, since a wrong fix risks a full outage. Found rate limiting is entirely unimplemented despite being claimed. Found and fixed a real DR-025 audit-log coverage gap (3 of 4 stock-movement types, plus settings changes, had no paired audit_log entry at all) across five repository functions, verified against a real database. Found and fixed missing `next.config.ts` security headers. Found four further real, named gaps not fixed this pass: mobile session storage falls back to plaintext `SharedPreferences` (M1), the local Drift database is unencrypted (M9), customer-erasure anonymisation is fully designed but has zero implementation (M6), and the Android release build signs with the debug keystore (M8, founder-blocked on real signing credentials). No alerting/monitoring infrastructure exists (A09), consistent with incident-response.md's own already-stated Phase 18 deferral. |
+| 0.3.0 | 2026-08-19 | Sprint 45 — the rate-limiting gap from Sprint 43's finding #2 closed for the 3 classes actually reachable from this codebase (mutating/read/sync-push, a Postgres-backed fixed-window counter in `requirePermission`). Found while building it: the sign-in rate-limit class cannot be implemented in this codebase at all, since sign-in is a direct client call to Supabase Auth that never reaches an `apps/web` Route Handler — a real, previously-unnamed architectural gap, not just an unimplemented one. A07's row and the summary counts corrected accordingly. |

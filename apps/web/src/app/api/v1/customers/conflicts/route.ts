@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/core/auth/session";
-import { ApiError } from "@/core/errors/api-error";
+import { ApiError, errorResponse } from "@/core/errors/api-error";
 import { listConflicts } from "@/modules/customers/service";
 import { listConflictsQuerySchema } from "@/modules/customers/schema";
 
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof ApiError) {
-      return NextResponse.json(error.toResponseBody(), { status: error.status });
+      return errorResponse(error);
     }
     throw error;
   }

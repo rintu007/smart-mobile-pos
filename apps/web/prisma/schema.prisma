@@ -615,3 +615,21 @@ model ReturnLineItem {
   @@index([originalSaleLineItemId])
   @@map("return_line_items")
 }
+
+/// Sprint 45 (docs/11-api/rate-limiting.md §1) — a fixed-window request counter, one row per
+/// `(scope, window)` pair. Deliberately **not** a tenant-owned table: `key` already embeds
+/// whichever scope it's protecting (`read:tenant:<id>`, `mutating:user:<id>`, `sync-push:user:<id>`)
+/// as an opaque string this table itself never interprets, so it carries no `tenant_id` column and
+/// needs no RLS policy — nothing outside `core/rate-limit/` ever queries it, and every value already
+/// baked into `key` was resolved from an authenticated session before this table is touched. Postgres
+/// (not an external service like Upstash Redis) per this project's standing free/open-source-first
+/// constraint — the same reasoning that chose Dependabot over a paid scanner and GitHub's own board
+/// automation over a third-party project-management tool.
+model RateLimitBucket {
+  key       String   @id
+  count     Int      @default(1)
+  windowEnd DateTime @map("window_end") @db.Timestamptz
+
+  @@index([windowEnd])
+  @@map("rate_limit_buckets")
+}

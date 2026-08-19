@@ -4,6 +4,7 @@ import { ApiError } from "@/core/errors/api-error";
 import * as identityService from "@/modules/identity/service";
 import * as storesService from "@/modules/stores/service";
 import * as rolesService from "@/modules/roles/service";
+import * as rateLimitService from "@/core/rate-limit/service";
 import type { Role } from "@/modules/roles/schema";
 
 // The mobile API contract (app/api/v1/*) is called with `Authorization: Bearer <token>`, never
@@ -147,11 +148,48 @@ export interface AuthorizedSession extends AuthenticatedSession {
   role: Role;
 }
 
+// Sprint 45 (docs/11-api/rate-limiting.md §1) — the endpoint classes that table actually names,
+// minus "Auth" (sign-in/OTP): the mobile client calls Supabase Auth *directly*
+// (docs/modules/authentication/specification.md §1a, "the first real Flutter screen... calls
+// Supabase Auth directly"), never through this codebase's own Route Handlers, so there is no
+// request here to rate-limit for that class — it needs Supabase Auth's own platform-side rate
+// limiting, a project-configuration concern, not code this repository can add. "Per device" in the
+// source table is scoped here to the authenticated session's own `authUserId` — no `devices` table
+// exists (tenant-isolation.md's already-named gap, restated for rate-limiting the same way Sprint
+// 41's `seed-second-user.ts` and Sprint 26's Trading Day scoping both already substituted "user"
+// for the missing device dimension).
+type RateLimitClass = "read" | "mutating" | "sync-push";
+
+const RATE_LIMITS: Record<
+  RateLimitClass,
+  { limit: number; windowSeconds: number; scope: "tenant" | "user" }
+> = {
+  read: { limit: 300, windowSeconds: 60, scope: "tenant" },
+  mutating: { limit: 60, windowSeconds: 60, scope: "user" },
+  "sync-push": { limit: 1, windowSeconds: 5, scope: "user" },
+};
+
 export async function requirePermission(
   request: NextRequest,
   allowedRoles: readonly Role[],
+  rateLimitClass?: RateLimitClass,
 ): Promise<AuthorizedSession> {
   const session = await requireSession(request);
+
+  // Defaults from the HTTP method when the caller doesn't know its own class better than that —
+  // every route handler that needs the tighter `sync-push` class passes it explicitly (only
+  // `POST /sync/push` does; `GET /sync/pull` has no class-specific limit of its own in
+  // rate-limiting.md §1 beyond the generic per-tenant read limit its `GET` method already implies).
+  const resolvedClass: RateLimitClass =
+    rateLimitClass ?? (request.method === "GET" ? "read" : "mutating");
+  const config = RATE_LIMITS[resolvedClass];
+  const scopeValue = config.scope === "tenant" ? session.tenantId : session.authUserId;
+  await rateLimitService.checkRateLimit(
+    `${resolvedClass}:${config.scope}:${scopeValue}`,
+    config.limit,
+    config.windowSeconds,
+  );
+
   const userId = await identityService.resolveUserId(session.authUserId);
   const storeId = await storesService.getPrimaryStoreId(session.tenantId);
   const role = await rolesService.resolveActiveRole(session.tenantId, userId, storeId);
