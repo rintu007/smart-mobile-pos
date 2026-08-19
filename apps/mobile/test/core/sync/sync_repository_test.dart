@@ -204,6 +204,79 @@ void main() {
     });
   });
 
+  // Sprint 52 (docs/13-offline-sync/failure-scenarios.md §1, test-plan.md §3's "Connectivity lost
+  // mid-batch" row) — the client-side half of this scenario ("a partial batch response is applied
+  // per-operation, not discarded wholesale," sync-api.md §3's own "every operation gets its own
+  // verdict" contract) was classified as needing a live server + fault-injecting proxy to test.
+  // It doesn't: the actual client-side guarantee — an operation missing from an otherwise
+  // well-formed response is left untouched, not lost or corrupted — is exercised the same way
+  // Sprint 50's interrupted-push tests were, with a fake push function returning a response that's
+  // simply missing one operation's result.
+  group('a partial batch response — connectivity lost mid-batch (failure-scenarios.md §1)', () {
+    test(
+      'an operation missing from the response is left untouched; the one present is applied',
+      () async {
+        await enqueue(clientOperationId: 'op-1', entityType: 'sale.create');
+        await enqueue(clientOperationId: 'op-2', entityType: 'sale.create');
+
+        final repo = SyncRepository(
+          db,
+          (operations) async => SyncPushResponse([
+            // Only op-1's result made it back — sync-api.md §3 promises a verdict for every
+            // submitted operation in a *complete* response, so a response missing one is exactly
+            // what a connection dropped partway through the batch looks like to the client.
+            SyncPushOperationResult(clientOperationId: 'op-1', status: 'accepted'),
+          ]),
+          ({cursor}) async => const SyncPullPage(products: [], nextCursor: null),
+        );
+
+        final summary = await repo.syncNow();
+
+        expect(summary.accepted, 1);
+        expect((await queueRow('op-1')).status, 'synced');
+
+        // Found while writing this test: failure-scenarios.md §1 describes this as "operations
+        // not yet acknowledged return to FailedRetrying" — but the real code doesn't explicitly
+        // transition anything; a row with no result in the response is simply left exactly as it
+        // was selected (`continue`, no write at all). A fresh `queued` row therefore stays
+        // `queued`, not `failed_retrying` — the same class of "the doc describes an explicit step
+        // the code doesn't actually take" gap Sprint 50/51 both found elsewhere. The practical
+        // guarantee (nothing lost, safely resent next cycle) holds regardless — see the corrected
+        // row and the second case below.
+        final untouchedRow = await queueRow('op-2');
+        expect(untouchedRow.status, 'queued');
+        expect(untouchedRow.attemptCount, 0);
+      },
+    );
+
+    test('the operation left untouched is safely resent on the very next sync cycle', () async {
+      await enqueue(clientOperationId: 'op-2', entityType: 'sale.create');
+
+      await SyncRepository(
+        db,
+        (operations) async => const SyncPushResponse([]), // op-2's result never arrives
+        ({cursor}) async => const SyncPullPage(products: [], nextCursor: null),
+      ).syncNow();
+
+      expect((await queueRow('op-2')).status, 'queued');
+
+      var sentIds = <String>[];
+      await SyncRepository(
+        db,
+        (operations) async {
+          sentIds = operations.map((op) => op.clientOperationId).toList();
+          return SyncPushResponse([
+            SyncPushOperationResult(clientOperationId: 'op-2', status: 'accepted'),
+          ]);
+        },
+        ({cursor}) async => const SyncPullPage(products: [], nextCursor: null),
+      ).syncNow();
+
+      expect(sentIds, ['op-2']);
+      expect((await queueRow('op-2')).status, 'synced');
+    });
+  });
+
   test('does not call push at all when nothing is queued', () async {
     var pushCalled = false;
     final repo = SyncRepository(
