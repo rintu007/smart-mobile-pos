@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.48.0
-> **Last updated:** 2026-08-19
+> **Version:** 0.49.0
+> **Last updated:** 2026-08-20
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
 
@@ -327,6 +327,17 @@ failure-scenarios.md, test-plan.md, and the `outbound_queue` table's own docstri
 does not flip, `release-checklist.md`'s failure-scenarios row (5 of 10 scenarios now genuinely
 unverified, down from 9).
 
+**Cross-cutting fix, [Sprint 51](sprint-51.md) (not a numbered item):** the "Schema version
+mismatch after an update" failure scenario built the same way (`migration_test.dart`) — and found a
+real, previously-undetected production bug in the process: `Migrator.createTable` builds a table
+from its *current* Dart shape, not its historical one, so a table created in one `onUpgrade` step
+and altered in a later one (`shop_settings_cache`, Sprint 37 + Sprint 39) broke with an unhandled
+duplicate-column error for any device jumping both steps in one update — permanently losing access
+to its own local database, including any unsynced sales. Fixed with a guarded `addColumn`; the
+standing rule for future migrations documented in `schema-local.md`'s new "Schema-migration safety"
+section. Narrows `release-checklist.md`'s failure-scenarios row further (4 of 10 scenarios now
+genuinely unverified, down from 5).
+
 ## 6. Ordering rule, restated
 
 Every dependency column above traces directly to
@@ -386,3 +397,4 @@ specifically.
 | 0.46.0 | 2026-08-19 | Cross-cutting fix, Sprint 48 (not a numbered M4 item): on-device database encryption built (SQLCipher via `package:sqlite3` 3.x's native-hooks mechanism, `AppDatabase.encrypted`), closing item 8's finding M9 — the local database had been plain, unencrypted SQLite despite `data-protection.md §3` deciding on SQLCipher since Phase 12. Found the anticipated `sqlcipher_flutter_libs` plugin is now a no-op stub; the real integration is a `pubspec.yaml` hook declaration instead. A legacy plaintext database file is reset once on first launch after upgrade rather than migrated, unlike Sprints 46/47's trivially-reset data. Verified against a real Android debug build (`libsqlcipher.so` confirmed bundled) and a dedicated unkeyed-read-fails test. 252/252 mobile tests (244 pre-existing + 8 new), `flutter analyze` clean. |
 | 0.47.0 | 2026-08-19 | Cross-cutting closeout, Sprint 49 (not a numbered M4 item): `release-checklist.md §2` re-checked against Sprints 45–48's real results. Nightly-suite row flips to satisfied — `nightly.yml` confirmed genuinely fired on its own `schedule` trigger and passed, via `gh run list`, not assumed. OWASP row's stale "rate limiting unimplemented" wording corrected to the narrower, accurate sign-in-specific architectural gap now that general rate limiting is built (Sprint 45). RLS and the 9 unverified failure scenarios re-confirmed unchanged. Bottom line: still not pilot-ready today, now three unresolved rows instead of four. No code changes. |
 | 0.48.0 | 2026-08-19 | Cross-cutting fix, Sprint 50 (not a numbered M4 item, not a re-opening of item 6): "App killed mid-sync"/"Device rebooted with a full queue" failure scenarios built with existing `flutter test` infrastructure alone. Found and corrected a real doc/code gap: the mobile client never writes the `Syncing` transitional status state-machines.md specifies — corrected there, in failure-scenarios.md, test-plan.md, and the `outbound_queue` table's docstring. Narrows (does not flip) release-checklist.md's failure-scenarios row: 5 of 10 scenarios remain genuinely unverified, down from 9. 254/254 mobile tests (252 pre-existing + 2 new), `flutter analyze` clean. |
+| 0.49.0 | 2026-08-20 | Cross-cutting fix, Sprint 51 (not a numbered M4 item): "Schema version mismatch after an update" built the same way (`migration_test.dart`, this project's first migration test) — and found a real, previously-undetected production bug: a table created in one `onUpgrade` step and altered in a later one broke with an unhandled duplicate-column error for any device jumping both steps in one update, permanently losing access to its own local database. Fixed with a guarded `addColumn`; standing rule for future migrations documented in schema-local.md. Narrows release-checklist.md's failure-scenarios row further: 4 of 10 scenarios remain genuinely unverified, down from 5. 256/256 mobile tests (254 pre-existing + 2 new), `flutter analyze` clean. |
