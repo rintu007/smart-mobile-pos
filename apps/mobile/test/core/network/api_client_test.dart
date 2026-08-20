@@ -51,4 +51,44 @@ void main() {
       );
     });
   });
+
+  group('isUnauthenticatedError', () {
+    test('true for a real UNAUTHENTICATED error body', () {
+      final error = errorWithBody({
+        'error': {'code': 'UNAUTHENTICATED', 'message': 'No valid session token presented.'},
+      });
+
+      expect(isUnauthenticatedError(error), isTrue);
+    });
+
+    test('false for a different error code, including the other 401 (DEVICE_REVOKED)', () {
+      final deviceRevoked = errorWithBody({
+        'error': {'code': 'DEVICE_REVOKED', 'message': 'This device has been revoked.'},
+      });
+      final permissionDenied = errorWithBody({
+        'error': {'code': 'PERMISSION_DENIED', 'message': 'Nope.'},
+      }, statusCode: 403);
+
+      expect(isUnauthenticatedError(deviceRevoked), isFalse);
+      expect(isUnauthenticatedError(permissionDenied), isFalse);
+    });
+
+    test('false when there is no response at all (e.g. a connection timeout)', () {
+      final error = DioException(
+        requestOptions: requestOptions(),
+        type: DioExceptionType.connectionTimeout,
+      );
+
+      expect(isUnauthenticatedError(error), isFalse);
+    });
+
+    test('false when the response body is not the expected shape', () {
+      expect(isUnauthenticatedError(errorWithBody('not json')), isFalse);
+      expect(isUnauthenticatedError(errorWithBody(<String, dynamic>{})), isFalse);
+      expect(
+        isUnauthenticatedError(errorWithBody({'error': 'not a map'})),
+        isFalse,
+      );
+    });
+  });
 }
