@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 14 — Testing Strategy
-> **Version:** 0.7.0
-> **Last updated:** 2026-08-20
+> **Version:** 0.8.0
+> **Last updated:** 2026-08-21
 > **Owner:** QA Lead / CTO
 > **Approved by:** _pending_
 
@@ -68,12 +68,24 @@ while queued" remains genuinely unverified (needs the full local Supabase CLI st
 does not flip — one real gap is still one unresolved row — but it is now the narrowest it has been
 across this entire run of sprints.**
 
-| Item | Source | Status, as of 2026-08-20 |
+**Flips, Sprint 57 (cross-cutting fix): "Token expired while queued" is built.** This row's own
+"needs the full Supabase CLI stack" reasoning turned out not to hold either — the fifth time in this
+document's own sprint-by-sprint history that an infra-needed excuse was checked directly and found
+not to. The real gap was that no reactive refresh-and-retry code existed in the mobile client at
+all: `docs/11-api/authentication.md §3` already implied both proactive and reactive refresh existed,
+but only the proactive half (the Supabase SDK's own background timer) did. Built the missing
+`api_client.dart` interceptor (one `refreshSession()` call, one retry, on any `401 UNAUTHENTICATED`
+— no distinct `TOKEN_EXPIRED` code was ever implementable server-side, corrected in
+`error-catalogue.md`); unit-tested the decision logic that drives it. **All 10 named failure
+scenarios now have real coverage or are resolved-by-design/not-applicable — this row flips to
+satisfied.**
+
+| Item | Source | Status, as of 2026-08-21 |
 | --- | --- | --- |
 | ☐ All PR-gated CI checks green on the release commit | [ci-pipeline.md §2](ci-pipeline.md#2-pipeline-stages--every-pull-request) | ✅ Satisfied — confirmed on every merge through Sprint 43. |
 | ☐ Nightly suite green on the release commit (or any failure explicitly triaged and accepted by the CTO, not silently ignored) | [ci-pipeline.md §3](ci-pipeline.md#3-nightly-pipeline) | ✅ **Satisfied, confirmed Sprint 49.** `nightly.yml` (Sprint 42) has now genuinely fired on its own `schedule` trigger (not just `workflow_dispatch`) and passed — verified directly against `gh run list --workflow=nightly.yml`, not assumed from the workflow file existing. Sprint 44's "not yet satisfiable" status is now stale; corrected here. |
 | ☐ Cross-tenant isolation suite green — all **19** tables (corrected from 22, tenant-isolation.md §2's Sprint 40 finding); the Realtime extension is explicitly **out of pilot-ready scope** — it needs the full local Supabase CLI stack, named and deferred, not required for a pilot cohort | [tenant-isolation.md](../12-security/tenant-isolation.md) | ✅ Satisfied for the 19 real tables (76/76, every PR since Sprint 40). Realtime extension knowingly excluded from this gate, not silently dropped — a pilot's real risk from an unrevoked Realtime subscription is bounded (≤60 min token lifetime, identity-and-sessions.md §5), judged acceptable for a small, consenting cohort. |
-| ☐ Server-testable and mobile-testable failure scenarios passing (**corrected from "all 10 offline failure scenarios passing"** — test-plan.md §3's Sprint 41 finding: only 1 of the 10 named scenarios in failure-scenarios.md §1 is a server-side, automatable case; **updated Sprints 50–54** — 5 more are mobile-testable with existing `flutter test` infrastructure, found once actually attempted; only 1 genuinely needs infrastructure this project doesn't have) | [failure-scenarios.md](../13-offline-sync/failure-scenarios.md) | ⬜ **Still not satisfied, but down to the narrowest gap this row has ever had — a real, material pilot risk, not a documentation nicety.** 6 of 10 scenarios now have real automated verification: the 1 server-testable case (`fast-integration`, every PR), "App killed mid-sync"/"Device rebooted with a full queue" (Sprint 50), "Schema version mismatch" (Sprint 51 — which found and fixed a real production bug in the process, see schema-local.md), the client half of "Connectivity lost mid-batch" (Sprint 52), and "Storage full" (Sprint 54 — real disk-space detection plus the designed warning, both unit- and widget-tested). Of the remaining 4: **2 are resolved with nothing to test** (already-not-a-failure/not-applicable, per failure-scenarios.md §1 itself), **1 is proven correct by design rather than by test** (a clock skewed by +36 hours, per clock-and-ordering.md §4), and **only 1 genuinely has zero verification on record** — a token expired mid-queue, needing the full local Supabase CLI stack. Every scenario a real pilot shop's Cashier is actually likely to hit day-to-day (a dead phone mid-shift, a reboot, an update across a schema-migrating release, a dropped connection mid-sale, a nearly-full device) now has real coverage; what remains is the one scenario needing infrastructure genuinely out of this project's current reach. |
+| ☐ Server-testable and mobile-testable failure scenarios passing (**corrected from "all 10 offline failure scenarios passing"** — test-plan.md §3's Sprint 41 finding: only 1 of the 10 named scenarios in failure-scenarios.md §1 is a server-side, automatable case; **updated Sprints 50–54** — 5 more are mobile-testable with existing `flutter test` infrastructure, found once actually attempted; **built in full, Sprint 57**) | [failure-scenarios.md](../13-offline-sync/failure-scenarios.md) | ✅ **Satisfied, Sprint 57.** All 10 named scenarios now have real coverage or are resolved-by-design/not-applicable: 7 with real automated verification (the 1 server-testable case, "App killed mid-sync"/"Device rebooted with a full queue"/Sprint 50, "Schema version mismatch"/Sprint 51, the client half of "Connectivity lost mid-batch"/Sprint 52, "Storage full"/Sprint 54, and "Token expired while queued"/Sprint 57), 2 resolved with nothing to test (already-not-a-failure/not-applicable, per failure-scenarios.md §1 itself), and 1 proven correct by design (a clock skewed by +36 hours, per clock-and-ordering.md §4). |
 | ☐ Manual test scripts MTS-01, MTS-02, MTS-03 executed and evidenced within the current release cycle | [manual-test-scripts.md](manual-test-scripts.md) | ⬜ **Not satisfied — founder-blocked.** No printer or reference low-end device owned yet (backlog.md M4 item 9, device-matrix.md §3). |
 | ☐ **A full simulated trading day, on real hardware, with a real printer, evidenced** | MTS-03 — this phase's own explicit exit criterion, satisfied by name | ⬜ Same blocker as the row above. |
 | ☐ OWASP checklist reviewed against the actual release build, **with no unresolved critical/high-severity finding** (corrected from bare "reviewed" — a review that finds and does not resolve a critical gap should not silently satisfy this gate just because the review itself happened) | [owasp-checklist.md](../12-security/owasp-checklist.md) | ⬜ **Not satisfied — narrowed, corrected Sprint 49.** The review happened (Sprint 43) and originally found two unresolved findings with real production risk. One is now scoped down to its actual remaining shape: general request rate limiting (mutating/read/sync-push) was built Sprint 45; what remains open is specifically **sign-in rate limiting**, which is architecturally unreachable from this codebase (sign-in never touches an `apps/web` Route Handler) and needs a Supabase-side platform configuration check this session cannot perform, not code. The other — **row-level security's likely-inert defence-in-depth layer** — is unchanged and still needs founder confirmation of the real production database role before any fix is attempted, since a wrong change risks a full outage. Both still need resolution — or a CTO-accepted, explicitly-documented risk exception, per this section's own §5 rule — before this box can honestly be checked. (The four other real gaps Sprint 43 named — mobile secure token storage, on-device database encryption, customer-erasure anonymisation, security alerting/monitoring — were not counted toward this row's "critical/high-severity" bar in the first place; the first three are now built anyway, Sprints 46–48.) |
@@ -81,12 +93,13 @@ across this entire run of sprints.**
 
 **Honest bottom line, stated plainly per §5's no-partial-credit rule: this product is not pilot-ready
 today** — unchanged since Sprint 44, but for a smaller and more honestly-described reason now. M4's
-8 engineering backlog items are all done, and the release gate above still has **three** unresolved
-rows (down from four since Sprint 44): the failure-scenarios row (1 of 10 named scenarios still
-genuinely unverified, down from 9 as of Sprint 54), the OWASP review's two remaining findings (RLS,
-sign-in rate limiting), and MTS execution — the last of which remains the only one that's
-founder-blocked rather than open engineering or verification work. The nightly suite's first real
-scheduled run, previously the fourth unresolved row, is now confirmed genuinely green.
+9 engineering backlog items are all done, and the release gate above still has **two** unresolved
+rows (down from three since Sprint 54, four since Sprint 44): the OWASP review's two remaining
+findings (RLS, sign-in rate limiting) and MTS execution — **both now founder-blocked or
+infra-blocked, not open engineering or verification work.** The failure-scenarios row, unresolved
+since this checklist was first written, is now fully satisfied (Sprint 57) — all 10 named scenarios
+have real coverage. The nightly suite's first real scheduled run, previously its own unresolved row,
+is also confirmed genuinely green (Sprint 49).
 
 ## 3. Commercial-launch-ready checklist — pilot-ready, plus:
 
@@ -130,3 +143,4 @@ release, consistent with [Definition of Done](../00-governance/definition-of-don
 | 0.5.0 | 2026-08-20 | Sprint 51 (cross-cutting fix) — failure-scenarios row narrowed again: "Schema version mismatch" built (`migration_test.dart`), which found and fixed a real, previously-undetected production bug (a table created in one migration step and altered in a later one broke with an unhandled duplicate-column error for any device jumping both steps in one update — see schema-local.md). Row still unresolved (4 of 10 scenarios remain genuinely unverified, down from 5). Bottom line unchanged: still not pilot-ready today, still three unresolved rows. |
 | 0.6.0 | 2026-08-20 | Sprint 52 (cross-cutting fix) — failure-scenarios row narrowed once more: the client half of "Connectivity lost mid-batch" built, found not to need the live server/fault-injecting proxy this document had specifically said it needed. Third instance of the same doc-vs-code gap Sprints 50/51 found (failure-scenarios.md's "return to FailedRetrying" is not literally what the code does). Row still unresolved (3 of 10 scenarios remain genuinely unverified, down from 4). Bottom line unchanged: still not pilot-ready today, still three unresolved rows. |
 | 0.7.0 | 2026-08-20 | Sprint 54 (cross-cutting fix, founder-confirmed to build storage-full handling) — failure-scenarios row narrowed to its smallest gap yet: "Storage full" built (`disk_space_2`-backed detection, the designed warning banner, both unit- and widget-tested). Only "Token expired while queued" remains genuinely unverified (1 of 10, down from 3) — needs the full local Supabase CLI stack. Row still unresolved, so the bottom line is unchanged: still not pilot-ready today, still three unresolved rows, one of them now down to a single named gap. |
+| 0.8.0 | 2026-08-21 | Sprint 57 (cross-cutting fix) — failure-scenarios row **flips to satisfied**: "Token expired while queued" built, found this row's own "needs the full Supabase CLI stack" claim didn't hold either (the fifth such correction in this project's history). All 10 named scenarios now have real coverage or are resolved-by-design/not-applicable. Bottom line improves for the first time in this row's history: still not pilot-ready today, but now only **two** unresolved rows (OWASP's RLS/sign-in-rate-limiting findings, MTS execution) instead of three, and both of those are now founder-blocked or infra-blocked rather than open engineering work of any kind. |

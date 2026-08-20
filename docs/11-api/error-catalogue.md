@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 11 — API Design
-> **Version:** 0.1.10
-> **Last updated:** 2026-08-20
+> **Version:** 0.1.11
+> **Last updated:** 2026-08-21
 > **Owner:** Principal Next.js Engineer
 > **Approved by:** _pending_
 
@@ -21,8 +21,7 @@ single complete list, not a duplicate source of truth — module documents link 
 | Code | HTTP | Cause | Client handling |
 | --- | --- | --- | --- |
 | `VALIDATION_FAILED` | 422 | Request body fails schema validation (missing/malformed field) | Show the field-level message from `details`; never a generic "something went wrong." |
-| `UNAUTHENTICATED` | 401 | No valid session token presented | Force sign-in. |
-| `TOKEN_EXPIRED` | 401 | Access token past expiry | Silent refresh via the refresh token ([authentication.md](authentication.md)); only surfaced to the user if refresh itself also fails. |
+| `UNAUTHENTICATED` | 401 | No valid session token presented — covers a missing token and an expired/malformed/otherwise-invalid one identically; `core/auth/session.ts` never distinguishes *why* `auth.getUser(token)` rejected a token, only that it did | The mobile client retries once after a silent `refreshSession()` call ([authentication.md §3](authentication.md#3-token-lifetimes-and-refresh)); force sign-in only if that refresh itself also fails — this is the common real-world case (an access token that expired while the device was offline), not a distinct server-side code. |
 | `DEVICE_REVOKED` | 401 | See [authentication.md §4](authentication.md#4-device-binding-and-revocation--checked-on-every-request-not-only-at-token-mint) | Force local sign-out; **never** clear the local unsynced-sales queue. |
 | `PERMISSION_DENIED` | 403 | Authenticated, but the user's role lacks this action per [permission-matrix.md](../05-personas/permission-matrix.md) | Route to the permission-denied pattern, [patterns.md §6](../10-design-system/patterns.md#6-permission-denied) — this should be rare, since [guards-and-redirects.md](../09-navigation/guards-and-redirects.md) already prevents most of these client-side; a live occurrence usually means a role changed mid-session. |
 | `NOT_FOUND` | 404 | No resource matches the given ID within the caller's tenant scope | Note: a resource belonging to a *different* tenant also returns `NOT_FOUND`, never a distinguishable "exists but not yours" — see [tenancy-model.md §5](../07-database/tenancy-model.md#5-the-proof-automated-cross-tenant-negative-test-suite)'s existence-leakage concern. |
@@ -71,3 +70,4 @@ single complete list, not a duplicate source of truth — module documents link 
 | 0.1.8 | 2026-08-14 | Sprint 27: added `DISCOUNT_REQUIRES_APPROVAL` to the module-specific index — `POST /sales`'s rejection of an over-threshold discount with no valid Manager/Owner approval (DR-012, pos/specification.md §2/§6). |
 | 0.1.9 | 2026-08-16 | Sprint 35: added `CONFLICT_RESOLUTION_VALUE_INVALID` to the module-specific index — `POST /customers/conflicts/{id}/resolve`'s rejection of a `resolved_value` matching neither of the conflict's own two candidate values (customers/specification.md §1c/§6). |
 | 0.1.10 | 2026-08-20 | Sprint 55: `DEVICE_REVOKED` (already reserved) implemented for the first time — `requireSession`'s per-request device-revocation check, `authentication.md §4`. |
+| 0.1.11 | 2026-08-21 | Sprint 57: found `TOKEN_EXPIRED` was never actually implementable as a distinct code — `core/auth/session.ts`'s JWT verification never checks *why* a token was rejected, only that it was, so every invalid-token case (missing, malformed, or expired) has always surfaced as plain `UNAUTHENTICATED`. Removed the row; its client-handling guidance (silent refresh, retry once) folded into `UNAUTHENTICATED`'s own row instead, now that the mobile client actually implements it. |

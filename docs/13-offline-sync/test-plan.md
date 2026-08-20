@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 13 — Offline Synchronisation
-> **Version:** 0.6.0
-> **Last updated:** 2026-08-20
+> **Version:** 0.7.0
+> **Last updated:** 2026-08-21
 > **Owner:** CTO / Principal Flutter Engineer
 > **Approved by:** _pending_
 
@@ -54,7 +54,7 @@ different test venues, only discovered while actually building the suite against
 | Device rebooted with a full queue | Mobile-only, same reasoning | **Built, Sprint 50** — same test, same reasoning failure-scenarios.md §1 itself already gives for treating these two rows identically. |
 | Schema version mismatch after an update | Mobile-only (Drift's own versioned-migration mechanism) | **Built, Sprint 51 (`migration_test.dart`) — and found a real, previously-undetected production bug in the same pass.** `Migrator.createTable` builds a table from its *current* Dart shape, not the shape it had when that call was originally written — a table created in one `onUpgrade` step and altered in a later one (`shop_settings_cache`, Sprint 37 creation + Sprint 39 column add) breaks with an unhandled duplicate-column error for any device jumping both steps in one update, permanently locking it out of its own local database. Fixed with a guarded `addColumn`; see [schema-local.md](../07-database/schema-local.md#schema-migration-safety--a-real-bug-found-sprint-51-not-a-hypothetical-rule) for the full account and the standing rule for future migrations. |
 | Storage full | Mobile-only (on-device disk pressure), no server involvement whatsoever | **Built, Sprint 54** — `core/storage/device_storage_probe.dart` (unit-tested: threshold boundary, fail-open on a probe error) plus `HomeScreen`'s low-storage banner (widget-tested: shown/hidden per the probe's result) |
-| Token expired while queued | Needs a real Supabase Auth (GoTrue) JWT issuance/expiry — the full local Supabase CLI stack Sprint 40 already named and deferred for the Realtime extension, for the same reason | **Deferred**, same infra gap as Sprint 40's Realtime deferral |
+| Token expired while queued | Mobile-only — the decision logic (which error shape triggers a refresh-and-retry) is a pure function, unit-tested the same way `isDeviceRevokedError` already is; the actual GoTrue refresh call itself is trusted SDK behaviour, not re-proven against a real Auth server | **Built, Sprint 57** — `apps/mobile/test/core/network/api_client_test.dart`'s `isUnauthenticatedError` group |
 | Device clock wrong by hours or days | Already proven by design in [clock-and-ordering.md §4](clock-and-ordering.md#4-what-this-means-for-a-device-with-a-badly-wrong-clock--the-failure-scenario-itself) | No code test needed |
 | Same account on two devices | [failure-scenarios.md §1](failure-scenarios.md#1-the-named-scenarios) itself already resolves this as "not a failure at all" | Nothing to test |
 | Queue older than server retention | [failure-scenarios.md §1](failure-scenarios.md#1-the-named-scenarios) itself already resolves this as "not applicable... no retention job exists" | Nothing to test |
@@ -84,6 +84,19 @@ named scenarios, only **"Token expired while queued"** remains a genuinely unver
 needing the full local Supabase CLI stack (GoTrue token issuance/expiry) this project doesn't have
 — named, not silently dropped, the same way Sprint 40 named the Realtime extension rather than
 building a fake stand-in for it.
+
+**Corrected once more, Sprint 57:** this row's own "needs the full Supabase CLI stack" reasoning
+turned out not to hold either, the fifth time in a row this document's own infra-needed claims have
+been checked directly and found not to (Sprints 50/51/52/54's rows, now this one). Investigation
+found the real gap wasn't "no way to test this without a live Auth server" — it was that no
+reactive refresh-and-retry code existed in the mobile client *at all*: `docs/11-api/authentication.md
+§3`'s own text already claimed the client refreshes "not only reactively on a 401," but nothing did.
+Built the missing piece (`api_client.dart`'s `onError` interceptor: one `refreshSession()` call, one
+retry, on any `401 UNAUTHENTICATED`) and unit-tested the decision logic that drives it
+(`isUnauthenticatedError`), the same seam-tested-not-mocked shape `isDeviceRevokedError` already
+established for this exact file. The actual GoTrue refresh call itself remains trusted, untested SDK
+behaviour — consistent with how this project already trusts `supabase_flutter`'s proactive-refresh
+timer elsewhere, not a new standard being applied selectively.
 
 ## 4. Failure-injection tooling
 
@@ -119,3 +132,4 @@ loss or duplication) is exactly as invisible-until-it-happens as a tenant-isolat
 | 0.4.0 | 2026-08-20 | Sprint 51 (cross-cutting fix): §3's "Schema version mismatch" row built (`migration_test.dart`, this project's first migration test) — and found a real, previously-undetected production bug in the same pass: a table created in one `onUpgrade` step and altered in a later one broke with an unhandled duplicate-column error for any device jumping both steps in one update, permanently losing access to its own local database. Fixed; full account in schema-local.md. |
 | 0.5.0 | 2026-08-20 | Sprint 52 (cross-cutting fix): §3's "Connectivity lost mid-batch" client-half row built — it did not need the live server + fault-injecting proxy this document had specifically named for it; the actual client-side guarantee is exercised with a fake partial push response, no different in kind from Sprints 50/51's own technique. Found and corrected a third instance of the same doc-vs-code gap those two sprints found: failure-scenarios.md's "operations not yet acknowledged return to FailedRetrying" is not literally what the code does — an unacknowledged row is simply left untouched. |
 | 0.6.0 | 2026-08-20 | Sprint 54 (cross-cutting fix): §3's "Storage full" row built — `disk_space_2`-backed free-disk-space detection plus the designed low-storage warning, both unit- and widget-tested. Of the 10 named failure scenarios, only "Token expired while queued" remains a genuinely unverified real gap. |
+| 0.7.0 | 2026-08-21 | Sprint 57 (cross-cutting fix): §3's last row, "Token expired while queued," built — found this row's own "needs the full Supabase CLI stack" claim didn't hold either (the fifth such correction in this document), and that no reactive refresh-and-retry code existed in the mobile client at all despite `authentication.md §3` already implying it did. Built `api_client.dart`'s missing `onError` retry-once-after-refresh logic; unit-tested its decision function. All 10 named failure scenarios now have real coverage or are resolved-by-design/not-applicable. |

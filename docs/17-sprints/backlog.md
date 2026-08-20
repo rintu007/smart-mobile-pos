@@ -394,6 +394,19 @@ letting `SignInController` report a successful sign-in as a failed one — now s
 best-effort, matching `main.dart`'s own established pattern. 273/273 mobile tests (266 pre-existing
 + 7 new), `flutter analyze` clean.
 
+**Cross-cutting fix, [Sprint 57](sprint-57.md) (not a numbered item):** "Token expired while
+queued" — [failure-scenarios.md](../13-offline-sync/failure-scenarios.md)'s last unverified
+scenario — built. Checked directly whether `test-plan.md`'s own "needs the full Supabase CLI stack"
+excuse actually held, the same way Sprints 50–52 already checked three other such excuses and found
+them false; it didn't hold here either. The real gap was that no reactive refresh-and-retry code
+existed in the mobile client at all — `authentication.md §3` already implied it did. Built
+`api_client.dart`'s missing `onError` interceptor (one `refreshSession()` call, one retry, on any
+`401 UNAUTHENTICATED`); found and corrected `error-catalogue.md`'s `TOKEN_EXPIRED` code, which was
+never actually implementable server-side. All 10 named failure scenarios now have real coverage or
+are resolved-by-design/not-applicable — `release-checklist.md`'s failure-scenarios row flips to
+satisfied for the first time in this project's history. 277/277 mobile tests (273 pre-existing + 4
+new), `flutter analyze` clean.
+
 ## 6. Ordering rule, restated
 
 Every dependency column above traces directly to
@@ -459,3 +472,4 @@ specifically.
 | 0.52.0 | 2026-08-20 | Cross-cutting fix, Sprint 54 (not a numbered M4 item, founder-confirmed): tier 3 built — `disk_space_2`-backed free-disk-space detection (100 MB threshold, fails open on a probe error), the designed low-storage warning shown persistently on `HomeScreen`. Package chosen after checking pub.dev directly (Sprint 48's own SQLCipher diligence). Storage-full is now the 6th of 10 named failure scenarios with real coverage; only "Token expired while queued" remains. 266/266 mobile tests (260 pre-existing + 6 new), `flutter analyze` clean, real Android debug build confirmed. |
 | 0.53.0 | 2026-08-20 | Cross-cutting fix, Sprint 55 (not a numbered M4 item, server half only): device registration/revocation built — `devices` table, `POST /auth/register-device`/`GET /devices`/`PATCH /devices/{id}/revoke`, `requireSession`'s per-request check via a new `X-Device-Id` header. Closes Sprint 43's OWASP finding for `authorisation-model.md §2`. Verified against a real Postgres connection (98/98 integration checks including the RLS deliberate-break-and-fix cycle; `devices` is the isolation suite's 20th table). Found a real rollout risk before merging (would reject every currently-installed mobile build's requests) — confirmed with the founder that no live reliance makes this safe now; mobile wiring deferred to a follow-up sprint. 227/227 web unit tests (218 pre-existing + 9 new), `tsc`/`eslint` clean. |
 | 0.54.0 | 2026-08-20 | Cross-cutting fix, Sprint 56 (not a numbered M4 item, mobile half of Sprint 55's same gap): `client_device_id` generated/persisted locally, registered on sign-in and on launch (best-effort), sent as `X-Device-Id` on every request, `DEVICE_REVOKED` forces local sign-out. Found and fixed two real bugs: a migration test's reconstructed historical schema needed updating for the new column (same class of gap Sprint 51 found), and a transient register-device failure was wrongly surfacing a successful sign-in as failed — now swallowed, best-effort. 273/273 mobile tests (266 pre-existing + 7 new), `flutter analyze` clean. |
+| 0.55.0 | 2026-08-21 | Cross-cutting fix, Sprint 57 (not a numbered M4 item): "Token expired while queued" — the last unverified failure scenario — built. Checked test-plan.md's own "needs the full Supabase CLI stack" claim directly (the fifth such check in this project, after Sprints 50/51/52/54) and found it false again: the real gap was no reactive refresh-and-retry code existing in the mobile client at all, despite authentication.md §3 implying it did. Built `api_client.dart`'s missing `onError` interceptor (refresh once, retry once, on `401 UNAUTHENTICATED`); found and corrected `error-catalogue.md`'s `TOKEN_EXPIRED` code, never actually implementable server-side. All 10 named failure scenarios now covered — `release-checklist.md`'s failure-scenarios row flips to satisfied for the first time. 277/277 mobile tests (273 pre-existing + 4 new), `flutter analyze` clean. |

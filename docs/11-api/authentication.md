@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 11 — API Design
-> **Version:** 0.3.0
-> **Last updated:** 2026-08-20
+> **Version:** 0.4.0
+> **Last updated:** 2026-08-21
 > **Owner:** Principal Next.js Engineer / CTO
 > **Approved by:** _pending_
 
@@ -59,9 +59,22 @@ device's existing token stays technically valid against Realtime (§5) where no 
 revocation check is possible. The **refresh token rotates on every use** — each refresh invalidates
 the previous refresh token, so a stolen-and-later-reused refresh token is detectable (Supabase
 rejects the reuse and, per its own reuse-detection behaviour, can revoke the session family). The
-mobile client refreshes proactively before expiry so a Cashier mid-sale never hits an expired-token
+mobile client refreshes proactively before expiry (`supabase_flutter`'s own background timer,
+trusted SDK behaviour, not reimplemented here) so a Cashier mid-sale never hits an expired-token
 error at the worst possible moment — an offline-first client refreshing opportunistically whenever
-connectivity is present, not only reactively on a 401.
+connectivity is present.
+
+**Built, Sprint 57 — the reactive fallback for the one case proactive refresh can't cover.** The
+background timer can only refresh while the app has connectivity; a device offline through its
+entire access-token TTL (60 minutes) and then reconnecting can have its first queued request rejected
+before the timer's next tick catches up. `error-catalogue.md`'s `UNAUTHENTICATED` row (§3 found no
+distinct `TOKEN_EXPIRED` code was ever implementable — `core/auth/session.ts` never checks *why* a
+token was rejected) is now handled reactively too: `buildApiClient`'s response interceptor calls
+`refreshSession()` once and retries the same request on any `401 UNAUTHENTICATED`, surfacing the
+error to the Cashier only if that refresh itself also fails (a genuinely expired refresh token, the
+one case with no automatic recovery). Closes
+[failure-scenarios.md](../13-offline-sync/failure-scenarios.md)'s "Token expired while queued"
+scenario, the last of the 10 named failure scenarios without real coverage.
 
 ## 4. Device binding and revocation — checked on every request, not only at token mint
 
@@ -125,3 +138,4 @@ model and the revocation guarantee, which are the parts a later phase cannot saf
 | 0.1.0 | 2026-07-30 | Initial token model: Custom Access Token Hook for tenant_id injection, refresh rotation, per-request device revocation check, explicit TB-2 Realtime exposure-window acknowledgement. |
 | 0.2.0 | 2026-08-20 | Sprint 55 — device registration/revocation built (`POST /auth/register-device`, `GET /devices`, `PATCH /devices/{id}/revoke`, `requireSession`'s per-request check), closing the OWASP review's other flagged authorisation-model.md §2 gap. §4's previously-unspecified "how `client_device_id` is presented" resolved as a new `X-Device-Id` header — a Custom Access Token Hook claim was considered and rejected, since a newly-registered device's id isn't known at token-mint time. |
 | 0.3.0 | 2026-08-20 | Sprint 56 — mobile side wired: `client_device_id` generated once per install and persisted locally, registered on sign-in and on launch (best-effort, swallowed on failure), sent as `X-Device-Id` on every request, and a `DEVICE_REVOKED` response forces an immediate local sign-out. |
+| 0.4.0 | 2026-08-21 | Sprint 57 — §3's reactive refresh fallback built: a `401 UNAUTHENTICATED` response triggers one `refreshSession()` call and a single retry, closing the gap proactive-only refresh left for a device offline through its entire access-token TTL. Found and corrected `error-catalogue.md`'s `TOKEN_EXPIRED` code — never actually implementable, since the server never distinguishes an expired token from any other invalid one. |
