@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 14 — Testing Strategy
-> **Version:** 0.10.0
+> **Version:** 0.11.0
 > **Last updated:** 2026-08-21
 > **Owner:** QA Lead / CTO
 > **Approved by:** _pending_
@@ -112,15 +112,23 @@ as a new row below rather than folded into the OWASP row, since it's really two 
 **Honest bottom line, stated plainly per §5's no-partial-credit rule: this product is not pilot-ready
 today** — unchanged since Sprint 44. M4's numbered backlog items **1–8** are done (item 9, MTS
 execution, is a founder action, never counted as engineering — a Sprint 57 edit to this line wrongly
-said all 9 were "engineering backlog items... done"; corrected here, Sprint 58). The release gate
-above has **three** unresolved rows as of Sprint 58 (up from two after Sprint 57 closed the
-failure-scenarios row, since this same pass both corrected the OWASP row's missing third finding and
-added a new row neither had ever tracked): MTS execution, the OWASP review's now-three remaining
-findings (RLS, sign-in rate limiting, Android release signing), and the Android distribution
-pipeline that release signing alone would still be blocked on even if provisioned today —
-**all founder-blocked or infra-blocked, not open engineering or verification work.** Row count
-unchanged as of Sprint 59, but the OWASP row's RLS finding deepened: this session found no
-documentary confirmation that three specific RLS policy files (`017`/`018`/`019` —
+said all 9 were "engineering backlog items... done"; corrected here, Sprint 58).
+
+**Row count, stated precisely (corrected Sprint 59 — a prior version of this paragraph said "three
+unresolved rows" without reconciling that against the table above, an imprecision worth naming
+rather than silently tightening):** the table above currently has **5** rows marked ⬜. Two of them
+(MTS-01/02/03, and the full-trading-day row that names the same scripts) share one root blocker —
+no printer or reference device owned yet — so they are one distinct concern, not two. One of them
+(pilot cohort consent) is not "blocked" in the same sense as the others; it is **not yet
+assessable**, since M5 pilot recruitment hasn't started and this row's own question (are the actual
+recruited participants informed and consenting) has no subject to ask it about yet — this row will
+become live when M5 begins, not before. That leaves **three distinct concerns that actually block
+M4's own closure today**: MTS execution, the OWASP review's now-three remaining findings (RLS,
+sign-in rate limiting, Android release signing), and the Android distribution pipeline that release
+signing alone would still be blocked on even if provisioned today — **all founder-blocked or
+infra-blocked, not open engineering or verification work.** The OWASP row's RLS finding deepened
+the same sprint this row-count correction was made: this session found no documentary confirmation
+that three specific RLS policy files (`017`/`018`/`019` —
 `sale_line_items`/`sale_payments`/`return_line_items`/`devices`) were ever actually applied to the
 real production database, a distinct and more severe possibility than "present but owner-exempt."
 **This is worth the founder's attention before anything else on this list** — it's the one item
@@ -174,4 +182,5 @@ release, consistent with [Definition of Done](../00-governance/definition-of-don
 | 0.7.0 | 2026-08-20 | Sprint 54 (cross-cutting fix, founder-confirmed to build storage-full handling) — failure-scenarios row narrowed to its smallest gap yet: "Storage full" built (`disk_space_2`-backed detection, the designed warning banner, both unit- and widget-tested). Only "Token expired while queued" remains genuinely unverified (1 of 10, down from 3) — needs the full local Supabase CLI stack. Row still unresolved, so the bottom line is unchanged: still not pilot-ready today, still three unresolved rows, one of them now down to a single named gap. |
 | 0.8.0 | 2026-08-21 | Sprint 57 (cross-cutting fix) — failure-scenarios row **flips to satisfied**: "Token expired while queued" built, found this row's own "needs the full Supabase CLI stack" claim didn't hold either (the fifth such correction in this project's history). All 10 named scenarios now have real coverage or are resolved-by-design/not-applicable. Bottom line improves for the first time in this row's history: still not pilot-ready today, but now only **two** unresolved rows (OWASP's RLS/sign-in-rate-limiting findings, MTS execution) instead of three, and both of those are now founder-blocked or infra-blocked rather than open engineering work of any kind. |
 | 0.9.0 | 2026-08-21 | Sprint 58 (cross-cutting fix, documentation-accuracy only) — found Android release signing had fallen through a crack between this document and `owasp-checklist.md`: named there as one of "4 real gaps remain" since Sprint 43, but never once threaded into this checklist's OWASP row. Corrected the OWASP row to include it as a third unresolved finding. Also found and added a new, previously-untracked row: the entire Android build→sign→upload pipeline `cd-workflows.md §2` describes (`release-candidate.yml`) was never actually built, and Play Console's Internal Testing track — this project's own designed **pilot** distribution mechanism, not just commercial — cannot accept a debug-signed build regardless. Also corrected this section's own bottom-line wording, introduced in error by the 0.8.0 entry above: M4's numbered backlog items are 1–8 done, not "9... done" — item 9 (MTS execution) is a founder action, never counted as engineering. Bottom line: still not pilot-ready today, now **three** unresolved rows (up from two), all founder-blocked or infra-blocked. |
-| 0.10.0 | 2026-08-21 | Sprint 59 (documentation-accuracy only, no code change) — the OWASP row's RLS finding deepened: checked `cd-workflows.md §1`'s own claim that every RLS SQL file was eventually applied to production (citing `implementation-log.md`'s "applied live" entries) file-by-file, and found no confirmation on record for `017`/`018`/`019` (`sale_line_items`/`sale_payments`/`return_line_items`/`devices`) at all — a distinct, more severe possibility than the existing FORCE/role finding, since "the app works in production" can't distinguish "RLS present but owner-exempt" from "RLS never applied for these specific tables." Row count unchanged (three), but flagged in the bottom line as the item most worth the founder's immediate attention, since it's genuinely unknown rather than merely blocked. |
+| 0.10.0 | 2026-08-21 | Sprint 59 (documentation-accuracy only, no code change) — the OWASP row's RLS finding deepened: checked `cd-workflows.md §1`'s own claim that every RLS SQL file was eventually applied to production (citing `implementation-log.md`'s "applied live" entries) file-by-file, and found no confirmation on record for `017`/`018`/`019` (`sale_line_items`/`sale_payments`/`return_line_items`/`devices`) at all — a distinct, more severe possibility than the existing FORCE/role finding, since "the app works in production" can't distinguish "RLS present but owner-exempt" from "RLS never applied for these specific tables." Flagged in the bottom line as the item most worth the founder's immediate attention, since it's genuinely unknown rather than merely blocked. |
+| 0.11.0 | 2026-08-21 | Consistency pass, same day: found the bottom line's own "three unresolved rows" claim had never actually been reconciled against the table above, which has 5 rows marked ⬜, not 3 — an imprecision introduced across the rapid Sprint 57–59 edits and caught by a dedicated proofreading pass rather than left standing. Corrected to state both numbers and the reasoning connecting them: 5 rows marked not-satisfied, of which MTS's two rows share one root blocker and the pilot-consent row is not-yet-assessable (M5 hasn't started) rather than blocked in the same sense, netting to 3 distinct concerns that actually block M4's own closure today. Also fixed a repeated off-by-one (6 of 18 RLS files, corrected to 7, matching `sprint-59.md`'s own correct count) that had propagated identically into `cd-workflows.md`, `implementation-log.md`, and `docs/18-implementation/README.md`, and a stale `backlog.md` header version that had drifted 4 versions behind its own Change Log. |
