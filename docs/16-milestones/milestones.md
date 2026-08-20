@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 16 — Milestones
-> **Version:** 0.1.1
-> **Last updated:** 2026-08-16
+> **Version:** 0.1.2
+> **Last updated:** 2026-08-21
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
 
@@ -46,6 +46,18 @@ first sale, not retrofitted), and Bluetooth receipt printing.
 | **Entry criteria** | M1 demonstrated. |
 | **Exit criteria** | The full [tap-count-audit.md](../09-navigation/tap-count-audit.md) budget is met on every Till workflow, measured on the reference low-end device ([device-matrix.md](../14-testing/device-matrix.md)), not estimated. |
 | **Demonstrable outcome** | A Cashier completes a discounted, split-payment sale under real queue-pressure-like conditions, opens and closes a trading day, and the counted-cash variance is correct to the paisa. |
+
+**Correction, found Sprint 60 (checking every milestone's own exit criterion against what was
+actually verified when each was declared closed, the same discipline Sprints 58/59 applied to
+M4's release gate):** [backlog.md §3](../17-sprints/backlog.md#3-m2--fully-decomposed-2026-08-14)
+declared M2 "fully closed, all 6 items done" (Sprint 30) — true of the backlog items, but this
+row's own Exit criteria above were never actually satisfied: the reference low-end device this
+row names has never been owned (unchanged from Sprint 43's finding through today,
+[device-matrix.md §3](../14-testing/device-matrix.md#3-this-is-a-founder-action-not-an-engineering-one--stated-plainly)),
+so `tap-count-audit.md`'s budget has only ever been checked as a design-time trace, never
+"measured, not estimated" as this row's own text explicitly requires. M0 and M4's own
+hardware-dependent exit criteria were each closed (or, for M4, deliberately left open) with an
+honest caveat naming this exact gap; M2's closure carried no equivalent caveat until now.
 
 ## M3 — Customers & Returns
 
@@ -100,3 +112,4 @@ from real usage before building further.
 | --- | --- | --- |
 | 0.1.0 | 2026-07-31 | Six outcome-based V1 milestones (M0–M5) defined with entry/exit criteria and a demonstrable-to-a-shop-owner outcome each; no calendar dates, per this document's deliberate scope. |
 | 0.1.1 | 2026-08-16 | M4's Scope row corrected: removed "the 10× load test," which belongs to release-checklist.md's commercial-launch tier (§3), not the pilot-ready tier (§2) M4's own Exit criteria row already restricts to — found decomposing M4 to item grain in backlog.md §5. |
+| 0.1.2 | 2026-08-21 | Sprint 60: found M2's own closure (backlog.md, Sprint 30 — "fully closed, all 6 items done") carried no caveat against this row's own Exit criteria, which require the tap-count-audit.md budget "measured on the reference low-end device... not estimated" — a device that has never been owned, unchanged since Sprint 43. M0 and M4's own hardware-dependent exit criteria were each closed with an honest caveat naming this exact gap; M2's was not, until now. Corrected with a dated note under M2's row. |
