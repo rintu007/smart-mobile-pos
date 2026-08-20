@@ -1,29 +1,24 @@
 # Phase 18 — Implementation
 
-> **Status:** 🟡 In progress — M0/M1/M2/M3 fully closed (all backlog items built; **Sprint 60 found
-> and named an uncaveated gap in M2's own closure specifically** — `milestones.md`'s M2 exit
-> criterion requires a physical-reference-device measurement that has never actually happened,
-> unchanged since Sprint 43's own finding, and M2's Sprint 30 closure never said so, unlike M0's and
-> M4's honest treatment of the same class of gap; see `milestones.md`'s own dated correction).
-> M4's numbered backlog items 1–8 are done;
-> item 9 (MTS-01/02/03 execution) remains **founder-blocked** (needs real printer/reference-device
-> hardware) — a prior version of this status line wrongly said all 9 were done, corrected Sprint 57.
-> Sprint 57 closed the failure-scenarios release-gate row in full (all 10 named offline scenarios
-> now have real coverage). Sprint 58 found a real finding had fallen through a crack between two
-> documents — Android release signing (`owasp-checklist.md`'s M8) had never been threaded into
-> `release-checklist.md`'s actual release gate — plus a second, compounding gap: the Android
-> build→sign→upload CI pipeline `cd-workflows.md §2` describes was never actually built. **Sprint 59
-> found something more urgent: no documentary confirmation exists that RLS policy files `017`/`018`
-> (sale_line_items/sale_payments/return_line_items, Sprint 40's own zero-RLS fix) or `019` (devices,
-> Sprint 55) were ever actually applied to the real production database** — distinct from, and
-> potentially more severe than, the already-known FORCE/role finding; this is the single most
-> action-critical item outstanding, genuinely unknown rather than merely known-and-blocked. M4's
-> remaining open items against its own exit criterion (release-checklist.md §2's pilot-ready gate)
-> are now: item 9 (MTS execution), the OWASP review's three findings (RLS — now with two distinct
-> open questions — sign-in rate limiting, Android release signing), and the Android
-> distribution-pipeline gap — none of them open engineering work; all founder-blocked, infra-blocked,
-> or awaiting a founder verification this session cannot perform itself.
-> **Version:** 0.64.0
+> **Status:** 🟡 In progress — M0/M1/M3 fully closed. **M2 is closed at the backlog-item level (all
+> 6 items built) but its own `milestones.md` exit criterion — a physical-reference-device
+> measurement — has never actually been performed (Sprint 60 found and named this; see
+> `milestones.md`'s dated correction).** M4's numbered backlog items 1–8 are done; item 9
+> (MTS-01/02/03 execution) remains **founder-blocked** (no reference device owned — the same root
+> cause as M2's own gap above). Sprints 57–61 (see `implementation-log.md` for the full account)
+> closed the failure-scenarios release-gate row in full and corrected several real accounting gaps
+> between documents that had never been checked against each other. As of Sprint 61, M4's remaining
+> open items against `release-checklist.md §2`'s pilot-ready gate are down to **two distinct
+> concerns**: MTS execution (device hardware), and the OWASP review's three findings — RLS (now
+> with a second, more urgent open question: were `017`/`018`/`019` even applied to the real
+> production database, not just whether `FORCE` is set), sign-in rate limiting, and Android release
+> signing. (A prior version of this line also named a separate Android-distribution-pipeline gap;
+> Sprint 61 found that was over-scoped — `pilot-plan.md`'s own minimal pilot shape needs only a real
+> signing keystore and a direct sideload install, not Google Play Console, which moved to
+> commercial-launch scope where it belongs.) None of the remaining items are open engineering work;
+> all are founder-blocked, infra-blocked, or awaiting a founder verification this session cannot
+> perform itself.
+> **Version:** 0.65.0
 > **Last updated:** 2026-08-21
 > **Owner:** CTO / All engineering roles
 
@@ -99,29 +94,27 @@ scaffold that precedes the first module in the loop above — not a module itsel
 to the 13-step loop or the full Definition of Done. See
 [implementation-log.md](implementation-log.md) for what has actually landed.
 
-As of Sprint 60 (2026-08-21): M1 — Full Catalogue & Inventory (8 items), M2 — Full POS Loop
-(6 items — **Sprint 60 found and named an uncaveated gap specific to M2's own closure**: its exit
-criterion requires a physical-reference-device measurement never actually performed, unlike M0's
-and M4's honest treatment of the same class of gap; see `milestones.md`'s own dated correction),
-and M3 — Customers, Returns & Refund (5 items) are each fully closed at the backlog-item level.
-M4 — Reports, Settings, and Release Readiness has numbered backlog items 1–8 done — item 9 (MTS
-execution) remains founder-blocked, unchanged since Sprint 43 first named it — plus 17 further
-unnumbered cross-cutting sprints (44–60) closing OWASP-review, failure-scenario, and
-release-gate/milestone-accounting findings post-hoc. M4 has not formally closed, since
+As of Sprint 61 (2026-08-21): M1 — Full Catalogue & Inventory (8 items) and M3 — Customers,
+Returns & Refund (5 items) are each fully closed. M2 — Full POS Loop (6 items) is closed at the
+backlog-item level, but Sprint 60 found and named an uncaveated gap specific to its own closure:
+its `milestones.md` exit criterion requires a physical-reference-device measurement never actually
+performed, unlike M0's and M4's honest treatment of the same class of gap. M4 — Reports, Settings,
+and Release Readiness has numbered backlog items 1–8 done — item 9 (MTS execution) remains
+founder-blocked, the same root cause as M2's gap above, unchanged since Sprint 43 first named it —
+plus 18 further unnumbered cross-cutting sprints (44–61) closing OWASP-review, failure-scenario,
+and release-gate/milestone-accounting findings post-hoc. M4 has not formally closed, since
 [release-checklist.md §2](../14-testing/release-checklist.md) (its own stated exit criterion, per
-[milestones.md](../16-milestones/milestones.md)) still has three unresolved rows (up from two as of
-Sprint 57 — Sprint 58 found Android release signing had never been threaded into this gate at all,
-plus a second, compounding gap: the Android build→sign→upload CI pipeline was never actually
-built): item 9 above, the OWASP review's now-three findings, and the new Android
-distribution-pipeline row — all founder-blocked or infrastructure-blocked rather than open
-engineering work (see the status line above). **Sprint 59, checking those same findings one level
-deeper, found that the RLS finding is not fully understood yet either** — three specific RLS policy
-files have no documentary confirmation of ever reaching the real production database at all, a
-question this session cannot answer itself and that takes priority over the FORCE/role question it
-sits in front of. There is no unstarted, buildable engineering gap left in this phase as of this
-writing — the honest next steps are founder action (unblocking the items above, and specifically
-verifying the RLS-application question) or beginning M5 — First Real Shop pilot-recruitment prep,
-which itself is gated on M4 formally closing.
+[milestones.md](../16-milestones/milestones.md)) still has **two** distinct unresolved concerns as
+of Sprint 61 (down from three after Sprint 58/59, once Sprint 61 found the Android-distribution row
+had been over-scoped — see the status line above): item 9/MTS execution, and the OWASP review's
+three findings, with RLS carrying a second, more urgent open question (were `017`/`018`/`019` ever
+actually applied to the real production database, a question that takes priority over the
+FORCE/role question it sits in front of). There is no unstarted, buildable engineering gap left in
+this phase as of this writing — the honest next steps are founder action (unblocking the items
+above, and specifically verifying the RLS-application question) or beginning M5 — First Real Shop
+pilot-recruitment prep, which itself is gated on M4 formally closing. `pilot-plan.md` (Sprint 61)
+was reviewed in full for the first time this session and found to already be a complete, workable
+plan for that milestone once M4 clears.
 
 ## Change Log
 
@@ -191,3 +184,4 @@ which itself is gated on M4 formally closing.
 | 0.62.0 | 2026-08-21 | Sprint 58 (cross-cutting fix, documentation-accuracy only — no code change): found Android release signing (owasp-checklist.md's M8 finding, open since Sprint 43) had never been threaded into release-checklist.md's actual release gate at all — named in one document's own "4 real gaps remain" list for 15 sprints without ever reaching the other. Checked whether this omission was actually harmless before correcting it: `cd-workflows.md §2` names Google Play Console's Internal Testing track as this project's own designed **pilot** distribution mechanism, not only a commercial one, and Internal Testing cannot accept a debug-signed build — so this finding genuinely blocks the pilot gate, not just a future commercial one. Found a second, compounding gap investigating the first: the entire Android build→sign→upload pipeline `cd-workflows.md §2` describes (`release-candidate.yml`) was never actually built — confirmed directly against `.github/workflows/` (only `pr.yml`/`nightly.yml` exist) — the same "designed but not built" class of gap Sprint 55/PR #79 already found for this same document's §1. Corrected `owasp-checklist.md`, `cd-workflows.md §2`, and added a new, explicit row to `release-checklist.md §2` (not folded into the OWASP row, since it's a second, independent blocker that would remain even with a real keystore in hand). Also found and corrected a self-introduced accounting error in the prior sprint's own `release-checklist.md` edit (M4 items 1–8 done, not "9," matching item 9's own unchanged founder-blocked status). `release-checklist.md`'s pilot-ready gate now has three unresolved rows, up from two, all founder-blocked or infra-blocked. |
 | 0.63.0 | 2026-08-21 | Sprint 59 (cross-cutting fix, documentation-accuracy only — no code change, but the most consequential finding of this run of sprints): checked `cd-workflows.md §1`'s own claim that every RLS SQL file (`001`–`019`) was eventually applied to the real production database — citing `implementation-log.md`'s "applied live" entries as evidence — file by file, rather than trusted. That confirming phrase appears explicitly for only 7 of 18 RLS files. For `017`/`018` (`sale_line_items`/`sale_payments`/`return_line_items` — Sprint 40's own fix for the two tables that had *zero* RLS at all) and `019` (`devices`, Sprint 55), there is no confirmation anywhere on record that these were ever actually applied to production — direct documentary evidence (Sprint 40's own text distinguishes local verification from "the shared production Supabase project" and never claims the latter; Sprint 55's demo script lists a real-Supabase smoke test as "not performed"), not inference. This is distinct from, and potentially more severe than, `owasp-checklist.md`'s existing FORCE/role finding, since "the app works in production" can't distinguish "RLS present but owner-exempt" from "RLS never applied for these tables." Corrected `owasp-checklist.md` (finding #1 grew a second dimension), `cd-workflows.md §1`, and `release-checklist.md`'s OWASP row. Named prominently as the single most action-critical item outstanding — genuinely unknown, not merely blocked. |
 | 0.64.0 | 2026-08-21 | Sprint 60 (cross-cutting fix, documentation-accuracy only — no code change): checked every milestone's own exit criterion in `milestones.md` against what was actually verified at closure. Found M2's row requires the `tap-count-audit.md` budget "measured on the reference low-end device..., not estimated" — never satisfied, since that device has never been owned (unchanged since Sprint 43) and `tap-count-audit.md` is explicitly a design-time trace, not a physical measurement. M2's Sprint 30 closure ("fully closed, all 6 items done") carried no caveat against this, unlike M0's and M4's own honest treatment of an equivalent hardware-dependent exit criterion. Corrected `milestones.md` (dated note under M2's row) and `backlog.md §3` — the "all 6 items done" claim stands, the gap named is between that and this milestone's own stricter exit-criteria text. M1/M3 checked and confirmed not to share this issue. |
+| 0.65.0 | 2026-08-21 | Sprint 61 (cross-cutting fix, documentation-accuracy — narrows a prior finding rather than deepening one, the first of this kind in this run of sprints): read `pilot-plan.md` in full for the first time this session and found `release-checklist.md`'s Sprint 58 Android-distribution row had never been checked against it. Google Play Console's Internal Testing track was never actually required for the real pilot shape `pilot-plan.md` describes (2–3 founder-visited shops, deliberately minimal) — only a real signing keystore plus a direct sideload install is, the exact mechanism already proven across every real-device install this project has done. Corrected `cd-workflows.md §2` (Play Console reframed as commercial-scale work), `release-checklist.md` (§2's row narrowed; the full CI/Play-Console pipeline moved to §3), and `pilot-plan.md` itself (added the missing device-install step). Distinct blocking concerns for M4's pilot-ready closure drop from three to **two** — the first correction in this run of sprints that shortened the founder's remaining task list rather than lengthened it. |

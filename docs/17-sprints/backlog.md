@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.58.0
+> **Version:** 0.59.0
 > **Last updated:** 2026-08-21
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
@@ -474,6 +474,28 @@ done" (still true) but by naming the real gap between that and this milestone's 
 exit-criteria text. M1 and M3's exit criteria were checked too and don't share this issue — neither
 requires physical-hardware measurement.
 
+**Cross-cutting fix, [Sprint 61](sprint-61.md) (not a numbered item, documentation-accuracy —
+narrows rather than deepens a prior finding, the first of this kind in this run of sprints):**
+read [pilot-plan.md](../16-milestones/pilot-plan.md) in full for the first time this session (it
+hadn't been touched since Sprint 01/before any of M1–M4 was built) and found `release-checklist.md`'s
+own Sprint 58 Android-distribution row had never been checked against it. That row required Google
+Play Console's Internal Testing track for pilot readiness, following `cd-workflows.md §2`'s
+Phase-15-era design — but `pilot-plan.md` (Phase 16, written later) already commits the *actual*
+first pilot to something much smaller: 2–3 founder-known shops, founder physically present for
+day-one, a deliberately minimal support model that names avoiding "premature generality" as its own
+explicit standard. Standing up Play Console API access, a service account, and an automated release
+pipeline for that pilot is exactly the generality `pilot-plan.md` already argues against elsewhere
+(in-app feedback tooling). What the pilot actually needs — a real signing keystore, then a direct
+sideload install during the founder's own visit, the identical mechanism already proven across
+every real-device install this project has done — is narrower and shares its one remaining blocker
+with the OWASP row's own Android-signing finding, not a second, independent one. Corrected
+`cd-workflows.md §2`, `release-checklist.md` (narrowed the §2 row, moved the full CI/Play-Console
+pipeline to §3 as commercial-launch scope), and `pilot-plan.md` itself (added the missing "how does
+the app reach the device" step this document should have named all along). Net effect: the number
+of distinct concerns blocking M4's pilot-ready closure drops from three to **two** (MTS execution;
+the OWASP review's three findings) — the first correction in this run of sprints that shortened the
+founder's remaining task list rather than lengthened it.
+
 ## 6. Ordering rule, restated
 
 Every dependency column above traces directly to
@@ -543,3 +565,4 @@ specifically.
 | 0.56.0 | 2026-08-21 | Cross-cutting fix, Sprint 58 (not a numbered M4 item, documentation-accuracy only): found Android release signing (owasp-checklist.md's M8 finding, open since Sprint 43) had never been threaded into release-checklist.md's actual release gate — named in one document for 15 sprints without ever reaching the other. Found a second, compounding gap: cd-workflows.md §2's entire Android build→sign→upload pipeline (`release-candidate.yml`) was never actually built, the same "designed but not built" class of gap Sprint 55/PR #79 already found for this document's §1. Corrected across all three documents; also corrected a self-introduced accounting error in the prior sprint's own release-checklist.md edit (M4 items 1–8 done, not "9," per item 9's own standing founder-blocked status). No code change. |
 | 0.57.0 | 2026-08-21 | Cross-cutting fix, Sprint 59 (not a numbered M4 item, documentation-accuracy only, genuinely severe finding): checked cd-workflows.md §1's claim that every RLS SQL file was eventually applied to production, file by file, rather than trusted. The confirming "applied live" phrase appears explicitly for only 7 of 18 RLS files. For `017`/`018` (sale_line_items/sale_payments/return_line_items, Sprint 40's own zero-RLS fix) and `019` (devices, Sprint 55), no confirmation exists on record that these were ever applied to the real production database — a distinct, more severe possibility than owasp-checklist.md's existing FORCE/role finding, since "the app works in production" can't distinguish the two explanations. Corrected across owasp-checklist.md, cd-workflows.md §1, and release-checklist.md's OWASP row. Flagged to the founder as the single most action-critical item outstanding — genuinely unknown, not merely blocked. No code change. |
 | 0.58.0 | 2026-08-21 | Cross-cutting fix, Sprint 60 (not a numbered M4 item, documentation-accuracy only): checked every milestone's own exit criterion against what was actually verified at closure. Found milestones.md's M2 row requires the tap-count-audit.md budget "measured on the reference low-end device..., not estimated" — never actually satisfied, since that device has never been owned (unchanged since Sprint 43), and M2's own closure (§3 above, Sprint 30) carried no caveat against this, unlike M0's and M4's honest treatment of their own hardware-dependent exit criteria. Corrected in milestones.md and §3 above with a dated note; M1/M3 checked and confirmed not to share this issue. No code change. |
+| 0.59.0 | 2026-08-21 | Cross-cutting fix, Sprint 61 (not a numbered M4 item, documentation-accuracy — narrows a prior finding rather than deepening one): read pilot-plan.md in full for the first time and found release-checklist.md's Sprint 58 Android-distribution row had never been checked against it. Play Console Internal Testing was never actually required for pilot-plan.md's real pilot shape (2-3 founder-visited shops, deliberately minimal) — only a real signing keystore plus direct sideload is, the mechanism already proven across every real-device install this project has done. Corrected cd-workflows.md §2, release-checklist.md (narrowed §2's row, moved the full pipeline to §3/commercial scope), and pilot-plan.md itself (added the missing device-install step). Distinct blocking concerns for M4's pilot-ready closure drop from three to two. No code change. |

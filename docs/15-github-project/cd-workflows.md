@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 15 — GitHub Project
-> **Version:** 0.4.0
+> **Version:** 0.5.0
 > **Last updated:** 2026-08-21
 > **Owner:** DevOps Engineer / CTO
 > **Approved by:** _pending_
@@ -69,6 +69,23 @@ design (`ci-workflows.md §3` already names `release-candidate.yml`'s trigger sh
 real is real, separately-scoped follow-up work, named here rather than assumed done because a
 design doc describes it in the present tense.
 
+**Narrowed, Sprint 61 — this section's own "not a path any real pilot shop could use" claim above
+was itself never checked against [pilot-plan.md](../16-milestones/pilot-plan.md)'s actual pilot
+shape, and doesn't hold once it is.** The distribution mechanism below (Play Console's Internal
+Testing track) was designed at Phase 15, before Phase 16's `pilot-plan.md` committed the first
+pilot to something much smaller: 2–3 shops, founder-known, with the founder physically present for
+the day-one visit (§2) and a deliberately minimal support model that names avoiding "premature
+generality" as its own explicit standard (§3, for feedback tooling — the identical reasoning
+applies here). Setting up Play Console API access, a service account, and an automated release
+pipeline for 2–3 founder-visited shops is exactly that kind of premature generality. **What the
+first pilot actually needs is narrower and already within reach: a real, non-debug signing
+keystore**, so `flutter build apk --release` produces a properly-signed build — then a direct
+sideload install during the founder's own day-one visit, the identical mechanism already proven
+reliable across every real-device install this project has done (Sprints 10, 16, 48, 54). Play
+Console distribution remains real, valuable work for scaling *past* founder-personal visits — that
+work is commercial-launch scope (`release-checklist.md §3`), not a pilot blocker. See
+`release-checklist.md`'s own corrected rows for the resulting split.
+
 ```mermaid
 flowchart LR
     Merge["Merge to main / release branch"] --> Build["flutter build appbundle"]
@@ -120,3 +137,4 @@ during a real incident.
 | 0.2.0 | 2026-08-20 | Corrected §1's "no manual deployment step exists" claim, found while merging Sprint 55's `019_rls_devices.sql`: true for Prisma migrations, never true for RLS — `supabase/sql/*.sql` has always needed a human to apply it to the real project by hand, confirmed by `implementation-log.md`'s own repeated "applied live" history for every prior numbered file. Named as a real, unfixed gap (a genuine CD mechanism for this is separately-scoped future work), not silently corrected away. |
 | 0.3.0 | 2026-08-21 | Sprint 58: corrected §2 the same way §1 was corrected last sprint — the entire Android build→sign→upload pipeline described here (`release-candidate.yml`) was never actually built; no such workflow exists, no signing-keystore secret has ever been created, and no app bundle has ever reached Google Play Console. Every real Android build produced by this project has been a manual, local, debug-signed `flutter build apk` command. Threaded into `release-checklist.md` for the first time in the same pass — this gap had been named in `owasp-checklist.md` since Sprint 43 but never carried into the actual release gate. |
 | 0.4.0 | 2026-08-21 | Sprint 59: §1's own "confirmed by implementation-log.md's own repeated 'applied live' entries" clause was itself imprecise, checked file-by-file rather than trusted. That phrase appears explicitly only for 7 of the 18 RLS files (`003`–`007`, `012`, `015`); for `017`/`018`/`019` there is no confirmation on record they were ever applied to the real production database at all — a real, previously-invisible possibility that specific tables (including Sprint 40's own "most significant" RLS fix) may have no live RLS protection whatsoever, distinct from and more severe than `owasp-checklist.md`'s existing FORCE/role finding. |
+| 0.5.0 | 2026-08-21 | Sprint 61: narrowed §2's own Sprint 58 correction — its "not a path any real pilot shop could use" claim was never checked against `pilot-plan.md`'s actual pilot shape (2–3 founder-visited shops, deliberately minimal). Play Console Internal Testing is premature generality for that pilot, the same reasoning `pilot-plan.md §3` already applies to feedback tooling; what the first pilot actually needs is a real signing keystore plus direct sideload, the mechanism already proven across every real-device install this project has done. Play Console distribution moves to commercial-launch scope. |
