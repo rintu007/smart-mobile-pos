@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.57.0
+> **Version:** 0.58.0
 > **Last updated:** 2026-08-21
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
@@ -118,6 +118,24 @@ solved. See [money-and-tax.md](../07-database/money-and-tax.md) and
 | 6 | Hold/Resume: `sales.status` transitions `draft`→`held`→`completed` on the client; per [sales.md](../11-api/endpoints/sales.md)'s own note a held/draft cart is never synced to the server as a partial row, so this is primarily mobile local-DB/UI work (till-screen hold list, resume-into-cart) — done, [Sprint 30](sprint-30.md); built to navigation-model.md §4's fuller "continuous auto-persistence from the first item added" requirement, a real gap this row's own wording didn't name; the server accepts a completed sale exactly as it does today regardless of what local lifecycle produced it, unchanged | — | 2 |
 
 **Total: 12 person-days.** Items 1–6 done. **M2 — Full POS Loop is now fully closed, all 6 items done.**
+
+**Correction, found Sprint 60 (checking every milestone's own exit criterion against what was
+actually verified at closure, the same discipline Sprints 58/59 applied to M4's release gate):**
+"all 6 items done" is true and remains the honest basis for this section's own scope — but
+[milestones.md](../16-milestones/milestones.md)'s **M2 row** states a *different*, stricter
+exit criterion that this closure never actually satisfied: "the full
+[tap-count-audit.md](../09-navigation/tap-count-audit.md) budget is met on every Till workflow,
+**measured on the reference low-end device**..., **not estimated**." `tap-count-audit.md` is
+explicitly a design-time trace (Phase 09, v0.1.0), never a physical measurement; the reference
+device it names has never been owned, unchanged from Sprint 43 through today (M4 item
+9/MTS-03/device-matrix.md's own still-open finding). M0 and M4 — this project's other two
+milestones with a hardware-dependent exit criterion — were each closed with an explicit,
+honest caveat naming exactly this gap (Sprint 16's "step 8 remains open, blocked on printer
+hardware"; M4 never actually closed at all, still correctly tracked open via
+release-checklist.md). This entry's own "fully closed" line carried no equivalent caveat when
+written (Sprint 30) and none since — corrected here, not by weakening the claim (all 6 backlog
+items genuinely are done) but by naming the real, still-open gap between that and
+milestones.md's own stricter exit-criteria text for this specific milestone.
 
 ## 4. M3 — fully decomposed 2026-08-16, now that M2 has reached this point
 
@@ -441,6 +459,21 @@ tables," so it can't be used to rule the second explanation out. Corrected acros
 directly — confirming this for at minimum `017`/`018`/`019` is now the single most action-critical
 item flagged to the founder, ahead of the FORCE/role question it's a precondition for.
 
+**Cross-cutting fix, [Sprint 60](sprint-60.md) (not a numbered item, documentation-accuracy only —
+no code change):** checked every milestone's own exit criterion against what was actually verified
+when it was declared closed, the same discipline Sprints 58/59 applied to M4's release gate. Found
+that [milestones.md](../16-milestones/milestones.md)'s **M2** row states a stricter exit criterion
+than "all 6 backlog items done" (the basis §3 above actually closed on, Sprint 30) —
+"the tap-count-audit.md budget... measured on the reference low-end device..., not estimated" — and
+that criterion was never actually satisfied: the reference device has never been owned, unchanged
+since Sprint 43's finding through today. M0 and M4, this project's other two milestones with a
+hardware-dependent exit criterion, were each closed (or, for M4, deliberately left open) with an
+honest, explicit caveat naming this exact gap; M2's closure carried none until now. Corrected in
+`milestones.md` with a dated note under M2's row, and in §3 above — not by weakening "all 6 items
+done" (still true) but by naming the real gap between that and this milestone's own stricter
+exit-criteria text. M1 and M3's exit criteria were checked too and don't share this issue — neither
+requires physical-hardware measurement.
+
 ## 6. Ordering rule, restated
 
 Every dependency column above traces directly to
@@ -509,3 +542,4 @@ specifically.
 | 0.55.0 | 2026-08-21 | Cross-cutting fix, Sprint 57 (not a numbered M4 item): "Token expired while queued" — the last unverified failure scenario — built. Checked test-plan.md's own "needs the full Supabase CLI stack" claim directly (the fifth such check in this project, after Sprints 50/51/52/54) and found it false again: the real gap was no reactive refresh-and-retry code existing in the mobile client at all, despite authentication.md §3 implying it did. Built `api_client.dart`'s missing `onError` interceptor (refresh once, retry once, on `401 UNAUTHENTICATED`); found and corrected `error-catalogue.md`'s `TOKEN_EXPIRED` code, never actually implementable server-side. All 10 named failure scenarios now covered — `release-checklist.md`'s failure-scenarios row flips to satisfied for the first time. 277/277 mobile tests (273 pre-existing + 4 new), `flutter analyze` clean. |
 | 0.56.0 | 2026-08-21 | Cross-cutting fix, Sprint 58 (not a numbered M4 item, documentation-accuracy only): found Android release signing (owasp-checklist.md's M8 finding, open since Sprint 43) had never been threaded into release-checklist.md's actual release gate — named in one document for 15 sprints without ever reaching the other. Found a second, compounding gap: cd-workflows.md §2's entire Android build→sign→upload pipeline (`release-candidate.yml`) was never actually built, the same "designed but not built" class of gap Sprint 55/PR #79 already found for this document's §1. Corrected across all three documents; also corrected a self-introduced accounting error in the prior sprint's own release-checklist.md edit (M4 items 1–8 done, not "9," per item 9's own standing founder-blocked status). No code change. |
 | 0.57.0 | 2026-08-21 | Cross-cutting fix, Sprint 59 (not a numbered M4 item, documentation-accuracy only, genuinely severe finding): checked cd-workflows.md §1's claim that every RLS SQL file was eventually applied to production, file by file, rather than trusted. The confirming "applied live" phrase appears explicitly for only 7 of 18 RLS files. For `017`/`018` (sale_line_items/sale_payments/return_line_items, Sprint 40's own zero-RLS fix) and `019` (devices, Sprint 55), no confirmation exists on record that these were ever applied to the real production database — a distinct, more severe possibility than owasp-checklist.md's existing FORCE/role finding, since "the app works in production" can't distinguish the two explanations. Corrected across owasp-checklist.md, cd-workflows.md §1, and release-checklist.md's OWASP row. Flagged to the founder as the single most action-critical item outstanding — genuinely unknown, not merely blocked. No code change. |
+| 0.58.0 | 2026-08-21 | Cross-cutting fix, Sprint 60 (not a numbered M4 item, documentation-accuracy only): checked every milestone's own exit criterion against what was actually verified at closure. Found milestones.md's M2 row requires the tap-count-audit.md budget "measured on the reference low-end device..., not estimated" — never actually satisfied, since that device has never been owned (unchanged since Sprint 43), and M2's own closure (§3 above, Sprint 30) carried no caveat against this, unlike M0's and M4's honest treatment of their own hardware-dependent exit criteria. Corrected in milestones.md and §3 above with a dated note; M1/M3 checked and confirmed not to share this issue. No code change. |
