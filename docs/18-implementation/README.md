@@ -3,13 +3,16 @@
 > **Status:** 🟡 In progress — M0/M1/M2/M3 fully closed. M4's numbered backlog items 1–8 are done;
 > item 9 (MTS-01/02/03 execution) remains **founder-blocked** (needs real printer/reference-device
 > hardware) — a prior version of this status line wrongly said all 9 were done, corrected Sprint 57.
-> Sprint 57 also closed the failure-scenarios release-gate row in full (all 10 named offline
-> scenarios now have real coverage), so M4's only remaining open items against its own exit
-> criterion (release-checklist.md §2's pilot-ready gate) are item 9 above and the OWASP review's two
-> remaining findings — RLS `FORCE` (needs founder confirmation of the real production database
-> role) and sign-in rate limiting (needs a Supabase dashboard configuration change, not code) —
-> none of them open engineering work.
-> **Version:** 0.61.0
+> Sprint 57 closed the failure-scenarios release-gate row in full (all 10 named offline scenarios
+> now have real coverage). Sprint 58 found a real finding had fallen through a crack between two
+> documents — Android release signing (`owasp-checklist.md`'s M8) had never been threaded into
+> `release-checklist.md`'s actual release gate — plus a second, compounding gap: the Android
+> build→sign→upload CI pipeline `cd-workflows.md §2` describes was never actually built. M4's
+> remaining open items against its own exit criterion (release-checklist.md §2's pilot-ready gate)
+> are now: item 9 above, the OWASP review's three findings (RLS `FORCE`, sign-in rate limiting,
+> Android release signing), and the Android distribution-pipeline gap — none of them open
+> engineering work; all founder-blocked or infra-blocked.
+> **Version:** 0.62.0
 > **Last updated:** 2026-08-21
 > **Owner:** CTO / All engineering roles
 
@@ -85,19 +88,22 @@ scaffold that precedes the first module in the loop above — not a module itsel
 to the 13-step loop or the full Definition of Done. See
 [implementation-log.md](implementation-log.md) for what has actually landed.
 
-As of Sprint 57 (2026-08-21): M1 — Full Catalogue & Inventory (8 items), M2 — Full POS Loop
+As of Sprint 58 (2026-08-21): M1 — Full Catalogue & Inventory (8 items), M2 — Full POS Loop
 (6 items), and M3 — Customers, Returns & Refund (5 items) are each fully closed. M4 — Reports,
 Settings, and Release Readiness has numbered backlog items 1–8 done — item 9 (MTS execution)
-remains founder-blocked, unchanged since Sprint 43 first named it — plus 14 further unnumbered
-cross-cutting sprints (44–57) closing OWASP-review and failure-scenario findings post-hoc. M4 has
-not formally closed, since [release-checklist.md §2](../14-testing/release-checklist.md) (its own
-stated exit criterion, per [milestones.md](../16-milestones/milestones.md)) still has two
-unresolved rows (down from three as of Sprint 57, which closed the failure-scenarios row in full):
-item 9 above, and the OWASP review's two remaining findings — both founder-blocked or
-infrastructure-blocked rather than open engineering work (see the status line above). There is no
-unstarted, buildable engineering gap left in this phase as of this writing — the honest next steps
-are founder action (unblocking the items above) or beginning
-M5 — First Real Shop pilot-recruitment prep, which itself is gated on M4 formally closing.
+remains founder-blocked, unchanged since Sprint 43 first named it — plus 15 further unnumbered
+cross-cutting sprints (44–58) closing OWASP-review, failure-scenario, and release-gate-accounting
+findings post-hoc. M4 has not formally closed, since
+[release-checklist.md §2](../14-testing/release-checklist.md) (its own stated exit criterion, per
+[milestones.md](../16-milestones/milestones.md)) still has three unresolved rows (up from two as of
+Sprint 57 — Sprint 58 found Android release signing had never been threaded into this gate at all,
+plus a second, compounding gap: the Android build→sign→upload CI pipeline was never actually
+built): item 9 above, the OWASP review's now-three findings, and the new Android
+distribution-pipeline row — all founder-blocked or infrastructure-blocked rather than open
+engineering work (see the status line above). There is no unstarted, buildable engineering gap left
+in this phase as of this writing — the honest next steps are founder action (unblocking the items
+above) or beginning M5 — First Real Shop pilot-recruitment prep, which itself is gated on M4
+formally closing.
 
 ## Change Log
 
@@ -164,3 +170,4 @@ M5 — First Real Shop pilot-recruitment prep, which itself is gated on M4 forma
 | 0.59.0 | 2026-08-20 | Sprint 56 (cross-cutting fix): the mobile half of Sprint 55's device registration/revocation gap built, closing Sprint 43's device-revocation OWASP finding in full. `client_device_id` generated once per install and persisted locally, registered on sign-in and on launch (best-effort), sent as `X-Device-Id` on every request, `DEVICE_REVOKED` forces an immediate local sign-out. Found and fixed two real bugs during verification: a migration test's reconstructed historical schema needed updating for the new column (same class of gap Sprint 51 found), and a transient register-device failure was letting a successful sign-in surface as a failed one. `flutter test` 273/273. **M4's 9 numbered backlog items are all now done; M4 itself remains open only on the three founder-blocked/infra-blocked release-checklist rows named in the status line above.** |
 | 0.60.0 | 2026-08-21 | Sprint 57 (cross-cutting fix): "Token expired while queued" — `failure-scenarios.md`'s last unverified failure scenario — built, closing `release-checklist.md`'s failure-scenarios row in full. Checked directly whether the row's own "needs the full Supabase CLI stack" claim held — the fifth such check in this project (after Sprints 50/51/52/54), and false again: the real gap was no reactive refresh-and-retry code existing in `api_client.dart` at all, plus a real, previously-undocumented server fact (`core/auth/session.ts` never emits a distinct `TOKEN_EXPIRED` code — every invalid-token case surfaces as `UNAUTHENTICATED`). Fixed: a `refreshSession()`-then-retry-once interceptor on any `401 UNAUTHENTICATED`, unit-tested at the decision-logic level the same way `isDeviceRevokedError` already was. Corrected `error-catalogue.md`/`authentication.md §3` to match. `flutter test` 277/277 (273 pre-existing + 4 new). **All 10 named failure scenarios now have real coverage; `release-checklist.md` has only two unresolved rows left, both founder-blocked/infra-blocked.** |
 | 0.61.0 | 2026-08-21 | Correction to 0.59.0's own status line, found while writing this entry's own status-line update: it said "M4's 9 numbered backlog items are all now done," but M4 item 9 (MTS-01/02/03 execution) has been founder-blocked since Sprint 43 and Sprints 55/56 (device registration/revocation) were explicitly unnumbered cross-cutting fixes, not item 9 — the two were conflated. This document's own established discipline (check a prior claim against the source it should trace to, backlog.md in this case) caught it before it could propagate further; corrected in the status header and "Where things stand" above. |
+| 0.62.0 | 2026-08-21 | Sprint 58 (cross-cutting fix, documentation-accuracy only — no code change): found Android release signing (owasp-checklist.md's M8 finding, open since Sprint 43) had never been threaded into release-checklist.md's actual release gate at all — named in one document's own "4 real gaps remain" list for 15 sprints without ever reaching the other. Checked whether this omission was actually harmless before correcting it: `cd-workflows.md §2` names Google Play Console's Internal Testing track as this project's own designed **pilot** distribution mechanism, not only a commercial one, and Internal Testing cannot accept a debug-signed build — so this finding genuinely blocks the pilot gate, not just a future commercial one. Found a second, compounding gap investigating the first: the entire Android build→sign→upload pipeline `cd-workflows.md §2` describes (`release-candidate.yml`) was never actually built — confirmed directly against `.github/workflows/` (only `pr.yml`/`nightly.yml` exist) — the same "designed but not built" class of gap Sprint 55/PR #79 already found for this same document's §1. Corrected `owasp-checklist.md`, `cd-workflows.md §2`, and added a new, explicit row to `release-checklist.md §2` (not folded into the OWASP row, since it's a second, independent blocker that would remain even with a real keystore in hand). Also found and corrected a self-introduced accounting error in the prior sprint's own `release-checklist.md` edit (M4 items 1–8 done, not "9," matching item 9's own unchanged founder-blocked status). `release-checklist.md`'s pilot-ready gate now has three unresolved rows, up from two, all founder-blocked or infra-blocked. |
