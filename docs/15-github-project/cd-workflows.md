@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 15 — GitHub Project
-> **Version:** 0.2.0
-> **Last updated:** 2026-08-20
+> **Version:** 0.3.0
+> **Last updated:** 2026-08-21
 > **Owner:** DevOps Engineer / CTO
 > **Approved by:** _pending_
 
@@ -39,6 +39,22 @@ manually applies that file to the real project** — this is the one manual step
 have named all along.
 
 ## 2. Android build, signing, and distribution
+
+**Corrected, Sprint 58 (found while checking why Android release signing had never been threaded
+into `release-checklist.md`, not by inspecting this section itself first):** everything below is
+the **designed** pipeline, not a built one — the same gap Sprint 55/PR #79 already found and named
+for §1's RLS-SQL deployment path, now found here too. `release-candidate.yml` does not exist in
+`.github/workflows/` (only `pr.yml` and `nightly.yml` do); no GitHub encrypted secret for a signing
+keystore has ever been created; nothing in this repository has ever built, signed, or uploaded an
+app bundle to Google Play Console, Internal Testing or otherwise. Every Android build produced by
+this project so far (Sprints 10, 16, 48, 54) has been a manual, local `flutter build apk` command,
+signed with the default debug keystore (`apps/mobile/android/app/build.gradle.kts`'s own `// TODO:
+Add your own signing config for the release build` comment, per `owasp-checklist.md`'s M8 finding),
+re-served over a local network file share for the founder's own device — workable for founder-only
+testing, not a path any real pilot shop could use. The diagram and table below remain the intended
+design (`ci-workflows.md §3` already names `release-candidate.yml`'s trigger shape); building it for
+real is real, separately-scoped follow-up work, named here rather than assumed done because a
+design doc describes it in the present tense.
 
 ```mermaid
 flowchart LR
@@ -89,3 +105,4 @@ during a real incident.
 | --- | --- | --- |
 | 0.1.0 | 2026-07-31 | Vercel git-push deployment; Android signing via GitHub encrypted secrets, never committed; auto-incremented build numbering; rollback mechanism per component; rehearsal flagged honestly as a pending Phase 18 action. |
 | 0.2.0 | 2026-08-20 | Corrected §1's "no manual deployment step exists" claim, found while merging Sprint 55's `019_rls_devices.sql`: true for Prisma migrations, never true for RLS — `supabase/sql/*.sql` has always needed a human to apply it to the real project by hand, confirmed by `implementation-log.md`'s own repeated "applied live" history for every prior numbered file. Named as a real, unfixed gap (a genuine CD mechanism for this is separately-scoped future work), not silently corrected away. |
+| 0.3.0 | 2026-08-21 | Sprint 58: corrected §2 the same way §1 was corrected last sprint — the entire Android build→sign→upload pipeline described here (`release-candidate.yml`) was never actually built; no such workflow exists, no signing-keystore secret has ever been created, and no app bundle has ever reached Google Play Console. Every real Android build produced by this project has been a manual, local, debug-signed `flutter build apk` command. Threaded into `release-checklist.md` for the first time in the same pass — this gap had been named in `owasp-checklist.md` since Sprint 43 but never carried into the actual release gate. |
