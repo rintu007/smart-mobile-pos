@@ -421,6 +421,26 @@ backlog items are 1–8 done, not "9... done" — item 9, MTS execution, is a fo
 counted as engineering). Release-checklist.md's pilot-ready gate now has three unresolved rows
 (up from two), all founder-blocked or infra-blocked, none open engineering work.
 
+**Cross-cutting fix, [Sprint 59](sprint-59.md) (not a numbered item, documentation-accuracy only —
+no code change, but a genuinely severe finding):** checked `cd-workflows.md §1`'s own claim that
+every RLS SQL file (`001`–`019`) was, in practice, eventually applied to the real production
+database — citing `implementation-log.md`'s "applied live" entries as its evidence — file by file
+against the actual documentary record, rather than trusted at face value. That confirming phrase
+appears explicitly for only 6 of the 18 RLS files. For `017`/`018`
+(`sale_line_items`/`sale_payments`/`return_line_items` — Sprint 40's own fix for the two tables that
+had *zero* RLS at all) and `019` (`devices`, Sprint 55), **there is no confirmation anywhere on
+record that these policies were ever actually applied to the real production database** — Sprint
+40's own text explicitly distinguishes local verification from "the shared production Supabase
+project" and never claims the latter for these two files; Sprint 55's own demo script lists a
+real-Supabase smoke test as "not performed this sprint." This is a distinct, more severe
+possibility than `owasp-checklist.md`'s existing FORCE/role finding — "the app works in production"
+is equally consistent with "RLS present but owner-exempt" and "RLS never applied for these specific
+tables," so it can't be used to rule the second explanation out. Corrected across
+`owasp-checklist.md` (finding #1 grew a second dimension), `cd-workflows.md §1`, and
+`release-checklist.md`'s OWASP row. This session cannot check the real production database
+directly — confirming this for at minimum `017`/`018`/`019` is now the single most action-critical
+item flagged to the founder, ahead of the FORCE/role question it's a precondition for.
+
 ## 6. Ordering rule, restated
 
 Every dependency column above traces directly to
@@ -488,3 +508,4 @@ specifically.
 | 0.54.0 | 2026-08-20 | Cross-cutting fix, Sprint 56 (not a numbered M4 item, mobile half of Sprint 55's same gap): `client_device_id` generated/persisted locally, registered on sign-in and on launch (best-effort), sent as `X-Device-Id` on every request, `DEVICE_REVOKED` forces local sign-out. Found and fixed two real bugs: a migration test's reconstructed historical schema needed updating for the new column (same class of gap Sprint 51 found), and a transient register-device failure was wrongly surfacing a successful sign-in as failed — now swallowed, best-effort. 273/273 mobile tests (266 pre-existing + 7 new), `flutter analyze` clean. |
 | 0.55.0 | 2026-08-21 | Cross-cutting fix, Sprint 57 (not a numbered M4 item): "Token expired while queued" — the last unverified failure scenario — built. Checked test-plan.md's own "needs the full Supabase CLI stack" claim directly (the fifth such check in this project, after Sprints 50/51/52/54) and found it false again: the real gap was no reactive refresh-and-retry code existing in the mobile client at all, despite authentication.md §3 implying it did. Built `api_client.dart`'s missing `onError` interceptor (refresh once, retry once, on `401 UNAUTHENTICATED`); found and corrected `error-catalogue.md`'s `TOKEN_EXPIRED` code, never actually implementable server-side. All 10 named failure scenarios now covered — `release-checklist.md`'s failure-scenarios row flips to satisfied for the first time. 277/277 mobile tests (273 pre-existing + 4 new), `flutter analyze` clean. |
 | 0.56.0 | 2026-08-21 | Cross-cutting fix, Sprint 58 (not a numbered M4 item, documentation-accuracy only): found Android release signing (owasp-checklist.md's M8 finding, open since Sprint 43) had never been threaded into release-checklist.md's actual release gate — named in one document for 15 sprints without ever reaching the other. Found a second, compounding gap: cd-workflows.md §2's entire Android build→sign→upload pipeline (`release-candidate.yml`) was never actually built, the same "designed but not built" class of gap Sprint 55/PR #79 already found for this document's §1. Corrected across all three documents; also corrected a self-introduced accounting error in the prior sprint's own release-checklist.md edit (M4 items 1–8 done, not "9," per item 9's own standing founder-blocked status). No code change. |
+| 0.57.0 | 2026-08-21 | Cross-cutting fix, Sprint 59 (not a numbered M4 item, documentation-accuracy only, genuinely severe finding): checked cd-workflows.md §1's claim that every RLS SQL file was eventually applied to production, file by file, rather than trusted. The confirming "applied live" phrase appears explicitly for only 6 of 18 RLS files. For `017`/`018` (sale_line_items/sale_payments/return_line_items, Sprint 40's own zero-RLS fix) and `019` (devices, Sprint 55), no confirmation exists on record that these were ever applied to the real production database — a distinct, more severe possibility than owasp-checklist.md's existing FORCE/role finding, since "the app works in production" can't distinguish the two explanations. Corrected across owasp-checklist.md, cd-workflows.md §1, and release-checklist.md's OWASP row. Flagged to the founder as the single most action-critical item outstanding — genuinely unknown, not merely blocked. No code change. |
