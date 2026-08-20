@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 16 — Milestones
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-31
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-21
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
 
@@ -36,9 +36,22 @@ themselves a plausible early-adopter channel, and matching the two verticals alr
 
 ## 2. Onboarding
 
+**Added, Sprint 61 — a real gap, not a design decision left implicit:** this document never said
+how the app actually reaches a pilot shop's device, despite that being squarely within its own
+stated purpose ("naming **how** the first real shop is recruited and supported"). Resolved as a
+**direct sideload install of a properly-signed (non-debug) release APK**, done by the founder
+during the pre-visit or day-one visit — the identical mechanism already proven reliable across
+every real-device install this project has done (Sprints 10, 16, 48, 54), needing only a real
+signing keystore (`cd-workflows.md §2`'s own corrected account) and no Play Console setup at all.
+Google Play Console distribution was this project's originally-designed mechanism (Phase 15,
+before this document existed), but standing it up — API access, a service account, an automated
+pipeline — for 2–3 shops the founder personally visits is exactly the kind of premature-generality
+effort §3 below already argues against for feedback tooling; the same reasoning applies here.
+
 | Step | Detail |
 | --- | --- |
 | Pre-visit | Product catalogue for the shop entered in advance (by the founder/team, not the shop owner) from a photo or a quick in-person walk of the shelves — the ten-minute onboarding promise is about the *shop owner's* time, not a claim that data entry from zero takes ten minutes |
+| Pre-visit or day-one | The release APK sideloaded directly onto the shop's device by the founder — a one-time "allow installs from this source" permission grant on the shop's own device, the same step already handled on the founder's own device every prior real-device install |
 | Day-one visit | Founder present in person for the shop's first real trading day — opens the day, observes the first real sale, is available for the first real return, closes the day and reconciles cash together |
 | Week-one check-in | A direct conversation (call or in-person), not a survey — matching this document's "known relationship" recruitment stance, a structured NPS-style survey is premature for a 2–3 shop pilot |
 | Week-four check-in | Same, plus a direct comparison against the shop's own prior method (a notebook, or a competitor product if already in use) |
@@ -89,3 +102,4 @@ does not close it outright, and should not be reported as having done so.
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-31 | Recruitment narrowed to 2–3 known Grocery/Mobile Shop pilots, matching existing seed data; founder-present onboarding; WhatsApp-based feedback deliberately chosen over premature in-app tooling; success criteria reused verbatim from success-metrics.md's Pilot column. |
+| 0.2.0 | 2026-08-21 | Sprint 61: added the missing "how does the app actually reach the shop's device" step — a direct sideload of a properly-signed release APK, done by the founder during the visit, rather than Google Play Console distribution. Found this document had never been reconciled against `cd-workflows.md §2`'s Phase-15-era Play Console design, and that reconciling them the other way (correcting `cd-workflows.md`/`release-checklist.md` to match this document's own already-established minimalism) was the right call — the same "avoid premature generality" reasoning this document already applies to feedback tooling in §3. |
