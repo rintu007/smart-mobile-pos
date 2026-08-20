@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 15 — GitHub Project
-> **Version:** 0.3.0
+> **Version:** 0.4.0
 > **Last updated:** 2026-08-21
 > **Owner:** DevOps Engineer / CTO
 > **Approved by:** _pending_
@@ -27,16 +27,29 @@ but was never true for Row-Level Security. RLS policies live in `supabase/sql/*.
 kept outside Prisma's migration flow (`tenancy-model.md §2`) — CI only ever applies these files
 against the ephemeral `fast-integration` test container (`integration-tests/setup/apply-sql.mjs`),
 **never** against the real project. Every numbered file from `001_` through `019_` has, in practice,
-required a human to run it against the real Supabase SQL editor by hand after merging — confirmed
-by `implementation-log.md`'s own repeated "applied live" entries — exactly the "a step a human has
-to remember to run is a step that eventually gets forgotten" risk this section's own rule warns
-against, previously true of this path without this section ever admitting it. **No automated fix
-built this pass** — a genuine CD mechanism (a Supabase CLI step in the Vercel build, or a GitHub
-Action running `apply-sql.mjs`-equivalent against the real `DATABASE_URL` on merge) is real,
-separately-scoped follow-up work, named here rather than silently left unfixed a second time. Until
-then: **any PR that adds a new `supabase/sql/*.sql` file is not actually deployed until someone
-manually applies that file to the real project** — this is the one manual step this document should
-have named all along.
+required a human to run it against the real Supabase SQL editor by hand after merging — this exactly
+matches the "a step a human has to remember to run is a step that eventually gets forgotten" risk
+this section's own rule warns against, previously true of this path without this section ever
+admitting it. **No automated fix built this pass** — a genuine CD mechanism (a Supabase CLI step in
+the Vercel build, or a GitHub Action running `apply-sql.mjs`-equivalent against the real
+`DATABASE_URL` on merge) is real, separately-scoped follow-up work, named here rather than silently
+left unfixed a second time. Until then: **any PR that adds a new `supabase/sql/*.sql` file is not
+actually deployed until someone manually applies that file to the real project** — this is the one
+manual step this document should have named all along.
+
+**Corrected further, Sprint 59 — the "confirmed by implementation-log.md's own repeated 'applied
+live' entries" clause above was itself imprecise, checked file-by-file rather than trusted.** That
+phrase appears explicitly only for `003`–`007`, `012`, and `015`. For `010`/`011`/`013`/`014`/`016`
+there's reasonable circumstantial evidence (each introducing sprint's own demo ran against real
+production Supabase with a passing cross-tenant check for that table) but no file-specific
+confirming sentence. For **`017`/`018` (`sale_line_items`/`sale_payments`/`return_line_items`,
+Sprint 40) and `019` (`devices`, Sprint 55) there is no confirmation anywhere on record that these
+three files were ever actually applied to the real production database** — Sprint 40's own text
+distinguishes local verification from "the shared production Supabase project" and never claims the
+latter for these two files; Sprint 55's own demo script lists a real-Supabase smoke test as "not
+performed this sprint." See `owasp-checklist.md`'s finding #1 for the security consequence — this
+isn't merely a process-hygiene gap, it may mean specific tables have had no live RLS protection at
+all, a distinct and more severe possibility than "RLS present but owner-exempt."
 
 ## 2. Android build, signing, and distribution
 
@@ -106,3 +119,4 @@ during a real incident.
 | 0.1.0 | 2026-07-31 | Vercel git-push deployment; Android signing via GitHub encrypted secrets, never committed; auto-incremented build numbering; rollback mechanism per component; rehearsal flagged honestly as a pending Phase 18 action. |
 | 0.2.0 | 2026-08-20 | Corrected §1's "no manual deployment step exists" claim, found while merging Sprint 55's `019_rls_devices.sql`: true for Prisma migrations, never true for RLS — `supabase/sql/*.sql` has always needed a human to apply it to the real project by hand, confirmed by `implementation-log.md`'s own repeated "applied live" history for every prior numbered file. Named as a real, unfixed gap (a genuine CD mechanism for this is separately-scoped future work), not silently corrected away. |
 | 0.3.0 | 2026-08-21 | Sprint 58: corrected §2 the same way §1 was corrected last sprint — the entire Android build→sign→upload pipeline described here (`release-candidate.yml`) was never actually built; no such workflow exists, no signing-keystore secret has ever been created, and no app bundle has ever reached Google Play Console. Every real Android build produced by this project has been a manual, local, debug-signed `flutter build apk` command. Threaded into `release-checklist.md` for the first time in the same pass — this gap had been named in `owasp-checklist.md` since Sprint 43 but never carried into the actual release gate. |
+| 0.4.0 | 2026-08-21 | Sprint 59: §1's own "confirmed by implementation-log.md's own repeated 'applied live' entries" clause was itself imprecise, checked file-by-file rather than trusted. That phrase appears explicitly only for 6 of the 18 RLS files (`003`–`007`, `012`, `015`); for `017`/`018`/`019` there is no confirmation on record they were ever applied to the real production database at all — a real, previously-invisible possibility that specific tables (including Sprint 40's own "most significant" RLS fix) may have no live RLS protection whatsoever, distinct from and more severe than `owasp-checklist.md`'s existing FORCE/role finding. |

@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 12 — Security Design
-> **Version:** 0.8.0
+> **Version:** 0.9.0
 > **Last updated:** 2026-08-21
 > **Owner:** Security Engineer / CTO
 > **Approved by:** _pending_
@@ -47,6 +47,29 @@ production risk — flagged for the founder rather than silently deferred.
    zero rows) — this needs the founder to confirm the actual `DATABASE_URL` role Supabase issued
    before any change is made, the same category of "needs information only production access has"
    as the branch-protection setting Sprint 40 also could not apply itself.
+
+   **A second, independent, and more fundamental possibility, found Sprint 59 and not yet ruled
+   out: some of these policies may never have reached the real production database at all**, a
+   different failure from "present but owner-exempt." `cd-workflows.md §1`'s own corrected account
+   (Sprint 55) of the manual apply-by-hand step cited `implementation-log.md`'s "applied live"
+   entries as evidence every file 001–019 eventually got applied — but that phrase, checked
+   file-by-file against every sprint doc and implementation-log entry, appears explicitly only for
+   `003`–`007`, `012`, and `015`. For `010`, `011`, `013`, `014`, `016` there is reasonable
+   circumstantial evidence (each sprint's own demo explicitly ran "against production Supabase"
+   with a passing cross-tenant RLS check for that table) but no file-specific confirming sentence.
+   For **`017`/`018` (`sale_line_items`/`sale_payments`/`return_line_items` — Sprint 40's own
+   "most significant security gap" fix, closing the exact tables that had *zero* RLS at all) and
+   `019` (`devices`, Sprint 55)**, the documentary record contains **no confirmation at all** —
+   Sprint 40's own text explicitly distinguishes verification "against the real applied SQL
+   locally" from "the shared production Supabase project" and never claims the latter for these two
+   files; Sprint 55's own demo script explicitly lists a real-Supabase smoke test as "not performed
+   this sprint." "The application demonstrably works in production" is consistent with *either*
+   explanation (owner-exempt-but-present, or absent-but-masked-by-the-app's-own-service-layer-scoping)
+   — it cannot distinguish between them, so it cannot be used to rule this one out the way it was
+   used to support the FORCE/role finding above. This session cannot check `pg_class.relrowsecurity`
+   against the real production database directly — **the founder confirming, for at minimum `017`,
+   `018`, and `019`, that these policies genuinely exist live is a precondition for the FORCE/role
+   question even being the right next question to ask.**
 2. **No request-throttling code existed anywhere in this repository — fixed Sprint 45, with one
    real architectural limit found while building it.** `rate-limiting.md`'s mutating/read/sync-push
    classes are now enforced inside `requirePermission` (a Postgres-backed fixed-window counter, no
@@ -125,3 +148,4 @@ still holds).
 | 0.6.0 | 2026-08-19 | Sprint 48 — M9's on-device database encryption gap closed: the local database now opens through a SQLCipher-enabled `sqlite3` build, keyed via `PRAGMA key` with a 256-bit random value from platform secure storage; verified against a real Android debug build (`libsqlcipher.so` genuinely bundled) and a dedicated test proving unkeyed reads fail. M10 now fully CONFIRMED (both halves built). M9's row and the summary counts corrected accordingly. |
 | 0.7.0 | 2026-08-20 | Sprint 55 — A01's device-revocation half built: `devices` table, register/list/revoke endpoints, `requireSession`'s per-request check via a new `X-Device-Id` header. Verified against a real Postgres connection, including the RLS deliberate-break-and-fix cycle (98/98 integration checks). A01 remains PARTIAL overall — RLS's own "dual, independent" claim (finding #1) is a separate, still-open issue. |
 | 0.8.0 | 2026-08-21 | Sprint 58 (documentation-accuracy only) — found the M8 Android-signing finding (open since Sprint 43) had never been threaded into `release-checklist.md`'s actual release gate, despite being named in this document's own "4 real gaps remain" list the whole time. Cross-referenced in M8's row and the summary's item 4. Also found and corrected in `cd-workflows.md`/`release-checklist.md` (not this document): the entire Android build→sign→upload CI pipeline was never actually built, a second, compounding gap. |
+| 0.9.0 | 2026-08-21 | Sprint 59 (documentation-accuracy only, no code change — but a genuinely severe finding) — checked `cd-workflows.md §1`'s own blanket claim that "every numbered file 001–019 has, in practice, required a human to run it" (implying they eventually all were) against the actual documentary record, file by file. Found it imprecise in a materially dangerous direction: the confirming phrase "applied live" appears explicitly only for `003`–`007`, `012`, and `015`; for `017`/`018` (Sprint 40's own fix for the two tables with *zero* RLS at all) and `019` (`devices`, Sprint 55), there is **no confirmation anywhere on record** that these policies were ever actually applied to the real production Supabase database — Sprint 40's own text explicitly distinguishes local verification from "the shared production Supabase project" and never claims the latter for these two files. Added as a second, independent possibility to finding #1 above, since "the application demonstrably works in production" cannot distinguish "RLS present but owner-exempt" from "RLS never applied at all for these specific tables" — both look identical from the outside. This session cannot check the real production database directly; the founder confirming this for at minimum `017`, `018`, and `019` is now named as a precondition for the existing FORCE/role question, not a separate, lower-priority item. |
