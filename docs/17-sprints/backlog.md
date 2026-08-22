@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.59.0
+> **Version:** 0.60.0
 > **Last updated:** 2026-08-21
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
@@ -496,6 +496,22 @@ of distinct concerns blocking M4's pilot-ready closure drops from three to **two
 the OWASP review's three findings) — the first correction in this run of sprints that shortened the
 founder's remaining task list rather than lengthened it.
 
+**Cross-cutting deliverable, [Sprint 62](sprint-62.md) (not a numbered item, not documentation
+accuracy this time — a genuinely new artifact):** Sprint 59's own finding (no documentary
+confirmation that `017`/`018`/`019` were ever applied to the real production database) and
+`owasp-checklist.md`'s finding #1 (does the app's own role bypass RLS) both end the same way —
+"this session cannot check the real production database directly." Rather than leave that as a
+dead end, built the founder a direct answer:
+[supabase/sql/diagnostics/check_rls_status.sql](../../supabase/sql/diagnostics/check_rls_status.sql)
+— two read-only queries against `pg_tables`/`pg_roles`, safe to paste directly into the Supabase
+Dashboard's SQL Editor for the production project, answering both open questions in one
+five-minute paste-and-read action instead of leaving the founder to work out how to check either.
+Not a migration, never applied by CI or automatically — placed in its own `diagnostics/`
+subdirectory specifically so it can never be mistaken for one of the numbered policy files.
+Referenced from `cd-workflows.md §1`, `owasp-checklist.md`'s finding #1, and
+`release-checklist.md`'s OWASP row — the three places a reader following up on this finding would
+actually look.
+
 ## 6. Ordering rule, restated
 
 Every dependency column above traces directly to
@@ -566,3 +582,4 @@ specifically.
 | 0.57.0 | 2026-08-21 | Cross-cutting fix, Sprint 59 (not a numbered M4 item, documentation-accuracy only, genuinely severe finding): checked cd-workflows.md §1's claim that every RLS SQL file was eventually applied to production, file by file, rather than trusted. The confirming "applied live" phrase appears explicitly for only 7 of 18 RLS files. For `017`/`018` (sale_line_items/sale_payments/return_line_items, Sprint 40's own zero-RLS fix) and `019` (devices, Sprint 55), no confirmation exists on record that these were ever applied to the real production database — a distinct, more severe possibility than owasp-checklist.md's existing FORCE/role finding, since "the app works in production" can't distinguish the two explanations. Corrected across owasp-checklist.md, cd-workflows.md §1, and release-checklist.md's OWASP row. Flagged to the founder as the single most action-critical item outstanding — genuinely unknown, not merely blocked. No code change. |
 | 0.58.0 | 2026-08-21 | Cross-cutting fix, Sprint 60 (not a numbered M4 item, documentation-accuracy only): checked every milestone's own exit criterion against what was actually verified at closure. Found milestones.md's M2 row requires the tap-count-audit.md budget "measured on the reference low-end device..., not estimated" — never actually satisfied, since that device has never been owned (unchanged since Sprint 43), and M2's own closure (§3 above, Sprint 30) carried no caveat against this, unlike M0's and M4's honest treatment of their own hardware-dependent exit criteria. Corrected in milestones.md and §3 above with a dated note; M1/M3 checked and confirmed not to share this issue. No code change. |
 | 0.59.0 | 2026-08-21 | Cross-cutting fix, Sprint 61 (not a numbered M4 item, documentation-accuracy — narrows a prior finding rather than deepening one): read pilot-plan.md in full for the first time and found release-checklist.md's Sprint 58 Android-distribution row had never been checked against it. Play Console Internal Testing was never actually required for pilot-plan.md's real pilot shape (2-3 founder-visited shops, deliberately minimal) — only a real signing keystore plus direct sideload is, the mechanism already proven across every real-device install this project has done. Corrected cd-workflows.md §2, release-checklist.md (narrowed §2's row, moved the full pipeline to §3/commercial scope), and pilot-plan.md itself (added the missing device-install step). Distinct blocking concerns for M4's pilot-ready closure drop from three to two. No code change. |
+| 0.60.0 | 2026-08-21 | Cross-cutting deliverable, Sprint 62 (not a numbered M4 item — a new artifact, not a documentation correction): built `supabase/sql/diagnostics/check_rls_status.sql`, a read-only diagnostic the founder can paste into the Supabase Dashboard's SQL Editor to answer both Sprint 59's RLS-application question and owasp-checklist.md's FORCE/role question directly against the real production database. Referenced from cd-workflows.md §1, owasp-checklist.md's finding #1, and release-checklist.md's OWASP row. |

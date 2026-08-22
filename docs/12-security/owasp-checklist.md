@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 12 — Security Design
-> **Version:** 0.9.0
+> **Version:** 0.10.0
 > **Last updated:** 2026-08-21
 > **Owner:** Security Engineer / CTO
 > **Approved by:** _pending_
@@ -70,6 +70,16 @@ production risk — flagged for the founder rather than silently deferred.
    against the real production database directly — **the founder confirming, for at minimum `017`,
    `018`, and `019`, that these policies genuinely exist live is a precondition for the FORCE/role
    question even being the right next question to ask.**
+
+   **A ready-to-run answer, added Sprint 62:**
+   [supabase/sql/diagnostics/check_rls_status.sql](../../supabase/sql/diagnostics/check_rls_status.sql)
+   — two read-only queries, paste directly into the Supabase Dashboard's SQL Editor for the
+   production project. The first answers this finding's own question directly (every table's actual
+   `rowsecurity`/`relforcerowsecurity` state, not what the migration files say should be true); the
+   second answers the FORCE/role finding above in the same pass (every role's
+   `rolbypassrls`/`rolsuper` flags, so the app's own `DATABASE_URL` role can be checked by name).
+   Both questions, previously requiring the founder to work out how to check them, now have one
+   five-minute paste-and-read action.
 2. **No request-throttling code existed anywhere in this repository — fixed Sprint 45, with one
    real architectural limit found while building it.** `rate-limiting.md`'s mutating/read/sync-push
    classes are now enforced inside `requirePermission` (a Postgres-backed fixed-window counter, no
@@ -149,3 +159,4 @@ still holds).
 | 0.7.0 | 2026-08-20 | Sprint 55 — A01's device-revocation half built: `devices` table, register/list/revoke endpoints, `requireSession`'s per-request check via a new `X-Device-Id` header. Verified against a real Postgres connection, including the RLS deliberate-break-and-fix cycle (98/98 integration checks). A01 remains PARTIAL overall — RLS's own "dual, independent" claim (finding #1) is a separate, still-open issue. |
 | 0.8.0 | 2026-08-21 | Sprint 58 (documentation-accuracy only) — found the M8 Android-signing finding (open since Sprint 43) had never been threaded into `release-checklist.md`'s actual release gate, despite being named in this document's own "4 real gaps remain" list the whole time. Cross-referenced in M8's row and the summary's item 4. Also found and corrected in `cd-workflows.md`/`release-checklist.md` (not this document): the entire Android build→sign→upload CI pipeline was never actually built, a second, compounding gap. |
 | 0.9.0 | 2026-08-21 | Sprint 59 (documentation-accuracy only, no code change — but a genuinely severe finding) — checked `cd-workflows.md §1`'s own blanket claim that "every numbered file 001–019 has, in practice, required a human to run it" (implying they eventually all were) against the actual documentary record, file by file. Found it imprecise in a materially dangerous direction: the confirming phrase "applied live" appears explicitly only for `003`–`007`, `012`, and `015`; for `017`/`018` (Sprint 40's own fix for the two tables with *zero* RLS at all) and `019` (`devices`, Sprint 55), there is **no confirmation anywhere on record** that these policies were ever actually applied to the real production Supabase database — Sprint 40's own text explicitly distinguishes local verification from "the shared production Supabase project" and never claims the latter for these two files. Added as a second, independent possibility to finding #1 above, since "the application demonstrably works in production" cannot distinguish "RLS present but owner-exempt" from "RLS never applied at all for these specific tables" — both look identical from the outside. This session cannot check the real production database directly; the founder confirming this for at minimum `017`, `018`, and `019` is now named as a precondition for the existing FORCE/role question, not a separate, lower-priority item. |
+| 0.10.0 | 2026-08-21 | Sprint 62 (no code change to `apps/*`, but a new artifact): added `supabase/sql/diagnostics/check_rls_status.sql`, a read-only diagnostic answering both open questions in finding #1 directly against the real production database — every table's actual RLS state, and every role's RLS-bypass flags — rather than leaving the founder to work out how to check either. Referenced in finding #1 above and in `cd-workflows.md §1`. |

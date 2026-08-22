@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 15 — GitHub Project
-> **Version:** 0.5.0
+> **Version:** 0.6.0
 > **Last updated:** 2026-08-21
 > **Owner:** DevOps Engineer / CTO
 > **Approved by:** _pending_
@@ -50,6 +50,17 @@ latter for these two files; Sprint 55's own demo script lists a real-Supabase sm
 performed this sprint." See `owasp-checklist.md`'s finding #1 for the security consequence — this
 isn't merely a process-hygiene gap, it may mean specific tables have had no live RLS protection at
 all, a distinct and more severe possibility than "RLS present but owner-exempt."
+
+**A ready-to-run answer, added Sprint 62, since this session cannot check the real database itself:**
+[supabase/sql/diagnostics/check_rls_status.sql](../../supabase/sql/diagnostics/check_rls_status.sql)
+— two read-only queries, safe to paste directly into the Supabase Dashboard's SQL Editor for the
+production project. The first lists every table's actual `rowsecurity`/`relforcerowsecurity` state
+right now (not what the migration files say should be true); the second lists every database role's
+`rolbypassrls`/`rolsuper` flags, so the app's own `DATABASE_URL` role can be checked directly against
+the exact question `owasp-checklist.md`'s finding #1 has had to infer rather than confirm since
+Sprint 43. Not a migration, never applied by CI, never run automatically — a diagnostic only, named
+and placed in its own `diagnostics/` subdirectory specifically so it's never mistaken for one of the
+numbered policy files.
 
 ## 2. Android build, signing, and distribution
 
@@ -138,3 +149,4 @@ during a real incident.
 | 0.3.0 | 2026-08-21 | Sprint 58: corrected §2 the same way §1 was corrected last sprint — the entire Android build→sign→upload pipeline described here (`release-candidate.yml`) was never actually built; no such workflow exists, no signing-keystore secret has ever been created, and no app bundle has ever reached Google Play Console. Every real Android build produced by this project has been a manual, local, debug-signed `flutter build apk` command. Threaded into `release-checklist.md` for the first time in the same pass — this gap had been named in `owasp-checklist.md` since Sprint 43 but never carried into the actual release gate. |
 | 0.4.0 | 2026-08-21 | Sprint 59: §1's own "confirmed by implementation-log.md's own repeated 'applied live' entries" clause was itself imprecise, checked file-by-file rather than trusted. That phrase appears explicitly only for 7 of the 18 RLS files (`003`–`007`, `012`, `015`); for `017`/`018`/`019` there is no confirmation on record they were ever applied to the real production database at all — a real, previously-invisible possibility that specific tables (including Sprint 40's own "most significant" RLS fix) may have no live RLS protection whatsoever, distinct from and more severe than `owasp-checklist.md`'s existing FORCE/role finding. |
 | 0.5.0 | 2026-08-21 | Sprint 61: narrowed §2's own Sprint 58 correction — its "not a path any real pilot shop could use" claim was never checked against `pilot-plan.md`'s actual pilot shape (2–3 founder-visited shops, deliberately minimal). Play Console Internal Testing is premature generality for that pilot, the same reasoning `pilot-plan.md §3` already applies to feedback tooling; what the first pilot actually needs is a real signing keystore plus direct sideload, the mechanism already proven across every real-device install this project has done. Play Console distribution moves to commercial-launch scope. |
+| 0.6.0 | 2026-08-21 | Sprint 62: added `supabase/sql/diagnostics/check_rls_status.sql`, a read-only, ready-to-paste diagnostic answering Sprint 59's own open question directly against the real database — which tables actually have RLS enabled/forced, and whether the app's own role bypasses it — rather than leaving the founder to work out how to check it. Referenced here in §1, next to the finding it answers. |
