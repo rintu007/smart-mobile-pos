@@ -15,10 +15,13 @@
 > signing. (A prior version of this line also named a separate Android-distribution-pipeline gap;
 > Sprint 61 found that was over-scoped — `pilot-plan.md`'s own minimal pilot shape needs only a real
 > signing keystore and a direct sideload install, not Google Play Console, which moved to
-> commercial-launch scope where it belongs.) None of the remaining items are open engineering work;
+> commercial-launch scope where it belongs.) **Sprint 62 built a ready-to-run diagnostic**
+> (`supabase/sql/diagnostics/check_rls_status.sql`) answering both open RLS questions directly
+> against the real production database — a five-minute paste-and-read action, not a code fix. None
+> of the remaining items are open engineering work;
 > all are founder-blocked, infra-blocked, or awaiting a founder verification this session cannot
 > perform itself.
-> **Version:** 0.65.0
+> **Version:** 0.66.0
 > **Last updated:** 2026-08-21
 > **Owner:** CTO / All engineering roles
 
@@ -94,27 +97,31 @@ scaffold that precedes the first module in the loop above — not a module itsel
 to the 13-step loop or the full Definition of Done. See
 [implementation-log.md](implementation-log.md) for what has actually landed.
 
-As of Sprint 61 (2026-08-21): M1 — Full Catalogue & Inventory (8 items) and M3 — Customers,
+As of Sprint 62 (2026-08-21): M1 — Full Catalogue & Inventory (8 items) and M3 — Customers,
 Returns & Refund (5 items) are each fully closed. M2 — Full POS Loop (6 items) is closed at the
 backlog-item level, but Sprint 60 found and named an uncaveated gap specific to its own closure:
 its `milestones.md` exit criterion requires a physical-reference-device measurement never actually
 performed, unlike M0's and M4's honest treatment of the same class of gap. M4 — Reports, Settings,
 and Release Readiness has numbered backlog items 1–8 done — item 9 (MTS execution) remains
 founder-blocked, the same root cause as M2's gap above, unchanged since Sprint 43 first named it —
-plus 18 further unnumbered cross-cutting sprints (44–61) closing OWASP-review, failure-scenario,
-and release-gate/milestone-accounting findings post-hoc. M4 has not formally closed, since
+plus 19 further unnumbered cross-cutting sprints (44–62) closing OWASP-review, failure-scenario,
+and release-gate/milestone-accounting findings post-hoc, plus one new deliverable (Sprint 62). M4
+has not formally closed, since
 [release-checklist.md §2](../14-testing/release-checklist.md) (its own stated exit criterion, per
 [milestones.md](../16-milestones/milestones.md)) still has **two** distinct unresolved concerns as
 of Sprint 61 (down from three after Sprint 58/59, once Sprint 61 found the Android-distribution row
 had been over-scoped — see the status line above): item 9/MTS execution, and the OWASP review's
 three findings, with RLS carrying a second, more urgent open question (were `017`/`018`/`019` ever
 actually applied to the real production database, a question that takes priority over the
-FORCE/role question it sits in front of). There is no unstarted, buildable engineering gap left in
-this phase as of this writing — the honest next steps are founder action (unblocking the items
-above, and specifically verifying the RLS-application question) or beginning M5 — First Real Shop
-pilot-recruitment prep, which itself is gated on M4 formally closing. `pilot-plan.md` (Sprint 61)
-was reviewed in full for the first time this session and found to already be a complete, workable
-plan for that milestone once M4 clears.
+FORCE/role question it sits in front of). **Sprint 62 built a direct answer to that question and
+the FORCE/role question in one pass** —
+[supabase/sql/diagnostics/check_rls_status.sql](../../supabase/sql/diagnostics/check_rls_status.sql),
+a read-only script the founder can paste into the Supabase Dashboard's SQL Editor. There is no
+unstarted, buildable engineering gap left in this phase as of this writing — the honest next steps
+are founder action (running the diagnostic above, and unblocking the remaining items) or beginning
+M5 — First Real Shop pilot-recruitment prep, which itself is gated on M4 formally closing.
+`pilot-plan.md` (Sprint 61) was reviewed in full for the first time this session and found to
+already be a complete, workable plan for that milestone once M4 clears.
 
 ## Change Log
 
@@ -185,3 +192,4 @@ plan for that milestone once M4 clears.
 | 0.63.0 | 2026-08-21 | Sprint 59 (cross-cutting fix, documentation-accuracy only — no code change, but the most consequential finding of this run of sprints): checked `cd-workflows.md §1`'s own claim that every RLS SQL file (`001`–`019`) was eventually applied to the real production database — citing `implementation-log.md`'s "applied live" entries as evidence — file by file, rather than trusted. That confirming phrase appears explicitly for only 7 of 18 RLS files. For `017`/`018` (`sale_line_items`/`sale_payments`/`return_line_items` — Sprint 40's own fix for the two tables that had *zero* RLS at all) and `019` (`devices`, Sprint 55), there is no confirmation anywhere on record that these were ever actually applied to production — direct documentary evidence (Sprint 40's own text distinguishes local verification from "the shared production Supabase project" and never claims the latter; Sprint 55's demo script lists a real-Supabase smoke test as "not performed"), not inference. This is distinct from, and potentially more severe than, `owasp-checklist.md`'s existing FORCE/role finding, since "the app works in production" can't distinguish "RLS present but owner-exempt" from "RLS never applied for these tables." Corrected `owasp-checklist.md` (finding #1 grew a second dimension), `cd-workflows.md §1`, and `release-checklist.md`'s OWASP row. Named prominently as the single most action-critical item outstanding — genuinely unknown, not merely blocked. |
 | 0.64.0 | 2026-08-21 | Sprint 60 (cross-cutting fix, documentation-accuracy only — no code change): checked every milestone's own exit criterion in `milestones.md` against what was actually verified at closure. Found M2's row requires the `tap-count-audit.md` budget "measured on the reference low-end device..., not estimated" — never satisfied, since that device has never been owned (unchanged since Sprint 43) and `tap-count-audit.md` is explicitly a design-time trace, not a physical measurement. M2's Sprint 30 closure ("fully closed, all 6 items done") carried no caveat against this, unlike M0's and M4's own honest treatment of an equivalent hardware-dependent exit criterion. Corrected `milestones.md` (dated note under M2's row) and `backlog.md §3` — the "all 6 items done" claim stands, the gap named is between that and this milestone's own stricter exit-criteria text. M1/M3 checked and confirmed not to share this issue. |
 | 0.65.0 | 2026-08-21 | Sprint 61 (cross-cutting fix, documentation-accuracy — narrows a prior finding rather than deepening one, the first of this kind in this run of sprints): read `pilot-plan.md` in full for the first time this session and found `release-checklist.md`'s Sprint 58 Android-distribution row had never been checked against it. Google Play Console's Internal Testing track was never actually required for the real pilot shape `pilot-plan.md` describes (2–3 founder-visited shops, deliberately minimal) — only a real signing keystore plus a direct sideload install is, the exact mechanism already proven across every real-device install this project has done. Corrected `cd-workflows.md §2` (Play Console reframed as commercial-scale work), `release-checklist.md` (§2's row narrowed; the full CI/Play-Console pipeline moved to §3), and `pilot-plan.md` itself (added the missing device-install step). Distinct blocking concerns for M4's pilot-ready closure drop from three to **two** — the first correction in this run of sprints that shortened the founder's remaining task list rather than lengthened it. |
+| 0.66.0 | 2026-08-21 | Sprint 62 (cross-cutting deliverable — the first sprint in this run that built something new rather than correcting or verifying a claim): built `supabase/sql/diagnostics/check_rls_status.sql`, a read-only diagnostic answering both Sprint 59's RLS-application question and `owasp-checklist.md`'s FORCE/role question directly against the real production database, in one five-minute paste-and-read action instead of leaving the founder to work out how to check either. Placed outside the numbered migration sequence so it's never mistaken for a policy file; referenced from `cd-workflows.md §1`, `owasp-checklist.md`'s finding #1, and `release-checklist.md`'s OWASP row. |
