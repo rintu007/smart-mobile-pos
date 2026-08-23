@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 16 — Milestones
-> **Version:** 0.1.2
+> **Version:** 0.1.3
 > **Last updated:** 2026-08-21
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
@@ -95,6 +95,21 @@ milestone), not silently dropped.
 | **Exit criteria** | One real, consenting shop has completed at least one full real trading day on the product, unassisted past the initial onboarding session. |
 | **Demonstrable outcome** | The [success-metrics.md](../01-vision/success-metrics.md) "never-stop-selling" row — sales lost to system failure — measured against a real shop's real day, not a simulation. |
 
+**Exception to the Entry criteria above, decided 2026-08-21 — the same shape as
+[modules/README.md Rule 2](../modules/README.md#rules)'s own third exception for M0→M1:** M4 is not
+literally "demonstrated" yet — `release-checklist.md §2` still has two unresolved concerns (MTS
+execution, the OWASP review's three findings), all now purely founder actions with zero engineering
+work behind them (Sprints 62–64). Asked and answered plainly, not assumed: the founder directed M5
+**prep** work — recruitment-cohort groundwork, milestone decomposition, anything
+[pilot-plan.md](pilot-plan.md) itself doesn't require a live, cleared M4 to do — to begin now
+regardless, the same one-off judgment call M0's own third exception made for a different
+remaining-item shape (external hardware there; founder-owned configuration/credential actions here).
+**This does not move the actual exit criterion.** A real shop's real trading day — the thing M5
+actually exists to produce — still should not happen before the founder has, at minimum, confirmed
+the RLS-application question (`supabase/sql/diagnostics/check_rls_status.sql`, Sprint 62) that
+real customer/sale data would otherwise be exposed to. Sprint 65 begins M5 decomposition on this
+basis.
+
 ## Why V1 is six milestones, not one
 
 Per this phase's own rule, the first milestone is a narrow vertical slice specifically so a wrong
@@ -113,3 +128,4 @@ from real usage before building further.
 | 0.1.0 | 2026-07-31 | Six outcome-based V1 milestones (M0–M5) defined with entry/exit criteria and a demonstrable-to-a-shop-owner outcome each; no calendar dates, per this document's deliberate scope. |
 | 0.1.1 | 2026-08-16 | M4's Scope row corrected: removed "the 10× load test," which belongs to release-checklist.md's commercial-launch tier (§3), not the pilot-ready tier (§2) M4's own Exit criteria row already restricts to — found decomposing M4 to item grain in backlog.md §5. |
 | 0.1.2 | 2026-08-21 | Sprint 60: found M2's own closure (backlog.md, Sprint 30 — "fully closed, all 6 items done") carried no caveat against this row's own Exit criteria, which require the tap-count-audit.md budget "measured on the reference low-end device... not estimated" — a device that has never been owned, unchanged since Sprint 43. M0 and M4's own hardware-dependent exit criteria were each closed with an honest caveat naming this exact gap; M2's was not, until now. Corrected with a dated note under M2's row. |
+| 0.1.3 | 2026-08-21 | M5's Entry criteria exception recorded: founder-directed decision to begin M5 prep now despite M4 not being formally demonstrated yet (`release-checklist.md §2` still has two unresolved, purely founder-owned concerns) — the same shape as `modules/README.md` Rule 2's own third exception for M0→M1. Explicitly does not move M5's actual exit criterion: a real shop's real trading day still shouldn't happen before the RLS-application question is confirmed. Sprint 65 begins M5 decomposition on this basis. |

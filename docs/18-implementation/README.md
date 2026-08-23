@@ -18,8 +18,13 @@
 > database role), sign-in rate limiting (code side closed Sprint 64: client-side attempt throttling
 > now built; the server-side half remains a Supabase dashboard setting to confirm), and Android
 > release signing (code side closed Sprint 63: one `keytool` command + one properties file). There
-> is no unstarted, buildable engineering gap left in this phase as of this writing.
-> **Version:** 0.68.0
+> is no unstarted, buildable engineering gap left in this phase as of this writing. **Sprint 65: the
+> founder was asked directly and directed M5 prep to begin now anyway** — a dated exception recorded
+> in `milestones.md` (M5's Entry criteria row) and `modules/README.md` Rule 2's own precedent shape,
+> not a reinterpretation of M4's actual closure requirement. M5 (`backlog.md §6`) has zero
+> engineering items — it's pilot-plan.md's own recruitment/onboarding sequence broken into trackable
+> items, not code.
+> **Version:** 0.69.0
 > **Last updated:** 2026-08-21
 > **Owner:** CTO / All engineering roles
 
@@ -95,14 +100,14 @@ scaffold that precedes the first module in the loop above — not a module itsel
 to the 13-step loop or the full Definition of Done. See
 [implementation-log.md](implementation-log.md) for what has actually landed.
 
-As of Sprint 64 (2026-08-21): M1 — Full Catalogue & Inventory (8 items) and M3 — Customers,
+As of Sprint 65 (2026-08-21): M1 — Full Catalogue & Inventory (8 items) and M3 — Customers,
 Returns & Refund (5 items) are each fully closed. M2 — Full POS Loop (6 items) is closed at the
 backlog-item level, but Sprint 60 found and named an uncaveated gap specific to its own closure:
 its `milestones.md` exit criterion requires a physical-reference-device measurement never actually
 performed, unlike M0's and M4's honest treatment of the same class of gap. M4 — Reports, Settings,
 and Release Readiness has numbered backlog items 1–8 done — item 9 (MTS execution) remains
 founder-blocked, the same root cause as M2's gap above, unchanged since Sprint 43 first named it —
-plus 21 further unnumbered cross-cutting sprints (44–64) closing OWASP-review, failure-scenario,
+plus 22 further unnumbered cross-cutting sprints (44–65) closing OWASP-review, failure-scenario,
 and release-gate/milestone-accounting findings post-hoc, plus three new deliverables (Sprints
 62/63/64). M4 has not formally closed, since
 [release-checklist.md §2](../14-testing/release-checklist.md) (its own stated exit criterion, per
@@ -124,10 +129,20 @@ falling back to the debug keystore unchanged otherwise, so the only remaining st
 (`apps/mobile/android/key.properties.example` names both exactly). There is no unstarted, buildable
 engineering gap left in this phase as of this writing — the honest next step is entirely founder
 action (running the RLS diagnostic, provisioning a keystore, confirming the database role,
-confirming the Supabase sign-in rate-limit setting, and acquiring MTS hardware) or beginning M5 —
-First Real Shop pilot-recruitment prep, which itself is gated on M4 formally closing. `pilot-plan.md`
-(Sprint 61) was reviewed in full for the first time this session and found to already be a
-complete, workable plan for that milestone once M4 clears.
+confirming the Supabase sign-in rate-limit setting, and acquiring MTS hardware).
+
+**Sprint 65 — M5 begins, ahead of M4's formal closure, by explicit founder direction.** Asked
+directly whether to hold, begin M5 prep anyway, or redirect elsewhere, the founder chose to begin
+M5 prep now — a dated exception recorded in `milestones.md`'s M5 row, the same shape as
+`modules/README.md` Rule 2's own M0→M1 exception, and explicit that it does not move M5's actual
+exit criterion (a real shop's real trading day should still wait on the RLS-application question
+being confirmed). `pilot-plan.md` (reviewed in full Sprint 61, found already complete) is now
+decomposed into item grain in `backlog.md §6` — unlike every prior milestone, M5 has zero
+engineering items, since its own scope is explicitly "no new product work." The decomposition names
+one real, practical detail found while doing it: several of `success-metrics.md`'s pilot-target
+rows (sync success rate, duplicate sale rate, unresolved sync conflicts) have no dedicated
+dashboard and will need a direct database query during the pilot, unlike cash reconciliation
+variance, which Trading Day's own close flow already surfaces.
 
 ## Change Log
 
@@ -201,3 +216,4 @@ complete, workable plan for that milestone once M4 clears.
 | 0.66.0 | 2026-08-21 | Sprint 62 (cross-cutting deliverable — the first sprint in this run that built something new rather than correcting or verifying a claim): built `supabase/sql/diagnostics/check_rls_status.sql`, a read-only diagnostic answering both Sprint 59's RLS-application question and `owasp-checklist.md`'s FORCE/role question directly against the real production database, in one five-minute paste-and-read action instead of leaving the founder to work out how to check either. Placed outside the numbered migration sequence so it's never mistaken for a policy file; referenced from `cd-workflows.md §1`, `owasp-checklist.md`'s finding #1, and `release-checklist.md`'s OWASP row. |
 | 0.67.0 | 2026-08-21 | Sprint 63 (cross-cutting fix — closes the code half of Sprint 43's M8 finding): `apps/mobile/android/app/build.gradle.kts` had signed release builds unconditionally with the debug keystore since M0. Wired the standard Flutter release-signing pattern — real credentials read from a gitignored `key.properties` if present, falling back to the debug keystore unchanged when absent — with `apps/mobile/android/key.properties.example` naming the exact `keytool` command. Verified with a clean `flutter build apk --debug` (fallback path genuinely still works, not just compiles). Corrected `cd-workflows.md`, `owasp-checklist.md`, and `release-checklist.md` to match: all three remaining OWASP release-gate findings are now purely founder actions with zero engineering work left. |
 | 0.68.0 | 2026-08-21 | Sprint 64 (cross-cutting fix — corrects the 0.67.0 entry above's own claim, disproven within the same session): re-examined the sign-in rate-limiting finding and found real client-side engineering work hiding inside it too. Built `SignInController`'s exponential-cooldown attempt throttling — real defense-in-depth, honestly scoped as narrower than the still-open server-side gap. `flutter test` 280/280 (277 pre-existing + 3 new). Corrected `rate-limiting.md`, `identity-and-sessions.md`, `owasp-checklist.md`, and `release-checklist.md`. |
+| 0.69.0 | 2026-08-21 | Sprint 65 (M5 decomposition, a dated exception to normal milestone ordering): the founder was asked directly and directed M5 prep to begin now, despite M4 not being formally demonstrated — recorded in `milestones.md`'s M5 row and mirrored here, the same shape as `modules/README.md` Rule 2's M0→M1 exception, explicit that it doesn't move M5's own exit criterion. Decomposed `pilot-plan.md` into item grain (`backlog.md §6`) — zero engineering items, per M5's own "no new product scope." Found and named which pilot success-metrics are already visible via a built feature versus needing a manual database query today. No code change. |
