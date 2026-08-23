@@ -49,7 +49,7 @@ dependencies:
   drift: ^2.34.3
   path_provider: ^2.1.6
   path: ^1.9.1
-  flutter_secure_storage: ^10.3.1
+  flutter_secure_storage: ^11.0.0
   mobile_scanner: ^7.4.0
   dio: ^5.11.0
   freezed_annotation: ^3.1.0
