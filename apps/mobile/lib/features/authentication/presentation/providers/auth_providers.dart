@@ -8,6 +8,7 @@ import '../../../../core/database/device_identity_repository.dart';
 import '../../../../core/network/device_registration_api.dart';
 import '../../../../core/store_context/store_context_providers.dart';
 import '../../data/repositories/supabase_auth_repository.dart';
+import '../../domain/entities/auth_failure.dart';
 import '../../domain/repositories/auth_repository.dart';
 
 /// Manual (non-code-generated) Riverpod syntax — `riverpod_generator` is not
@@ -30,12 +31,45 @@ class SignInController extends AsyncNotifier<void> {
   // synchronously keeps the initial state `AsyncData(null)`.
   FutureOr<void> build() {}
 
+  // Sprint 64 (docs/11-api/rate-limiting.md's Auth-class finding, Sprint 45) — client-side
+  // defense-in-depth only, not a substitute for server-side protection. Sign-in itself is a direct
+  // client call to Supabase Auth, never reaching an `apps/web` Route Handler this codebase's own
+  // rate limiter could intercept — that finding still holds, unchanged. What was actually missing,
+  // found re-examining it: nothing on the client slowed a rapid sequence of failed attempts either,
+  // despite that being ordinary, safe engineering work independent of any Supabase setting. This
+  // only throttles the *same running app instance* — restarting the app resets it, an accepted,
+  // named limitation (matching the countermeasure's own honest scope), not an oversight. The first
+  // 3 failures are always free, so a Cashier who mistypes a password twice is never delayed.
+  static const _freeAttempts = 3;
+  static const _baseCooldown = Duration(seconds: 5);
+  static const _maxCooldown = Duration(seconds: 60);
+
+  int _consecutiveFailures = 0;
+  DateTime? _cooldownUntil;
+
   Future<void> signIn({required String email, required String password}) async {
+    final cooldownUntil = _cooldownUntil;
+    if (cooldownUntil != null && DateTime.now().isBefore(cooldownUntil)) {
+      final remainingSeconds = cooldownUntil.difference(DateTime.now()).inSeconds + 1;
+      state = AsyncError(
+        AuthFailure('Too many attempts. Try again in ${remainingSeconds}s.'),
+        StackTrace.current,
+      );
+      return;
+    }
+
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
-      await ref
-          .read(authRepositoryProvider)
-          .signInWithPassword(email: email, password: password);
+      try {
+        await ref
+            .read(authRepositoryProvider)
+            .signInWithPassword(email: email, password: password);
+      } catch (_) {
+        _registerFailedAttempt();
+        rethrow;
+      }
+      _consecutiveFailures = 0;
+      _cooldownUntil = null;
 
       // Sprint 56 (docs/11-api/authentication.md §2) — "every subsequent API request is rejected
       // until this step has completed once per install." `main.dart`'s own bootstrap only
@@ -52,6 +86,14 @@ class SignInController extends AsyncNotifier<void> {
         // Deliberately swallowed — see docstring above.
       }
     });
+  }
+
+  void _registerFailedAttempt() {
+    _consecutiveFailures++;
+    if (_consecutiveFailures <= _freeAttempts) return;
+    final exponent = _consecutiveFailures - _freeAttempts - 1;
+    final cooldown = _baseCooldown * (1 << exponent);
+    _cooldownUntil = DateTime.now().add(cooldown > _maxCooldown ? _maxCooldown : cooldown);
   }
 }
 

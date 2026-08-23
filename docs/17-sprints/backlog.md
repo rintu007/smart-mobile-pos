@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.61.0
+> **Version:** 0.62.0
 > **Last updated:** 2026-08-21
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
@@ -524,6 +524,20 @@ the founder's own remaining task narrows to running one command and filling in o
 writing any code. Corrected `cd-workflows.md §2`, `owasp-checklist.md`'s M8 row and summary, and
 `release-checklist.md`'s Android row to match.
 
+**Cross-cutting fix, [Sprint 64](sprint-64.md) (not a numbered item — real client-side defense-in-
+depth found hiding inside a third "purely founder-blocked" finding):** re-examined Sprint 45's
+sign-in rate-limiting finding the same way Sprints 62/63 re-examined RLS and Android signing.
+The server-side claim ("sign-in never reaches an `apps/web` Route Handler") holds fully under
+scrutiny — but nothing on the mobile client throttled repeated failed sign-in attempts either,
+despite that being ordinary, safe engineering work independent of any Supabase setting. Built:
+`SignInController` free-passes the first 3 failures, then applies an exponential cooldown (5s,
+10s, 20s, 40s, capped at 60s) before the same app instance can retry, resetting on any success —
+throttles one device's own retry loop, never an account across devices, an honestly-scoped
+defense-in-depth layer, not a substitute for the still-open server-side gap. `flutter analyze`
+clean, `flutter test` 280/280 (277 pre-existing + 3 new). Corrected `rate-limiting.md`,
+`identity-and-sessions.md §6`, `owasp-checklist.md`'s A07 row and summary, and
+`release-checklist.md`'s OWASP row to match.
+
 ## 6. Ordering rule, restated
 
 Every dependency column above traces directly to
@@ -596,3 +610,4 @@ specifically.
 | 0.59.0 | 2026-08-21 | Cross-cutting fix, Sprint 61 (not a numbered M4 item, documentation-accuracy — narrows a prior finding rather than deepening one): read pilot-plan.md in full for the first time and found release-checklist.md's Sprint 58 Android-distribution row had never been checked against it. Play Console Internal Testing was never actually required for pilot-plan.md's real pilot shape (2-3 founder-visited shops, deliberately minimal) — only a real signing keystore plus direct sideload is, the mechanism already proven across every real-device install this project has done. Corrected cd-workflows.md §2, release-checklist.md (narrowed §2's row, moved the full pipeline to §3/commercial scope), and pilot-plan.md itself (added the missing device-install step). Distinct blocking concerns for M4's pilot-ready closure drop from three to two. No code change. |
 | 0.60.0 | 2026-08-21 | Cross-cutting deliverable, Sprint 62 (not a numbered M4 item — a new artifact, not a documentation correction): built `supabase/sql/diagnostics/check_rls_status.sql`, a read-only diagnostic the founder can paste into the Supabase Dashboard's SQL Editor to answer both Sprint 59's RLS-application question and owasp-checklist.md's FORCE/role question directly against the real production database. Referenced from cd-workflows.md §1, owasp-checklist.md's finding #1, and release-checklist.md's OWASP row. |
 | 0.61.0 | 2026-08-21 | Cross-cutting fix, Sprint 63 (not a numbered M4 item, closes the code half of Sprint 43's M8 finding): wired build.gradle.kts to read real signing credentials from a gitignored key.properties if present, falling back to the debug keystore unchanged otherwise — the standard Flutter pattern, key.properties.example added with exact keytool instructions. Verified with a clean flutter build apk --debug. Corrected cd-workflows.md, owasp-checklist.md, and release-checklist.md — the founder's remaining Android-signing task is now purely running one command, no code work left. |
+| 0.62.0 | 2026-08-21 | Cross-cutting fix, Sprint 64 (not a numbered M4 item, real client-side defense-in-depth found hiding inside a third "purely founder-blocked" finding): re-examined Sprint 45's sign-in rate-limiting finding and found the mobile client did nothing to throttle repeated failed attempts. Built SignInController's exponential-cooldown attempt throttling (5s-60s, resets on success), honestly scoped as one-device defense-in-depth, not a substitute for the still-open server-side gap. flutter test 280/280 (277 pre-existing + 3 new). Corrected rate-limiting.md, identity-and-sessions.md, owasp-checklist.md, and release-checklist.md. |
