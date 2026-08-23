@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 15 — GitHub Project
-> **Version:** 0.6.0
+> **Version:** 0.7.0
 > **Last updated:** 2026-08-21
 > **Owner:** DevOps Engineer / CTO
 > **Approved by:** _pending_
@@ -97,6 +97,16 @@ Console distribution remains real, valuable work for scaling *past* founder-pers
 work is commercial-launch scope (`release-checklist.md §3`), not a pilot blocker. See
 `release-checklist.md`'s own corrected rows for the resulting split.
 
+**Wired, Sprint 63 — the code side of "a real signing keystore" is no longer a from-scratch task.**
+`apps/mobile/android/app/build.gradle.kts` now reads real signing credentials from a gitignored
+`key.properties` file if one exists (the standard Flutter pattern — see
+`apps/mobile/android/key.properties.example` for the exact `keytool` command and the four values to
+fill in), falling back to the debug keystore, unchanged, when it doesn't. Nothing about today's
+build behaviour changes until a real `key.properties` is actually created; once it is, release
+builds are automatically signed with it, no further code change needed. Verified: `flutter build apk
+--debug` still builds clean with `key.properties` absent (falls back exactly as before), and
+`flutter analyze` is unaffected (a Gradle-only change, no Dart touched).
+
 ```mermaid
 flowchart LR
     Merge["Merge to main / release branch"] --> Build["flutter build appbundle"]
@@ -150,3 +160,4 @@ during a real incident.
 | 0.4.0 | 2026-08-21 | Sprint 59: §1's own "confirmed by implementation-log.md's own repeated 'applied live' entries" clause was itself imprecise, checked file-by-file rather than trusted. That phrase appears explicitly only for 7 of the 18 RLS files (`003`–`007`, `012`, `015`); for `017`/`018`/`019` there is no confirmation on record they were ever applied to the real production database at all — a real, previously-invisible possibility that specific tables (including Sprint 40's own "most significant" RLS fix) may have no live RLS protection whatsoever, distinct from and more severe than `owasp-checklist.md`'s existing FORCE/role finding. |
 | 0.5.0 | 2026-08-21 | Sprint 61: narrowed §2's own Sprint 58 correction — its "not a path any real pilot shop could use" claim was never checked against `pilot-plan.md`'s actual pilot shape (2–3 founder-visited shops, deliberately minimal). Play Console Internal Testing is premature generality for that pilot, the same reasoning `pilot-plan.md §3` already applies to feedback tooling; what the first pilot actually needs is a real signing keystore plus direct sideload, the mechanism already proven across every real-device install this project has done. Play Console distribution moves to commercial-launch scope. |
 | 0.6.0 | 2026-08-21 | Sprint 62: added `supabase/sql/diagnostics/check_rls_status.sql`, a read-only, ready-to-paste diagnostic answering Sprint 59's own open question directly against the real database — which tables actually have RLS enabled/forced, and whether the app's own role bypasses it — rather than leaving the founder to work out how to check it. Referenced here in §1, next to the finding it answers. |
+| 0.7.0 | 2026-08-21 | Sprint 63: §2's remaining Android-signing gap wired for real — `build.gradle.kts` now reads real signing credentials from a gitignored `key.properties` if present (standard Flutter pattern, `key.properties.example` added with exact `keytool` instructions), falling back to the debug keystore unchanged when absent. No behaviour change until a real `key.properties` is created; verified `flutter build apk --debug` still builds clean with it absent. |

@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.60.0
+> **Version:** 0.61.0
 > **Last updated:** 2026-08-21
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
@@ -512,6 +512,18 @@ Referenced from `cd-workflows.md §1`, `owasp-checklist.md`'s finding #1, and
 `release-checklist.md`'s OWASP row — the three places a reader following up on this finding would
 actually look.
 
+**Cross-cutting fix, [Sprint 63](sprint-63.md) (not a numbered item — closes the code half of
+Sprint 43's own M8 finding):** `apps/mobile/android/app/build.gradle.kts` unconditionally signed
+release builds with the debug keystore since M0. Wired the standard Flutter release-signing
+pattern instead: real credentials read from a gitignored `key.properties` file if one exists
+(`apps/mobile/android/key.properties.example` added, naming the exact `keytool` command and the
+four values needed), falling back to the debug keystore, unchanged, when it doesn't — no behaviour
+change until a real `key.properties` is actually created, verified with a clean
+`flutter build apk --debug`. Closes the code side of `owasp-checklist.md`'s M8 finding entirely;
+the founder's own remaining task narrows to running one command and filling in one file, not
+writing any code. Corrected `cd-workflows.md §2`, `owasp-checklist.md`'s M8 row and summary, and
+`release-checklist.md`'s Android row to match.
+
 ## 6. Ordering rule, restated
 
 Every dependency column above traces directly to
@@ -583,3 +595,4 @@ specifically.
 | 0.58.0 | 2026-08-21 | Cross-cutting fix, Sprint 60 (not a numbered M4 item, documentation-accuracy only): checked every milestone's own exit criterion against what was actually verified at closure. Found milestones.md's M2 row requires the tap-count-audit.md budget "measured on the reference low-end device..., not estimated" — never actually satisfied, since that device has never been owned (unchanged since Sprint 43), and M2's own closure (§3 above, Sprint 30) carried no caveat against this, unlike M0's and M4's honest treatment of their own hardware-dependent exit criteria. Corrected in milestones.md and §3 above with a dated note; M1/M3 checked and confirmed not to share this issue. No code change. |
 | 0.59.0 | 2026-08-21 | Cross-cutting fix, Sprint 61 (not a numbered M4 item, documentation-accuracy — narrows a prior finding rather than deepening one): read pilot-plan.md in full for the first time and found release-checklist.md's Sprint 58 Android-distribution row had never been checked against it. Play Console Internal Testing was never actually required for pilot-plan.md's real pilot shape (2-3 founder-visited shops, deliberately minimal) — only a real signing keystore plus direct sideload is, the mechanism already proven across every real-device install this project has done. Corrected cd-workflows.md §2, release-checklist.md (narrowed §2's row, moved the full pipeline to §3/commercial scope), and pilot-plan.md itself (added the missing device-install step). Distinct blocking concerns for M4's pilot-ready closure drop from three to two. No code change. |
 | 0.60.0 | 2026-08-21 | Cross-cutting deliverable, Sprint 62 (not a numbered M4 item — a new artifact, not a documentation correction): built `supabase/sql/diagnostics/check_rls_status.sql`, a read-only diagnostic the founder can paste into the Supabase Dashboard's SQL Editor to answer both Sprint 59's RLS-application question and owasp-checklist.md's FORCE/role question directly against the real production database. Referenced from cd-workflows.md §1, owasp-checklist.md's finding #1, and release-checklist.md's OWASP row. |
+| 0.61.0 | 2026-08-21 | Cross-cutting fix, Sprint 63 (not a numbered M4 item, closes the code half of Sprint 43's M8 finding): wired build.gradle.kts to read real signing credentials from a gitignored key.properties if present, falling back to the debug keystore unchanged otherwise — the standard Flutter pattern, key.properties.example added with exact keytool instructions. Verified with a clean flutter build apk --debug. Corrected cd-workflows.md, owasp-checklist.md, and release-checklist.md — the founder's remaining Android-signing task is now purely running one command, no code work left. |
