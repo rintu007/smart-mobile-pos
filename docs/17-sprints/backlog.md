@@ -2,17 +2,21 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 17 — Sprint Planning
-> **Version:** 0.62.0
+> **Version:** 0.63.0
 > **Last updated:** 2026-08-21
 > **Owner:** Product Manager / CTO
 > **Approved by:** _pending_
 
-Ordered, estimated, with dependencies. **M0, M1, M2, and M3 are decomposed in full, item by item, in
-the order planning actually reached them; M4 is still listed at module grain only** — per this
-documentation set's standing practice of not over-planning work several milestones away (the same
-reasoning [roadmap.md §5](../16-milestones/roadmap.md#5-v2v4--ordering-confirmed-not-yet-effort-estimated)
+Ordered, estimated, with dependencies. **M0 through M5 are all now decomposed in full, item by
+item, in the order planning actually reached them** (this line itself went stale after M4's own
+decomposition and was corrected here, Sprint 65, found while decomposing M5 and checking this
+paragraph against §1–§6 rather than assuming it was already current) — per this documentation set's
+standing practice of not over-planning work several milestones away (the same reasoning
+[roadmap.md §5](../16-milestones/roadmap.md#5-v2v4--ordering-confirmed-not-yet-effort-estimated)
 already applied to V2–V4), each decomposed to this level of detail only once actual sprint planning
-reaches it.
+reaches it. M5 (§6) is the one exception to "reaches it" in the literal sense — decomposed ahead of
+M4 formally closing, per the dated exception recorded there and in
+[milestones.md](../16-milestones/milestones.md#m5--first-real-shop).
 
 ---
 
@@ -538,12 +542,41 @@ clean, `flutter test` 280/280 (277 pre-existing + 3 new). Corrected `rate-limiti
 `identity-and-sessions.md §6`, `owasp-checklist.md`'s A07 row and summary, and
 `release-checklist.md`'s OWASP row to match.
 
-## 6. Ordering rule, restated
+## 6. M5 — fully decomposed 2026-08-21, ahead of M4 formally closing (a named exception)
 
-Every dependency column above traces directly to
+Per [milestones.md — M5](../16-milestones/milestones.md#m5--first-real-shop)'s own dated exception
+(2026-08-21, the same shape as [modules/README.md](../modules/README.md#rules) Rule 2's third
+exception for M0→M1): M4 is not literally "demonstrated" yet, but the founder directed M5 prep to
+begin now regardless, since every remaining M4 gate item is a purely founder-owned action with zero
+engineering work behind it (Sprints 62–64). **Unlike M0–M4, M5 has no engineering items at all** —
+[milestones.md](../16-milestones/milestones.md)'s own Scope line is explicit: "No new product
+scope." What follows decomposes [pilot-plan.md](../16-milestones/pilot-plan.md)'s own sequence of
+real-world actions into item grain the same way this document decomposes every other milestone,
+purely so M5's own progress is trackable the same way M0–M4's was — not because any of it is code.
+
+| # | Item | Depends on | Owner |
+| --- | --- | --- | --- |
+| 1 | **Go/no-go gate** — confirm every `release-checklist.md §2` item resolved: run `supabase/sql/diagnostics/check_rls_status.sql` against production (Sprint 62) and act on its result, provision a real Android signing keystore (Sprint 63), confirm the Supabase sign-in rate-limit setting, and acquire MTS hardware. Technically M4's own closure, not M5 content — listed here because it's the literal precondition for item 4 below | — | Founder |
+| 2 | **Recruitment** — approach 2–3 candidate shops from the Grocery/Mobile Shop verticals (`pilot-plan.md §1`), a founder-personal relationship preferred for the first shop specifically | — | Founder |
+| 3 | **Pre-visit prep, per recruited shop** — enter that shop's product catalogue in advance (photo or in-person shelf walk); build and sideload a properly-signed release APK onto the shop's device (`pilot-plan.md §2`, mechanism built Sprint 61/63) | 1, 2 | Founder |
+| 4 | **Day-one visit, per shop** — founder present for the shop's first real trading day: opens the day, observes the first real sale, is available for the first real return, closes the day and reconciles cash together | 1, 3 | Founder |
+| 5 | **Week-one and week-four check-ins, per shop** — direct conversation (not a survey, per `pilot-plan.md §2`'s own reasoning); week-four adds a direct comparison against the shop's prior method | 4 | Founder |
+| 6 | **Ongoing feedback capture** — a shared WhatsApp thread per shop (`pilot-plan.md §3`); every reported issue triaged through the standing GitHub issue templates like any internally-found bug | 4 | Founder |
+| 7 | **Success-criteria tracking** — `success-metrics.md §3`'s Pilot-target rows, checked against what's actually observable today rather than assumed all equally visible: **cash reconciliation variance** is already directly computed by Trading Day's own close flow (Sprint 26, live since M2); **stock accuracy** needs a physical count compared against the existing stock-value report; **sync success rate**, **duplicate sale rate**, and **unresolved sync conflicts** have no dedicated dashboard (M4's Reports scope only ever covered the four core business reports, never pilot/engineering health metrics) — the underlying data exists (`outbound_queue` status history, `sync_rejections`, `audit_log`), but reading it today means a direct database query, not a built screen. Named honestly now rather than discovered as a gap mid-pilot | 4 | Founder (queries), CTO (if a dashboard is ever warranted — separately-scoped, not assumed needed for a 2–3-shop pilot) |
+
+**Exit criterion, restated exactly as `milestones.md` states it — one real, consenting shop
+completing at least one full real trading day, unassisted past onboarding — is item 4 above,
+for the first shop, with item 1 already satisfied.** Everything past that point (items 5–7) is
+what M5's own success is actually judged against, not what closes it.
+
+## 7. Ordering rule, restated
+
+Every dependency column in §1–§5 traces directly to
 [dependency-graph.md](../16-milestones/dependency-graph.md)'s critical path — item order in this
 backlog is not a separate judgment call, it is that graph read top to bottom for M0's slice
-specifically.
+specifically. §6 (M5) is different in kind, not degree: its ordering is real-world rollout
+sequencing (recruit, prep, visit, follow up), not a code dependency graph — `dependency-graph.md`
+has nothing to say about it, and isn't cited there for that reason.
 
 ## Change Log
 
@@ -611,3 +644,4 @@ specifically.
 | 0.60.0 | 2026-08-21 | Cross-cutting deliverable, Sprint 62 (not a numbered M4 item — a new artifact, not a documentation correction): built `supabase/sql/diagnostics/check_rls_status.sql`, a read-only diagnostic the founder can paste into the Supabase Dashboard's SQL Editor to answer both Sprint 59's RLS-application question and owasp-checklist.md's FORCE/role question directly against the real production database. Referenced from cd-workflows.md §1, owasp-checklist.md's finding #1, and release-checklist.md's OWASP row. |
 | 0.61.0 | 2026-08-21 | Cross-cutting fix, Sprint 63 (not a numbered M4 item, closes the code half of Sprint 43's M8 finding): wired build.gradle.kts to read real signing credentials from a gitignored key.properties if present, falling back to the debug keystore unchanged otherwise — the standard Flutter pattern, key.properties.example added with exact keytool instructions. Verified with a clean flutter build apk --debug. Corrected cd-workflows.md, owasp-checklist.md, and release-checklist.md — the founder's remaining Android-signing task is now purely running one command, no code work left. |
 | 0.62.0 | 2026-08-21 | Cross-cutting fix, Sprint 64 (not a numbered M4 item, real client-side defense-in-depth found hiding inside a third "purely founder-blocked" finding): re-examined Sprint 45's sign-in rate-limiting finding and found the mobile client did nothing to throttle repeated failed attempts. Built SignInController's exponential-cooldown attempt throttling (5s-60s, resets on success), honestly scoped as one-device defense-in-depth, not a substitute for the still-open server-side gap. flutter test 280/280 (277 pre-existing + 3 new). Corrected rate-limiting.md, identity-and-sessions.md, owasp-checklist.md, and release-checklist.md. |
+| 0.63.0 | 2026-08-21 | Sprint 65: M5 decomposed (§6, new) ahead of M4 formally closing — a founder-directed exception recorded in milestones.md, the same shape as modules/README.md Rule 2's own M0→M1 exception. M5 has no engineering items (milestones.md's own "no new product scope"); §6 breaks pilot-plan.md's real-world sequence into item grain purely for trackability, and names honestly which pilot success-metrics are already observable via built features (cash reconciliation variance, via Trading Day) versus needing a manual database query today (sync success rate, duplicate sale rate, unresolved sync conflicts — no dedicated dashboard was ever built for these, nor was one in M4's scope). Also fixed this document's own stale intro paragraph, found while checking it against §1-§6: it still said "M4 is still listed at module grain only" despite §5 having fully decomposed M4 since Sprint 43. Renumbered old §6 (Ordering rule) to §7. |
