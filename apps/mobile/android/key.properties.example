@@ -1,0 +1,23 @@
+# Copy this file to key.properties (same directory) and fill in the real values below.
+# key.properties itself is gitignored (see .gitignore in this directory) — it holds real secrets
+# and must never be committed. This .example file is the only version tracked in git.
+#
+# One-time setup, run once from this directory (apps/mobile/android/):
+#
+#   keytool -genkey -v -keystore smartpos-x-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias smartpos-x
+#
+# keytool will interactively prompt for a keystore password, your name/org details, and a key
+# password (can be the same as the keystore password). Keep smartpos-x-release.jks and both
+# passwords somewhere durable and backed up outside this repository — losing this file means every
+# future release build permanently loses the ability to be treated as an update to anything already
+# installed from it; there is no recovery path, per cd-workflows.md's own "Android cannot be rolled
+# back" note.
+#
+# Then fill in the four values below to match what you just entered, and build.gradle.kts (already
+# wired, Sprint 63) will automatically sign release builds with this keystore instead of the debug
+# one — no further code change needed.
+
+storePassword=REPLACE_WITH_YOUR_KEYSTORE_PASSWORD
+keyPassword=REPLACE_WITH_YOUR_KEY_PASSWORD
+keyAlias=smartpos-x
+storeFile=smartpos-x-release.jks
