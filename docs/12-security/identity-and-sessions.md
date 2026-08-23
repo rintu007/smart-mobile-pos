@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 12 — Security Design
-> **Version:** 0.1.2
-> **Last updated:** 2026-08-20
+> **Version:** 0.1.3
+> **Last updated:** 2026-08-21
 > **Owner:** Security Engineer / CTO
 > **Approved by:** _pending_
 
@@ -82,6 +82,17 @@ anywhere in `apps/web/src` (confirmed by grep, and by the absence of any rate-li
 `package.json`). This section's design is sound and unchanged; it has simply never been built. Real,
 standalone scope for a future sprint, not fixed in this pass.
 
+**Status, Sprint 64 — narrower than "never been built," now that both halves have partial
+coverage.** Sprint 45 built server-side rate limiting for every request class *except* sign-in
+itself (which never reaches an `apps/web` Route Handler at all — architecturally distinct from the
+gap this correction originally named). Sprint 64 added the client-side half specifically for that
+remaining class: `SignInController` throttles repeated failed attempts with an exponential cooldown
+(see [rate-limiting.md §1](../11-api/rate-limiting.md#1-limits-by-endpoint-class)'s own Auth row).
+This section's own trade-off — no harsher server-side account lockout, since that's itself a DoS
+vector against a legitimate Cashier — still holds and is unaffected: the client-side cooldown built
+Sprint 64 throttles one device's own retry loop, never disables an account, and cannot be used by an
+attacker to lock a real Cashier out the way a server-side lockout could.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -89,3 +100,4 @@ standalone scope for a future sprint, not fixed in this pass.
 | 0.1.0 | 2026-07-30 | Token lifetimes justified, reuse detection and multi-device stance stated, revocation guarantee precisely scoped (hard for API, bounded-not-instant for Realtime), lockout-vs-rate-limit trade-off decided. |
 | 0.1.1 | 2026-08-19 | §6 corrected (Sprint 43, backlog.md M4 item 8): rate limiting is a design claim, not yet implemented anywhere in code — flagged as a real gap, not fixed this pass. |
 | 0.1.2 | 2026-08-20 | §5 — device revocation built (Sprint 55), closing the OWASP review's other flagged gap from `authorisation-model.md §2` step 2. Confirmed against a real Postgres connection with the RLS suite's own deliberate-break-and-fix cycle, not just unit tests. |
+| 0.1.3 | 2026-08-21 | §6 updated (Sprint 64): server-side rate limiting now covers every class except sign-in itself (Sprint 45); sign-in specifically now has client-side attempt throttling instead (`SignInController`'s exponential cooldown) — narrower than server-side, but real coverage where none existed. The no-server-side-lockout trade-off this section decided is unaffected and still holds. |
