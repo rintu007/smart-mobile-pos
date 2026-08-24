@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
+import { createTestPrismaClient } from "./setup/create-test-prisma-client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { checkRateLimit } from "@/core/rate-limit/service";
 
@@ -15,7 +16,7 @@ import { checkRateLimit } from "@/core/rate-limit/service";
 let prisma: PrismaClient;
 
 beforeAll(async () => {
-  prisma = new PrismaClient();
+  prisma = createTestPrismaClient();
   await prisma.$connect();
 });
 

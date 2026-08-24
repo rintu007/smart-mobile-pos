@@ -8,10 +8,11 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// Prisma 7 removed `url`/`directUrl` from the datasource block entirely — both connection strings
+// now live in `prisma.config.ts` (CLI/migrate) and `core/db/client.ts` (runtime, via the `pg`
+// driver adapter). See https://pris.ly/d/config-datasource.
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
 }
 
 /// The top-level tenant-isolation boundary. One row per business account.

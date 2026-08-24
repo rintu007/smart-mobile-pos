@@ -20,6 +20,11 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @smart-pos/web exec prisma generate
+        env:
+          # Prisma 7's prisma.config.ts (apps/web/prisma.config.ts) reads DIRECT_URL at config-load
+          # time, before `generate` even needs a real connection — a placeholder is enough, the same
+          # reasoning the `build` job's own env block below already established for DATABASE_URL.
+          DIRECT_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
       - run: pnpm --filter @smart-pos/web lint
       - run: pnpm --filter @smart-pos/web typecheck
 
@@ -35,6 +40,10 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @smart-pos/web exec prisma generate
+        env:
+          # See lint-typecheck's own identical env block above — Prisma 7's config-load step needs
+          # this even though `generate` itself never connects.
+          DIRECT_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
       - run: pnpm --filter @smart-pos/web test
 
   build:
@@ -49,6 +58,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @smart-pos/web exec prisma generate
+        env:
+          # See lint-typecheck's own identical env block above.
+          DIRECT_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
       - run: pnpm --filter @smart-pos/web build
         env:
           # Build-time only — no live database or Supabase project needed for `next build` to

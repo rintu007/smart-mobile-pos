@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
+import { createTestPrismaClient } from "./setup/create-test-prisma-client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { pushOperations } from "@/modules/sync/service";
 import { getStockBalance } from "@/modules/stock-movements/service";
@@ -23,7 +24,7 @@ import { seedSecondUser } from "./setup/seed-second-user";
 let prisma: PrismaClient;
 
 beforeAll(async () => {
-  prisma = new PrismaClient();
+  prisma = createTestPrismaClient();
   await prisma.$connect();
 });
 

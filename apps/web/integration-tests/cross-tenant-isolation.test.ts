@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { createTestPrismaClient } from "./setup/create-test-prisma-client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { seedTenant, type SeededTenant } from "./setup/seed-tenant";
 
@@ -83,7 +84,7 @@ let tenantA: SeededTenant;
 let tenantB: SeededTenant;
 
 beforeAll(async () => {
-  prisma = new PrismaClient();
+  prisma = createTestPrismaClient();
   tenantA = await seedTenant(prisma, "A");
   tenantB = await seedTenant(prisma, "B");
 }, 30_000);
