@@ -34,7 +34,12 @@
 > a new `prisma.config.ts` (CLI/migrate) and an explicit `@prisma/adapter-pg` driver adapter in
 > `core/db/client.ts` (runtime). All 12 Dependabot PRs from the Sprint 65 triage are now resolved: 9
 > merged as-is, 1 self-closed as a dead dependency, 3 fixed and merged across Sprints 66–68.
-> **Version:** 0.72.0
+> Sprint 69 then re-audited `docs/07-database/schema-server.md` — the master DB design doc — against
+> the live schema for the first time, finding and correcting real, load-bearing drift (a false
+> `device_id` column/scoping narrative on 3 tables, a false `client_operation_id` column on 3 tables,
+> 3 real built tables never documented) plus naming 4 real, unindexed live query paths as deferred
+> follow-up work. No code change.
+> **Version:** 0.73.0
 > **Last updated:** 2026-08-25
 > **Owner:** CTO / All engineering roles
 
@@ -178,6 +183,22 @@ Dependabot's own PR had left `@prisma/client` mismatched at `6.19.3` against `pr
 official migration guide's own `dotenv/config` example doesn't load this project's `.env.local`
 convention. All three Dependabot PRs left open after the Sprint 65 triage are now closed.
 
+**Sprint 69 — a Phase 07 documentation audit, self-initiated with no further Dependabot/engineering
+work outstanding.** Re-checked `schema-server.md` — the master database design document — against
+the live schema in one pass for the first time since it was written, the same "design doc vs. built
+reality" discipline Sprints 50–61 applied to release-readiness documents, never before to Phase 07.
+Found `device_id` documented as a real, `NOT NULL` column on `stock_movements`/`trading_days`/`sales`;
+none of the three ever got it, and `trading_days`' whole per-device scoping narrative was corrected
+to the real `(tenant_id, store_id)` design Sprint 26 built — already reasoned in
+`trading-day/specification.md §1`, just never carried back to this document, a real, 42-sprint-old
+violation of this project's own "deviations update the specification" rule. Found the identical
+`client_operation_id` false-column shape on three more tables. Added 3 real, live, built tables never
+in the original design (`invoice_sequences`, `customer_field_conflicts`, `rate_limit_buckets`) —
+table count corrected 22→25. Named, not fixed: 4 real, live, unindexed query paths and 1 undbuilt
+column, confirmed against actual repository code rather than assumed, left for a dedicated follow-up
+sprint since a documentation pass shouldn't add production migrations without their own verification.
+No code change.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -254,3 +275,4 @@ convention. All three Dependabot PRs left open after the Sprint 65 triage are no
 | 0.70.0 | 2026-08-25 | Sprint 66 (repository-tooling fix, not milestone work): with M5 fully decomposed and no engineering work left in it, triaged the 12 Dependabot PRs Sprint 42's `dependabot.yml` had wired but never processed. 9 merged cleanly, 1 self-closed by Dependabot as a dead dependency (#61 `freezed`), 3 left open with confirmed real breaking changes (#58 Vitest 4/Vite 6, #60 Prisma 7's `prisma.config.ts` migration, #64 `eslint-config-next` 16). Closed the lowest-risk of the three: re-investigated #64's failure from its actual stack trace rather than the prior triage's own summary and found the real cause narrower than assumed — `eslint.config.mjs` was already flat config; the break was `eslint-config-next` 16's legacy `next/core-web-vitals` shareable config crashing `FlatCompat`'s error-formatting path on a self-referential `eslint-plugin-react-hooks` config object. Fixed by switching to `eslint-config-next`'s own native flat-config exports, dropping `FlatCompat`. `lint`/`typecheck`/`test` (227/227)/`build` all verified clean. #58/#60 remain open. |
 | 0.71.0 | 2026-08-25 | Sprint 67 (repository-tooling fix, not milestone work): closed Dependabot PR #58 (Vitest 4). Confirmed Vitest 4 strictly requires Vite 6+ and `vite` had only ever resolved transitively via Vitest 2's own dependency chain, never pinned directly — the reason Dependabot's own version-only diff left the mismatch unresolved. Added `vite` (`^8.2.2`) as an explicit devDependency. No `vitest.config*.ts` changes needed. `lint`/`typecheck`/`test` (227/227)/`build` verified clean locally; `fast-integration` verified in CI. Only #60 (Prisma 7) remains open. |
 | 0.72.0 | 2026-08-25 | Sprint 68 (repository-tooling fix, not milestone work): closed the last Dependabot PR, #60 (Prisma 7) — the one with real runtime blast radius. `schema.prisma`'s datasource block lost `url`/`directUrl`; new `prisma.config.ts` holds `DIRECT_URL` for CLI/migrate, `core/db/client.ts` builds an explicit `@prisma/adapter-pg` adapter from `DATABASE_URL` for runtime, matching Prisma 7's mandatory-adapter requirement. Kept the deprecated-but-functional `prisma-client-js` generator, avoiding a 12-file import-path change. Fixed two further real gaps: Dependabot's own PR left `@prisma/client` mismatched at `6.19.3` against `prisma@7.9.1`; the official migration guide's `dotenv/config` example doesn't load this project's `.env.local` convention. `lint`/`typecheck`/`test` (227/227)/`build` verified clean locally with DB env vars unset; `fast-integration` verified in CI. All 12 Dependabot PRs from the Sprint 65 triage are now resolved. |
+| 0.73.0 | 2026-08-25 | Sprint 69 (Phase 07 documentation audit, no code change): re-audited `docs/07-database/schema-server.md` against the live schema — the first such reconciliation since it was written. Corrected a false `device_id` column/scoping narrative on `stock_movements`/`trading_days`/`sales` (real Sprint 26 deviation, already reasoned in `trading-day/specification.md`, never carried back here) and a false `client_operation_id` column on `stock_movements`/`sales`/`returns`. Added 3 real built tables never in the original design (`invoice_sequences`, `customer_field_conflicts`, `rate_limit_buckets`); table count corrected 22→25. Fixed five smaller column/type drifts. Named, not fixed: 4 real unindexed live query paths and 1 undbuilt column, confirmed against actual repository code, left for a dedicated follow-up sprint. |

@@ -2,23 +2,28 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 07 — Database Design
-> **Version:** 0.1.4
-> **Last updated:** 2026-08-20
+> **Version:** 0.1.5
+> **Last updated:** 2026-08-25
 > **Owner:** PostgreSQL Architect
 > **Approved by:** _pending_
 
-22 tables across 7 bounded contexts. Every table states its purpose, owning module, tenant scoping,
-columns, foreign-key delete behaviour, indexes (each tied to a named query from
-[06-workflows](../06-workflows/README.md)), and Row Level Security stance — satisfying this phase's
-exit criteria directly, not by cross-reference. Conventions applied uniformly, stated once here
-rather than repeated per table:
+25 tables across 7 bounded contexts — the original 22-table design plus 3 tables added during
+implementation and never in the original Phase 07 design (`invoice_sequences`, Sprint 24;
+`customer_field_conflicts`, Sprint 35; `rate_limit_buckets`, Sprint 45; see the Change Log's dated
+correction). 21 of the 25 are actually built, matching the live schema exactly — the other 4
+(`product_variants`, `batches`, `idempotency_keys`, `sync_rejections`) are named, deferred stubs with
+no V1 write path, unchanged since the original design. Every table states its purpose, owning
+module, tenant scoping, columns, foreign-key delete behaviour, indexes (each tied to a named query
+from [06-workflows](../06-workflows/README.md)), and Row Level Security stance — satisfying this
+phase's exit criteria directly, not by cross-reference. Conventions applied uniformly, stated once
+here rather than repeated per table:
 
 - **Every table** has `id UUID PRIMARY KEY` (client-generated per [ADR-0007](../adr/ADR-0007-client-generated-uuid-primary-keys.md)),
   `created_at TIMESTAMPTZ NOT NULL DEFAULT now()`, `created_by UUID NOT NULL REFERENCES users(id)`,
   and — except for the append-only Tier 2 tables listed in
   [ADR-0009](../adr/ADR-0009-soft-delete-for-reference-data-no-delete-for-ledger-data.md) —
   `updated_at TIMESTAMPTZ NOT NULL DEFAULT now()`. These are omitted from the column tables below to
-  avoid repeating them 22 times; assume their presence unless a table is explicitly Tier 2.
+  avoid repeating them across every table; assume their presence unless a table is explicitly Tier 2.
 - **Every tenant-owned table** has `tenant_id UUID NOT NULL REFERENCES tenants(id)` and RLS enabled
   per [ADR-0004](../adr/ADR-0004-shared-schema-multi-tenancy.md); stated per table as "RLS: tenant-scoped."
 - Money columns are `BIGINT` (minor units); tax rates are `INTEGER` (basis points) — [ADR-0006](../adr/ADR-0006-money-as-integer-minor-units.md).
@@ -181,8 +186,8 @@ filtering ([FR-036](../03-functional-requirements/functional-requirements.md)).
 | Column | Type | Constraint |
 | --- | --- | --- |
 | `tenant_id` | `UUID` | `NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT` |
-| `category_id` | `UUID` | `NOT NULL REFERENCES categories(id) ON DELETE RESTRICT` — a category with products cannot be hard-deleted; deactivate instead |
-| `unit_id` | `UUID` | `NOT NULL REFERENCES units(id) ON DELETE RESTRICT` |
+| `category_id` | `UUID` | nullable `REFERENCES categories(id) ON DELETE RESTRICT` — corrected from `NOT NULL` in a Phase 07 documentation audit (2026-08-25): Sprint 19 built it optional, matching `unit_id`/`sku`/`barcode`/`hsn_sac_code`'s own already-correctly-documented nullability, not held to a stricter rule than the rest of the row |
+| `unit_id` | `UUID` | nullable `REFERENCES units(id) ON DELETE RESTRICT` — same correction as `category_id` |
 | `name` | `TEXT` | `NOT NULL` |
 | `sku` | `TEXT` | nullable, unique per tenant |
 | `barcode` | `TEXT` | nullable, unique per tenant |
@@ -190,11 +195,15 @@ filtering ([FR-036](../03-functional-requirements/functional-requirements.md)).
 | `price_minor_units` | `BIGINT` | `NOT NULL` |
 | `deactivated_at` | `TIMESTAMPTZ` | nullable |
 
-**Indexes:** `(tenant_id, barcode) WHERE deactivated_at IS NULL` — barcode scan resolution
+**Indexes:** `(tenant_id, barcode)` unique, serving barcode scan resolution
 ([FR-022](../03-functional-requirements/functional-requirements.md)/[FR-023](../03-functional-requirements/functional-requirements.md)),
-the single most latency-sensitive query in the system (NFR-002). `(tenant_id, name text_pattern_ops) WHERE deactivated_at IS NULL` —
-text search ([FR-025](../03-functional-requirements/functional-requirements.md)). `(tenant_id, category_id) WHERE deactivated_at IS NULL` —
-category filtering ([FR-036](../03-functional-requirements/functional-requirements.md)).
+the single most latency-sensitive query in the system (NFR-002) — built as a plain unique
+constraint, not the partial (`WHERE deactivated_at IS NULL`) form originally documented here. The
+`(tenant_id, name text_pattern_ops)` text-search index ([FR-025](../03-functional-requirements/functional-requirements.md))
+and `(tenant_id, category_id)` category-filter index ([FR-036](../03-functional-requirements/functional-requirements.md))
+were never actually built, despite `GET /api/v1/products` genuinely supporting both `search` and
+`category_id` filters server-side — found in the same audit and named as real, deferred follow-up
+work rather than fixed speculatively in a documentation-only pass.
 **RLS:** tenant-scoped.
 
 ### `product_variants` — Tier 1, **V2+ stub, no V1 write path**
@@ -234,8 +243,19 @@ category filtering ([FR-036](../03-functional-requirements/functional-requiremen
 | `reason_code` | `TEXT` | nullable, `NOT NULL` when `movement_type = 'adjustment'` — enforced by a `CHECK` constraint, not application code, per [DR-007](../03-functional-requirements/business-rules.md) |
 | `reference_type` | `TEXT` | nullable — `'sale'` or `'return'`, when applicable |
 | `reference_id` | `UUID` | nullable — the sale or return this movement resulted from |
-| `client_operation_id` | `UUID` | `NOT NULL UNIQUE` — the idempotency key ([DR-022](../03-functional-requirements/business-rules.md)); doubles as this row's own ID per [ADR-0007](../adr/ADR-0007-client-generated-uuid-primary-keys.md) |
-| `device_id` | `UUID` | `NOT NULL REFERENCES devices(id) ON DELETE RESTRICT` |
+
+No separate `client_operation_id` column — the idempotency key ([DR-022](../03-functional-requirements/business-rules.md))
+is the `id` column itself (client-generated per [ADR-0007](../adr/ADR-0007-client-generated-uuid-primary-keys.md)),
+the same real mechanism `returns` below (Context 6) documents explicitly; corrected here to
+match rather than imply a second, separate column that was never built.
+
+**Correction, found in a Phase 07 documentation audit (2026-08-25):** `device_id` was never actually
+built into this table. This table was built in Sprint 11, 44 sprints before `devices` existed at all
+(Sprint 55) — it was never retrofitted afterward, and this document was never corrected to match.
+No live code or query has ever depended on it. `quantity_delta` is `INTEGER` in the real build, not
+`NUMERIC(14,3)` as stated above — the same fractional-quantity deferral `sale_line_items.quantity`
+already established (no quantity field anywhere in this schema is fractional-aware yet), named and
+dated in [inventory/specification.md §3](../modules/inventory/specification.md#3-database-tables-and-relationships).
 
 No `updated_at`. **Indexes:** `(tenant_id, store_id, product_id)` — the balance-derivation query,
 `SUM(quantity_delta)`, run constantly ([FR-041](../03-functional-requirements/functional-requirements.md)).
@@ -271,10 +291,43 @@ touching live `stock_movements` rows later.
 | `name` | `TEXT` | nullable |
 | `phone` | `TEXT` | nullable |
 | `deactivated_at` | `TIMESTAMPTZ` | nullable |
+| `erased_at` | `TIMESTAMPTZ` | nullable — added Sprint 46 ([privacy.md §4](../12-security/privacy.md)), never listed here until this correction; marks the row anonymised (`name`/`phone` overwritten with `NULL`) rather than deleted, so historical `sales.customer_id` FKs stay valid |
+| `updated_by` | `UUID` | nullable `REFERENCES users(id) ON DELETE SET NULL` — added Sprint 35 (backlog.md M3 item 5); the actor of the most recent successful field edit, feeding `customer_field_conflicts.current_set_by` below |
 
 **Indexes:** `(tenant_id, phone) WHERE deactivated_at IS NULL` — the return-by-phone-number lookup
 ([FR-062](../03-functional-requirements/functional-requirements.md)) and inline checkout search
 ([FR-052](../03-functional-requirements/functional-requirements.md)).
+**RLS:** tenant-scoped.
+
+### `customer_field_conflicts`
+**Not in the original Phase 07 design** — added Sprint 35 (backlog.md M3 item 5), found and
+documented here for the first time in a Phase 07 documentation audit (2026-08-25). The original
+design's `conflict-resolution.md §3` framed a field-level 3-way merge around a `base_updated_at`
+comparison, which cannot by itself support field-level conflict detection since the server keeps no
+field-level edit history — resolved during implementation by having the client send each field's own
+base value alongside its new value, computed entirely from request data with no new server-side
+history mechanism, and this table recording the collision when the base value doesn't match current.
+**Purpose:** a field-edit collision awaiting a Manager/Owner decision — currently-applied value vs.
+a later-arriving edit's attempted value, each attributed to its own actor.
+**Module:** Customers. **Tenant scoping:** tenant-scoped.
+
+| Column | Type | Constraint |
+| --- | --- | --- |
+| `tenant_id` | `UUID` | `NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT` |
+| `customer_id` | `UUID` | `NOT NULL REFERENCES customers(id) ON DELETE CASCADE` |
+| `field` | `TEXT` | `NOT NULL` — `'name'` or `'phone'`, application-enforced, not a `CHECK` constraint |
+| `current_value` | `TEXT` | nullable — mirrors `customers.name`/`phone`'s own nullability |
+| `current_set_by` | `UUID` | `NOT NULL REFERENCES users(id) ON DELETE RESTRICT` |
+| `attempted_value` | `TEXT` | nullable |
+| `attempted_set_by` | `UUID` | `NOT NULL REFERENCES users(id) ON DELETE RESTRICT` |
+| `resolved_at` | `TIMESTAMPTZ` | nullable |
+| `resolved_value` | `TEXT` | nullable |
+| `resolved_by` | `UUID` | nullable `REFERENCES users(id) ON DELETE SET NULL` |
+
+No `updated_at` — resolution is recorded via the explicit `resolved_at`/`resolved_value`/
+`resolved_by` triple, not an in-place update to the conflict's own defining fields.
+**Indexes:** `(tenant_id, resolved_at)` — the Manager/Owner-facing unresolved-conflicts queue,
+[`GET /customers/conflicts`](../modules/customers/specification.md#4-api-contract).
 **RLS:** tenant-scoped.
 
 ---
@@ -283,21 +336,27 @@ touching live `stock_movements` rows later.
 
 ### `trading_days` — Tier 1 for the row lifecycle, but reconciliation fields are never altered post-close except via a new reopen event
 **Purpose:** cash-drawer reconciliation state — [state-machines.md](../06-workflows/state-machines.md).
-**Module:** Cash Drawer / Day Close. **Tenant scoping:** tenant- and store-scoped. **Scoped per
-`device_id`, not shared across a store** — this is the resolution to
-[offline-workflows.md — Finding 2](../06-workflows/offline-workflows.md#finding-2--trading-day-is-a-shared-store-level-concept-and-multi-device-shops-need-a-rule),
-decided now rather than left open: V1 sidesteps the multi-till shared-day conflict question
-entirely by making each device responsible for its own trading day. A store with multiple devices
-therefore has multiple concurrent trading days in V1 — acceptable because V1's target shop is
-overwhelmingly single-device ([personas.md](../05-personas/personas.md)); multi-till reconciliation
-is deferred to whenever multi-outlet/multi-till is actually built, alongside
-[ADR-0003](../adr/ADR-0003-multi-outlet-modelled-from-day-one.md)'s deferred store selector.
+**Module:** Cash Drawer / Day Close. **Tenant scoping:** tenant- and store-scoped.
+
+**Correction, found in a Phase 07 documentation audit (2026-08-25):** the paragraph below described
+this table as scoped per `device_id`. Sprint 26 (backlog.md M2 item 2) built it scoped by
+`(tenant_id, store_id)` instead and named that as a genuine, dated deviation from this exact
+paragraph in [trading-day/specification.md §1](../modules/trading-day/specification.md#1-purpose-and-business-context)
+— but the correction was never carried back here, this document's own stated source of truth,
+leaving this paragraph wrong for 42 sprints. The real reasoning, from the module spec: no `devices`
+table existed until Sprint 55, 29 sprints after this table was built; offline-workflows.md's own
+Finding 2 text says "a single physical cash drawer suggests one shared day-state," making per-device
+the less physically correct model, not the more correct one; and V1's target shop is overwhelmingly
+single-device ([personas.md](../05-personas/personas.md)), so store-level scoping already delivers
+"one open day per device" for the single-device case that matters most in V1, without inventing a
+second, unused scoping dimension for the multi-device case V1 doesn't target. Multi-till reconciliation remains deferred to whenever multi-outlet/multi-till is
+actually built, alongside [ADR-0003](../adr/ADR-0003-multi-outlet-modelled-from-day-one.md)'s
+deferred store selector — unchanged by this correction.
 
 | Column | Type | Constraint |
 | --- | --- | --- |
 | `tenant_id` | `UUID` | `NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT` |
 | `store_id` | `UUID` | `NOT NULL REFERENCES stores(id) ON DELETE RESTRICT` |
-| `device_id` | `UUID` | `NOT NULL REFERENCES devices(id) ON DELETE RESTRICT` |
 | `status` | `TEXT` | `NOT NULL CHECK (status IN ('open','closed'))` |
 | `starting_float_minor_units` | `BIGINT` | `NOT NULL` |
 | `counted_cash_minor_units` | `BIGINT` | nullable until closed |
@@ -307,8 +366,8 @@ is deferred to whenever multi-outlet/multi-till is actually built, alongside
 | `reopened_at` | `TIMESTAMPTZ` | nullable |
 | `reopened_by` | `UUID` | nullable `REFERENCES users(id) ON DELETE SET NULL` |
 
-**Indexes:** `(tenant_id, device_id, status) WHERE status = 'open'` — "is there an open day on this
-device right now" check on every sale attempt.
+**Indexes:** `(tenant_id, store_id, status)` — "is there an open day at this store right now" check
+on every sale attempt.
 **RLS:** tenant-scoped.
 
 ### `sales` — Tier 2 (no update, no delete once `status = 'completed'`)
@@ -319,24 +378,52 @@ device right now" check on every sale attempt.
 | --- | --- | --- |
 | `tenant_id` | `UUID` | `NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT` |
 | `store_id` | `UUID` | `NOT NULL REFERENCES stores(id) ON DELETE RESTRICT` |
-| `device_id` | `UUID` | `NOT NULL REFERENCES devices(id) ON DELETE RESTRICT` |
-| `trading_day_id` | `UUID` | `NOT NULL REFERENCES trading_days(id) ON DELETE RESTRICT` |
+| `trading_day_id` | `UUID` | nullable `REFERENCES trading_days(id) ON DELETE RESTRICT` — corrected from `NOT NULL` in a Phase 07 documentation audit (2026-08-25): Sprint 26 (backlog.md M2 item 2) deliberately did not gate `POST /sales` on an open trading day, to avoid regressing the one live, working end-to-end sale flow this project had (Sprint 16) ahead of the mobile till screen that opens one — see [trading-day/specification.md §1](../modules/trading-day/specification.md#1-purpose-and-business-context) |
 | `customer_id` | `UUID` | nullable `REFERENCES customers(id) ON DELETE SET NULL` — a sale outlives a customer record being deactivated; the historical sale should not be blocked from existing, but losing the specific customer link on hard removal is acceptable since customers are Tier 1 (soft delete in the normal path anyway) |
 | `provisional_invoice_number` | `TEXT` | `NOT NULL`, immutable after creation — [ADR-0008](../adr/ADR-0008-offline-invoice-numbering.md) |
 | `canonical_invoice_number` | `BIGINT` | nullable, unique per `(tenant_id, financial_year)` when present |
+| `financial_year` | `TEXT` | nullable — the financial year `canonical_invoice_number` is scoped within ([identifiers.md §3](identifiers.md)), derived from `completed_at` at assignment time; added Sprint 24, never listed here until this correction |
 | `tax_registration_type_at_sale` | `TEXT` | `NOT NULL` — snapshot, not a live join to settings, since a shop's tax status can change after old sales exist |
 | `status` | `TEXT` | `NOT NULL CHECK (status IN ('draft','held','completed','cancelled'))` |
 | `subtotal_minor_units`, `tax_total_minor_units`, `discount_total_minor_units`, `grand_total_minor_units` | `BIGINT` | `NOT NULL` |
-| `client_operation_id` | `UUID` | `NOT NULL UNIQUE` |
 | `completed_at` | `TIMESTAMPTZ` | nullable |
+
+No separate `client_operation_id` column — corrected in the same Phase 07 documentation audit
+(2026-08-25) as `device_id` above: `id` alone is this table's idempotency key, the same real
+mechanism `returns` below (Context 6) documents explicitly.
 
 **Indexes:** `(tenant_id, store_id, completed_at)` — daily sales report
 ([FR-071](../03-functional-requirements/functional-requirements.md)). `(tenant_id, provisional_invoice_number)` unique —
 lookup for returns ([FR-062](../03-functional-requirements/functional-requirements.md)). `(tenant_id, canonical_invoice_number)` —
 export/report ordering. `(customer_id) WHERE customer_id IS NOT NULL` — customer purchase history
-([FR-051](../03-functional-requirements/functional-requirements.md)).
+([FR-051](../03-functional-requirements/functional-requirements.md)) — **named here but never actually
+built; see the Change Log's dated correction**, found in the same audit and left as real, deferred
+follow-up work rather than fixed speculatively in a documentation-only pass.
 **RLS:** tenant-scoped. **No `UPDATE`/`DELETE` once `status = 'completed'`** — enforced by a
 trigger rejecting any write attempt against a completed row, not merely by omitting an endpoint.
+
+### `invoice_sequences`
+**Not in the original Phase 07 design** — added Sprint 24 (backlog.md M1 item 8), found and
+documented here for the first time in a Phase 07 documentation audit (2026-08-25). The original
+design only said `canonical_invoice_number` is "unique per `(tenant_id, financial_year)`," leaving
+the assignment mechanism open ("via a database sequence or an equivalent atomic counter"). A
+per-tenant Postgres `SEQUENCE` object isn't practical for an unbounded number of tenants; this
+table-based counter is the actual, ADR-0008-sanctioned mechanism, incremented atomically in the same
+transaction as the `sales` row it numbers.
+**Purpose:** the atomic counter backing [ADR-0008](../adr/ADR-0008-offline-invoice-numbering.md)'s
+canonical invoice-number assignment. **Module:** Sales & Invoices. **Tenant scoping:** tenant-scoped.
+
+| Column | Type | Constraint |
+| --- | --- | --- |
+| `tenant_id` | `UUID` | `NOT NULL REFERENCES tenants(id) ON DELETE RESTRICT` |
+| `financial_year` | `TEXT` | `NOT NULL` |
+| `next_value` | `BIGINT` | `NOT NULL` |
+
+No `created_at`/`created_by`/`updated_at` — this table is a pure counter, not an entity with its own
+audit trail; each row is mutated in place by the same transaction that reads and increments it.
+**Indexes:** `(tenant_id, financial_year)` unique — the atomic upsert-and-increment this table exists
+to make possible.
+**RLS:** tenant-scoped.
 
 ### `sale_line_items` — Tier 2
 **Module:** Sales & Invoices.
@@ -346,18 +433,25 @@ trigger rejecting any write attempt against a completed row, not merely by omitt
 | `sale_id` | `UUID` | `NOT NULL REFERENCES sales(id) ON DELETE RESTRICT` |
 | `product_id` | `UUID` | `NOT NULL REFERENCES products(id) ON DELETE RESTRICT` |
 | `variant_id` | `UUID` | nullable `REFERENCES product_variants(id) ON DELETE RESTRICT` |
-| `quantity` | `NUMERIC(14,3)` | `NOT NULL` |
+| `quantity` | `NUMERIC(14,3)` | `NOT NULL` — `INTEGER` in the real build, the same fractional-quantity deferral named on `stock_movements` above ([inventory/specification.md §3](../modules/inventory/specification.md#3-database-tables-and-relationships)) |
 | `unit_price_minor_units` | `BIGINT` | `NOT NULL` — snapshot at sale time, independent of later price changes |
-| `hsn_sac_code_at_sale` | `TEXT` | nullable — snapshot, per [RR-003](../02-business-requirements/regulatory-requirements.md) |
 | `tax_rate_basis_points` | `INTEGER` | `NOT NULL` |
 | `line_discount_minor_units` | `BIGINT` | `NOT NULL DEFAULT 0` |
 | `line_tax_minor_units` | `BIGINT` | `NOT NULL` — [DR-008](../03-functional-requirements/business-rules.md) |
 | `line_total_minor_units` | `BIGINT` | `NOT NULL` |
 
+**Correction, found in a Phase 07 documentation audit (2026-08-25):** `hsn_sac_code_at_sale` was
+never actually built — no such column exists on this table; only `products.hsn_sac_code` (Context 2)
+does, unsnapshotted. Named as a real, deferred gap rather than removed silently: RR-003's per-line
+snapshot requirement is not met today, the same open item Sprint 39's own receipt-template work
+already named for GSTIN specifically (`receipt_template_config`'s row note, Context 7 below).
+
 No independent `tenant_id`/RLS — access is via `sale_id` join; a line item is never queried
 directly across tenants.
-**Indexes:** `(sale_id)` — assembling a sale/invoice. `(product_id)` — "which sales included this
-product" for top/slow product reports ([FR-073](../03-functional-requirements/functional-requirements.md)).
+**Indexes:** `(sale_id)` — assembling a sale/invoice. The `(product_id)` index this document
+previously claimed for top/slow product reports ([FR-073](../03-functional-requirements/functional-requirements.md))
+was never actually built — named as real, deferred follow-up work in the same audit, not fixed
+speculatively in a documentation-only pass.
 
 ### `sale_payments` — Tier 2
 **Module:** Sales & Invoices (Split Payment, [FR-028](../03-functional-requirements/functional-requirements.md)).
@@ -386,8 +480,15 @@ product" for top/slow product reports ([FR-073](../03-functional-requirements/fu
 | `status` | `TEXT` | `NOT NULL CHECK (status IN ('initiated','pending_approval','approved','completed','rejected'))` |
 | `refund_total_minor_units` | `BIGINT` | `NOT NULL` |
 | `approved_by` | `UUID` | nullable `REFERENCES users(id) ON DELETE SET NULL` |
-| `client_operation_id` | `UUID` | `NOT NULL UNIQUE` |
 | `completed_at` | `TIMESTAMPTZ` | nullable |
+
+**Correction, found in a Phase 07 documentation audit (2026-08-25):** no separate `client_operation_id`
+column — `id` alone is this table's idempotency key, matching every other client-generated-id
+table's actual mechanism (`sales`, `trading_days`, `customers`), corrected in the same pass as
+`sales`/`stock_movements` above. Also gains `created_at`/`created_by` (already implied by this
+document's own blanket per-table convention, not previously stated explicitly for this table) —
+`GET /returns`'s Cashier "own device only" scope is unimplementable without a column recording who
+filed the return, per [returns/specification.md §1](../modules/returns/specification.md#1-purpose-and-business-context).
 
 **Indexes:** `(original_sale_id)` — has-this-sale-been-returned check, WF-012.
 `(tenant_id, store_id, status) WHERE status = 'pending_approval'` — the Manager approval queue,
@@ -483,6 +584,33 @@ the resolution itself is an update to `resolved_at`, which is acceptable here be
 records an *anomaly to be worked*, not a financial fact; the underlying rejected sale/return in
 `sales`/`returns` remains untouched and immutable regardless of how this row is annotated.
 
+### `rate_limit_buckets`
+**Not in the original Phase 07 design** — added Sprint 45 ([rate-limiting.md §1](../11-api/rate-limiting.md#1-limits-by-endpoint-class)),
+found and documented here for the first time in a Phase 07 documentation audit (2026-08-25).
+**Purpose:** a fixed-window request counter, one row per `(scope, window)` pair, backing the three
+enforceable rate-limit classes (mutating/read/sync-push). **Module:** none — this is cross-cutting
+API infrastructure, not owned by any bounded context above; placed here as the closest fit among the
+existing contexts rather than inventing an eighth. **Tenant scoping: deliberately none** — this is
+the one genuine exception to this document's own blanket "every tenant-owned table" convention
+stated at the top, the same class of stated exception `devices`' server-generated `id` already is.
+`key` already embeds whichever scope it protects (`read:tenant:<id>`, `mutating:user:<id>`,
+`sync-push:user:<id>`) as an opaque string this table itself never interprets, so it carries no
+`tenant_id` column and needs no RLS policy — nothing outside `core/rate-limit/` ever queries it, and
+every value baked into `key` was already resolved from an authenticated session before this table is
+touched.
+
+| Column | Type | Constraint |
+| --- | --- | --- |
+| `key` | `TEXT` | `PRIMARY KEY` — not a client-generated UUID, the other genuine exception to this document's blanket per-table convention |
+| `count` | `INTEGER` | `NOT NULL DEFAULT 1` |
+| `window_end` | `TIMESTAMPTZ` | `NOT NULL` |
+
+No `id`/`tenant_id`/`created_at`/`created_by`/`updated_at` — this table opts out of every one of this
+document's own blanket per-table conventions, stated explicitly rather than left as an unexplained
+omission.
+**Indexes:** `(window_end)` — expired-bucket cleanup.
+**RLS:** none — see above.
+
 ---
 
 ## Change Log
@@ -494,3 +622,4 @@ records an *anomaly to be worked*, not a financial fact; the underlying rejected
 | 0.1.2 | 2026-08-16 | Correction found starting Reports, Sprint 37 (backlog.md M4 item 2): BR-024/BR-045 require a configurable low-stock threshold and none existed anywhere. Added `shop_settings.low_stock_threshold_quantity` — a single shop-wide value, not per-product (named, deferred). |
 | 0.1.3 | 2026-08-17 | Sprint 39 (backlog.md M4 item 4): `receipt_template_config`'s row note now names its actual shape (`{ footer_message: string }`, the only field the module accepts); `printer_config`'s row note now names why it stays unused — a paired printer is per-device data, resolved as a new mobile-local-only table instead of a write to this column. |
 | 0.1.4 | 2026-08-20 | Sprint 55: `devices` built, exactly as designed. `id` confirmed server-generated (`randomUUID()`), a deliberate exception to this document's blanket client-generated-id convention for a table no offline client write ever creates directly. |
+| 0.1.5 | 2026-08-25 | Sprint 69 (Phase 07 documentation audit, no code change): the first line-by-line reconciliation of this document against the live schema since it was written. Found `device_id` documented as a real, `NOT NULL` column on `stock_movements`/`trading_days`/`sales` — none of the three ever actually got it, `devices` (Sprint 55) having been built many sprints after all three, and never retrofitted; `trading_days`' whole per-device scoping paragraph was corrected to the real `(tenant_id, store_id)` scoping Sprint 26 built and already named as a dated deviation in `trading-day/specification.md §1`, just never carried back here — this document's own stated source-of-truth rule. Found `client_operation_id` documented as a real column on `stock_movements`/`sales`/`returns`; none of the three built it — `id` alone is the idempotency key on all three, already correctly reasoned in `returns`' own Prisma model comment but never corrected here. Found and added three tables built during implementation, never in the original design: `invoice_sequences` (Sprint 24), `customer_field_conflicts` (Sprint 35), `rate_limit_buckets` (Sprint 45) — the intro's table count corrected from 22 to 25 (21 actually built, 4 named stubs unchanged). Found and corrected: `sales.trading_day_id` (`NOT NULL`, actually nullable per Sprint 26), `sales.financial_year` (missing from the column list entirely), `products.category_id`/`unit_id` (`NOT NULL`, actually nullable per Sprint 19), `customers.erased_at`/`updated_by` (missing, Sprints 46/35), `sale_line_items.quantity`/`stock_movements.quantity_delta` type (`NUMERIC(14,3)`, actually `INTEGER`). Found and **named as real, deferred gaps rather than fixed speculatively** (a documentation-only pass should not add production migrations without their own dedicated verification): four indexes this document claims but that were never actually built — `sales(customer_id)` (customer purchase history), `sale_line_items(product_id)` (top/slow product reports), `products(tenant_id, name text_pattern_ops)` and `products(tenant_id, category_id)` (both genuinely used by `GET /api/v1/products`'s real `search`/`category_id` filters); and one column, `sale_line_items.hsn_sac_code_at_sale`, documented but never built (only the unsnapshotted `products.hsn_sac_code` exists). This audit was bounded deliberately — it does not claim to be exhaustive across all 25 tables, only that every discrepancy found while working through Context 2 (Catalogue), 3 (Inventory), 4 (Customers), 5 (Sales), and 6 (Returns) in detail was corrected or named; Context 1 (Identity & Tenancy) and 7 (Settings & Sync) were checked only for the specific issues this pass was already tracking, not re-audited from scratch. |
