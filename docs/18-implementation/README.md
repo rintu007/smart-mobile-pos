@@ -23,9 +23,14 @@
 > in `milestones.md` (M5's Entry criteria row) and `modules/README.md` Rule 2's own precedent shape,
 > not a reinterpretation of M4's actual closure requirement. M5 (`backlog.md §6`) has zero
 > engineering items — it's pilot-plan.md's own recruitment/onboarding sequence broken into trackable
-> items, not code.
-> **Version:** 0.69.0
-> **Last updated:** 2026-08-21
+> items, not code. With no engineering work left in M5, Sprint 66 processed the 12 long-open
+> Dependabot PRs Sprint 42 had wired but never triaged (9 merged, 1 self-closed as a dead dependency,
+> 3 left open on confirmed real breaking changes) and closed the lowest-risk of the three
+> (`eslint-config-next` 16 — a `FlatCompat`/circular-JSON crash, fixed by switching to the package's
+> own native flat-config exports). Vitest 4 (#58, needs Vite 6+) and Prisma 7 (#60, needs a
+> `prisma.config.ts` migration) remain open, each needing its own dedicated migration sprint.
+> **Version:** 0.70.0
+> **Last updated:** 2026-08-25
 > **Owner:** CTO / All engineering roles
 
 ## Charter
@@ -144,6 +149,15 @@ rows (sync success rate, duplicate sale rate, unresolved sync conflicts) have no
 dashboard and will need a direct database query during the pilot, unlike cash reconciliation
 variance, which Trading Day's own close flow already surfaces.
 
+**Sprint 66 — Dependabot triage and one dependency-tooling fix, not milestone work.** With no
+engineering work left in M5, the 12 long-open Dependabot PRs Sprint 42 had wired but never
+processed were triaged: 9 merged, 1 self-closed by Dependabot as a dead dependency, 3 left open on
+confirmed real breaking changes (Vitest 4/Vite 6, Prisma 7's `prisma.config.ts` migration,
+`eslint-config-next` 16). The last of the three was then fixed on its own branch — `eslint.config.mjs`
+migrated to `eslint-config-next`'s native flat-config exports, resolving a `FlatCompat`/circular-JSON
+crash the prior triage had diagnosed slightly imprecisely. Vitest 4 and Prisma 7 remain open,
+each still needing its own dedicated migration sprint.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -217,3 +231,4 @@ variance, which Trading Day's own close flow already surfaces.
 | 0.67.0 | 2026-08-21 | Sprint 63 (cross-cutting fix — closes the code half of Sprint 43's M8 finding): `apps/mobile/android/app/build.gradle.kts` had signed release builds unconditionally with the debug keystore since M0. Wired the standard Flutter release-signing pattern — real credentials read from a gitignored `key.properties` if present, falling back to the debug keystore unchanged when absent — with `apps/mobile/android/key.properties.example` naming the exact `keytool` command. Verified with a clean `flutter build apk --debug` (fallback path genuinely still works, not just compiles). Corrected `cd-workflows.md`, `owasp-checklist.md`, and `release-checklist.md` to match: all three remaining OWASP release-gate findings are now purely founder actions with zero engineering work left. |
 | 0.68.0 | 2026-08-21 | Sprint 64 (cross-cutting fix — corrects the 0.67.0 entry above's own claim, disproven within the same session): re-examined the sign-in rate-limiting finding and found real client-side engineering work hiding inside it too. Built `SignInController`'s exponential-cooldown attempt throttling — real defense-in-depth, honestly scoped as narrower than the still-open server-side gap. `flutter test` 280/280 (277 pre-existing + 3 new). Corrected `rate-limiting.md`, `identity-and-sessions.md`, `owasp-checklist.md`, and `release-checklist.md`. |
 | 0.69.0 | 2026-08-21 | Sprint 65 (M5 decomposition, a dated exception to normal milestone ordering): the founder was asked directly and directed M5 prep to begin now, despite M4 not being formally demonstrated — recorded in `milestones.md`'s M5 row and mirrored here, the same shape as `modules/README.md` Rule 2's M0→M1 exception, explicit that it doesn't move M5's own exit criterion. Decomposed `pilot-plan.md` into item grain (`backlog.md §6`) — zero engineering items, per M5's own "no new product scope." Found and named which pilot success-metrics are already visible via a built feature versus needing a manual database query today. No code change. |
+| 0.70.0 | 2026-08-25 | Sprint 66 (repository-tooling fix, not milestone work): with M5 fully decomposed and no engineering work left in it, triaged the 12 Dependabot PRs Sprint 42's `dependabot.yml` had wired but never processed. 9 merged cleanly, 1 self-closed by Dependabot as a dead dependency (#61 `freezed`), 3 left open with confirmed real breaking changes (#58 Vitest 4/Vite 6, #60 Prisma 7's `prisma.config.ts` migration, #64 `eslint-config-next` 16). Closed the lowest-risk of the three: re-investigated #64's failure from its actual stack trace rather than the prior triage's own summary and found the real cause narrower than assumed — `eslint.config.mjs` was already flat config; the break was `eslint-config-next` 16's legacy `next/core-web-vitals` shareable config crashing `FlatCompat`'s error-formatting path on a self-referential `eslint-plugin-react-hooks` config object. Fixed by switching to `eslint-config-next`'s own native flat-config exports, dropping `FlatCompat`. `lint`/`typecheck`/`test` (227/227)/`build` all verified clean. #58/#60 remain open. |
