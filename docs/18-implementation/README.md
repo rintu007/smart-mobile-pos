@@ -29,10 +29,12 @@
 > (`eslint-config-next` 16 — a `FlatCompat`/circular-JSON crash, fixed by switching to the package's
 > own native flat-config exports). Sprint 67 closed the second: Vitest 4 (#58) needed `vite` added
 > as an explicit devDependency (`^8.2.2`) — it had only ever resolved transitively, never been
-> pinned, which is why Dependabot's own diff alone couldn't fix it. Only Prisma 7 (#60, needs a
-> `prisma.config.ts` migration) remains open — the one with real runtime blast radius, unlike the
-> two closed so far, which were both test/lint tooling only.
-> **Version:** 0.71.0
+> pinned, which is why Dependabot's own diff alone couldn't fix it. Sprint 68 then closed the last
+> one: Prisma 7 (#60) — `schema.prisma`'s datasource block lost `url`/`directUrl` entirely, moved to
+> a new `prisma.config.ts` (CLI/migrate) and an explicit `@prisma/adapter-pg` driver adapter in
+> `core/db/client.ts` (runtime). All 12 Dependabot PRs from the Sprint 65 triage are now resolved: 9
+> merged as-is, 1 self-closed as a dead dependency, 3 fixed and merged across Sprints 66–68.
+> **Version:** 0.72.0
 > **Last updated:** 2026-08-25
 > **Owner:** CTO / All engineering roles
 
@@ -163,8 +165,18 @@ crash the prior triage had diagnosed slightly imprecisely.
 **Sprint 67 — the second Dependabot fix, Vitest 4.** `vite` had never been a direct dependency of
 `apps/web`, resolving only transitively through Vitest 2's own dependency chain — the actual reason
 Dependabot's version-only diff couldn't fix PR #58 on its own. Added `vite` (`^8.2.2`) explicitly
-alongside the `vitest` bump; no config-file changes needed. Only Prisma 7 (#60) remains open, the
-one of the three with real runtime blast radius rather than test/lint-tooling-only scope.
+alongside the `vitest` bump; no config-file changes needed.
+
+**Sprint 68 — the third and last Dependabot fix, Prisma 7, the one with real runtime blast radius.**
+`schema.prisma`'s `datasource` block lost `url`/`directUrl` entirely — both connection strings now
+live in a new `prisma.config.ts` (CLI/migrate, `DIRECT_URL`) and an explicit `@prisma/adapter-pg`
+driver adapter built in `core/db/client.ts` from `DATABASE_URL` (runtime), matching Prisma 7's
+mandatory-adapter requirement. Kept the deprecated-but-functional `prisma-client-js` generator
+rather than the newer generator's mandatory custom output path, avoiding a 12-file import-path
+change unrelated to the actual bug. Found and fixed two further real gaps beyond the headline error:
+Dependabot's own PR had left `@prisma/client` mismatched at `6.19.3` against `prisma@7.9.1`; the
+official migration guide's own `dotenv/config` example doesn't load this project's `.env.local`
+convention. All three Dependabot PRs left open after the Sprint 65 triage are now closed.
 
 ## Change Log
 
@@ -241,3 +253,4 @@ one of the three with real runtime blast radius rather than test/lint-tooling-on
 | 0.69.0 | 2026-08-21 | Sprint 65 (M5 decomposition, a dated exception to normal milestone ordering): the founder was asked directly and directed M5 prep to begin now, despite M4 not being formally demonstrated — recorded in `milestones.md`'s M5 row and mirrored here, the same shape as `modules/README.md` Rule 2's M0→M1 exception, explicit that it doesn't move M5's own exit criterion. Decomposed `pilot-plan.md` into item grain (`backlog.md §6`) — zero engineering items, per M5's own "no new product scope." Found and named which pilot success-metrics are already visible via a built feature versus needing a manual database query today. No code change. |
 | 0.70.0 | 2026-08-25 | Sprint 66 (repository-tooling fix, not milestone work): with M5 fully decomposed and no engineering work left in it, triaged the 12 Dependabot PRs Sprint 42's `dependabot.yml` had wired but never processed. 9 merged cleanly, 1 self-closed by Dependabot as a dead dependency (#61 `freezed`), 3 left open with confirmed real breaking changes (#58 Vitest 4/Vite 6, #60 Prisma 7's `prisma.config.ts` migration, #64 `eslint-config-next` 16). Closed the lowest-risk of the three: re-investigated #64's failure from its actual stack trace rather than the prior triage's own summary and found the real cause narrower than assumed — `eslint.config.mjs` was already flat config; the break was `eslint-config-next` 16's legacy `next/core-web-vitals` shareable config crashing `FlatCompat`'s error-formatting path on a self-referential `eslint-plugin-react-hooks` config object. Fixed by switching to `eslint-config-next`'s own native flat-config exports, dropping `FlatCompat`. `lint`/`typecheck`/`test` (227/227)/`build` all verified clean. #58/#60 remain open. |
 | 0.71.0 | 2026-08-25 | Sprint 67 (repository-tooling fix, not milestone work): closed Dependabot PR #58 (Vitest 4). Confirmed Vitest 4 strictly requires Vite 6+ and `vite` had only ever resolved transitively via Vitest 2's own dependency chain, never pinned directly — the reason Dependabot's own version-only diff left the mismatch unresolved. Added `vite` (`^8.2.2`) as an explicit devDependency. No `vitest.config*.ts` changes needed. `lint`/`typecheck`/`test` (227/227)/`build` verified clean locally; `fast-integration` verified in CI. Only #60 (Prisma 7) remains open. |
+| 0.72.0 | 2026-08-25 | Sprint 68 (repository-tooling fix, not milestone work): closed the last Dependabot PR, #60 (Prisma 7) — the one with real runtime blast radius. `schema.prisma`'s datasource block lost `url`/`directUrl`; new `prisma.config.ts` holds `DIRECT_URL` for CLI/migrate, `core/db/client.ts` builds an explicit `@prisma/adapter-pg` adapter from `DATABASE_URL` for runtime, matching Prisma 7's mandatory-adapter requirement. Kept the deprecated-but-functional `prisma-client-js` generator, avoiding a 12-file import-path change. Fixed two further real gaps: Dependabot's own PR left `@prisma/client` mismatched at `6.19.3` against `prisma@7.9.1`; the official migration guide's `dotenv/config` example doesn't load this project's `.env.local` convention. `lint`/`typecheck`/`test` (227/227)/`build` verified clean locally with DB env vars unset; `fast-integration` verified in CI. All 12 Dependabot PRs from the Sprint 65 triage are now resolved. |

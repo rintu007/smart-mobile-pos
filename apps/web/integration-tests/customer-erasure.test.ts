@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { createTestPrismaClient } from "./setup/create-test-prisma-client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eraseCustomer, deactivateCustomer } from "@/modules/customers/service";
 import { seedTenant } from "./setup/seed-tenant";
@@ -17,7 +18,7 @@ import { seedTenant } from "./setup/seed-tenant";
 let prisma: PrismaClient;
 
 beforeAll(async () => {
-  prisma = new PrismaClient();
+  prisma = createTestPrismaClient();
   await prisma.$connect();
 });
 
