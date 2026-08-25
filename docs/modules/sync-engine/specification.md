@@ -70,7 +70,8 @@ named, deferred Phase 18 tuning decision (per that section's own wording).
 
 **Sprint 36 (backlog.md M4 item 1) — `stock_movements`/`sales` pull, the "reporting parity across
 devices" sync-api.md §6 has named since Phase 11 and never implemented until now.** Reports (M4 item
-2, not yet built) reads its four figures entirely from the local caches this sprint fills — no
+2, not yet built at the time this sprint ran — built the very next sprint, Sprint 37, corrected here
+Sprint 74) reads its four figures entirely from the local caches this sprint fills — no
 `reports.md` endpoint exists or is needed, per [FR-071](../../03-functional-requirements/functional-requirements.md#group-j--reports-core-four)'s
 own offline-behaviour column ("computed from locally synced data"). Two real design points, both
 already recorded in [backlog.md §5](../../17-sprints/backlog.md#5-m4--fully-decomposed-2026-08-16-now-that-m3-has-reached-this-point)'s

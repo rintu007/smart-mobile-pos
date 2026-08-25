@@ -3,7 +3,7 @@
 > **Status:** 🟢 Approved
 > **Module:** POS
 > **Slice:** V1 — this document scopes only M0's minimal first cut, not the full V1 shape (§1)
-> **Version:** 0.10.3
+> **Version:** 0.10.4
 > **Last updated:** 2026-08-26
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
@@ -19,11 +19,13 @@ Written to drive [Sprint 05](../../17-sprints/sprint-05.md) — specification be
 Lets a shop record a completed sale. [backlog.md item 6](../../17-sprints/backlog.md#1-m0--walking-skeleton-fully-decomposed)
 scopes M0 to "manual product add to cart..., cash payment only" — no discount, tax, or split
 payment (all [M1/M2 scope](../../17-sprints/backlog.md#2-m1m4--module-grain-only-decomposed-when-reached)),
-no Trading Day precondition (Trading Day is its own M2-scope module, not yet built), and no
-`device_id` (Authentication's device-registration slice — [module registry](../README.md) — isn't
-built yet either). This is a real, named gap against the full V1 requirement, the same shape of
-scope boundary already documented for Authentication's device revocation and Products' category/unit
-fields. §11 states this plainly.
+no Trading Day precondition (Trading Day was its own M2-scope module, not yet built when this
+section was written — built Sprint 26, still not a hard `POST /sales` gate, a separate, deliberate
+decision named in §3 below, not an oversight), and no `device_id` (this was M0-era shorthand for
+"Authentication's device-registration slice isn't built yet" — corrected Sprint 74: `device_id` was
+never actually part of `sales`' real design at all, per `schema-server.md`'s own Sprint 69
+correction, not merely delayed). §11 states the M0-era gap plainly; §3 below carries the corrected,
+current picture.
 
 **Also out of scope this sprint:** the mobile till screen UI itself — see §4.
 
@@ -571,3 +573,4 @@ invoice-document rendering (§1).
 | 0.10.1 | 2026-08-16 | Sprint 33 (backlog.md M3 item 3, Returns server): no request/response contract change — `pos/service.ts` gains two exports, `getCompletedSaleForReturn` (a read-only, `status = 'completed'`-only lookup) and `roundFraction` (the existing private BigInt-rounding helper, made public), both reused by `returnsService` via the sanctioned service-to-service path rather than a repository-layer reach-through — see [returns/specification.md §1](../returns/specification.md#1-purpose-and-business-context). |
 | 0.10.2 | 2026-08-16 | Sprint 34 (backlog.md M3 item 4, Returns mobile): found and fixed a real, blocking gap — `formatSale`'s `line_items` mapping never exposed each line item's own `id`, which the mobile Returns client needs to submit `POST /returns`' `original_sale_line_item_id`. Added additively (`id` alongside every existing field); every consumer (`GET /sales/{id}`, `GET /sales/lookup`, `POST /sales`'s own response) already tolerates extra response fields, so this is not a breaking change to an already-shipped contract. See [returns/specification.md §1b](../returns/specification.md#1b-sprint-34--returns--refund-mobile-m3-item-4). |
 | 0.10.3 | 2026-08-26 | Sprint 73 (schema-server.md's own Phase 07 audit found this column documented but never built): `sale_line_items.hsn_sac_code_at_sale` built — a snapshot of `products.hsn_sac_code` taken at sale-creation time, RR-003's per-line GST field. Additive response field, `formatSale`'s existing consumers unaffected. Also corrected this document's own stale `sales` table note, which still implied `customer_id` (built Sprint 32) and `device_id` (never actually part of the real design at all, per schema-server.md's own Sprint 69 correction) were both "not yet built" pending future work. Invoice-document rendering (GSTIN, HSN/SAC breakup display) remains explicitly deferred to Receipt & Printing, unchanged. |
+| 0.10.4 | 2026-08-26 | Sprint 74 (module-registry staleness audit): found and corrected a second, earlier stale claim in §1's own M0-scope-boundary paragraph — "Trading Day... not yet built" (built Sprint 26) and "`device_id`... isn't built yet either" (never actually part of `sales`' real design at all, per schema-server.md's own Sprint 69 correction, not merely delayed). Distinct from Sprint 73's own fix to this document's later `sale_line_items` column-list section — this was the earlier historical-framing paragraph, missed in that pass. |
