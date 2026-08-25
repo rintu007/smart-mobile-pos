@@ -2,7 +2,7 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 07 — Database Design
-> **Version:** 0.1.5
+> **Version:** 0.1.6
 > **Last updated:** 2026-08-25
 > **Owner:** PostgreSQL Architect
 > **Approved by:** _pending_
@@ -198,12 +198,19 @@ filtering ([FR-036](../03-functional-requirements/functional-requirements.md)).
 **Indexes:** `(tenant_id, barcode)` unique, serving barcode scan resolution
 ([FR-022](../03-functional-requirements/functional-requirements.md)/[FR-023](../03-functional-requirements/functional-requirements.md)),
 the single most latency-sensitive query in the system (NFR-002) — built as a plain unique
-constraint, not the partial (`WHERE deactivated_at IS NULL`) form originally documented here. The
-`(tenant_id, name text_pattern_ops)` text-search index ([FR-025](../03-functional-requirements/functional-requirements.md))
-and `(tenant_id, category_id)` category-filter index ([FR-036](../03-functional-requirements/functional-requirements.md))
-were never actually built, despite `GET /api/v1/products` genuinely supporting both `search` and
-`category_id` filters server-side — found in the same audit and named as real, deferred follow-up
-work rather than fixed speculatively in a documentation-only pass.
+constraint, not the partial (`WHERE deactivated_at IS NULL`) form originally documented here.
+`(tenant_id, category_id)` — category filtering ([FR-036](../03-functional-requirements/functional-requirements.md)),
+built Sprint 70, closing a real gap found in the prior audit.
+
+**Correction, found building Sprint 70 (2026-08-25):** the `(tenant_id, name text_pattern_ops)`
+text-search index this document claimed for FR-025 was never a real fix for the query it names —
+`products/repository.ts#listProducts`'s actual search is `name`/`sku` `contains` (case-insensitive,
+i.e. `ILIKE '%text%'`), not a left-anchored prefix match. `text_pattern_ops` only accelerates
+left-anchored patterns (`LIKE 'text%'`); it does nothing for a `%text%` scan regardless of whether
+it's built. A real fix needs a trigram (`pg_trgm`) GIN index instead — a different, larger change
+(enabling a Postgres extension, a different index type, its own verification against a live
+database) than the plain B-tree index this document had assumed would work. Left unbuilt and
+correctly re-scoped, not fixed with the wrong tool in this pass.
 **RLS:** tenant-scoped.
 
 ### `product_variants` — Tier 1, **V2+ stub, no V1 write path**
@@ -395,10 +402,11 @@ mechanism `returns` below (Context 6) documents explicitly.
 **Indexes:** `(tenant_id, store_id, completed_at)` — daily sales report
 ([FR-071](../03-functional-requirements/functional-requirements.md)). `(tenant_id, provisional_invoice_number)` unique —
 lookup for returns ([FR-062](../03-functional-requirements/functional-requirements.md)). `(tenant_id, canonical_invoice_number)` —
-export/report ordering. `(customer_id) WHERE customer_id IS NOT NULL` — customer purchase history
-([FR-051](../03-functional-requirements/functional-requirements.md)) — **named here but never actually
-built; see the Change Log's dated correction**, found in the same audit and left as real, deferred
-follow-up work rather than fixed speculatively in a documentation-only pass.
+export/report ordering. `(tenant_id, customer_id, completed_at)` — customer purchase history
+([FR-051](../03-functional-requirements/functional-requirements.md)), built Sprint 70 as a composite
+matching `listPurchaseHistory`'s actual query shape (`customers/repository.ts`) — more precise than
+this document's own original bare `(customer_id) WHERE customer_id IS NOT NULL` claim, which had
+gone undocumented-as-built since this document was first written.
 **RLS:** tenant-scoped. **No `UPDATE`/`DELETE` once `status = 'completed'`** — enforced by a
 trigger rejecting any write attempt against a completed row, not merely by omitting an endpoint.
 
@@ -448,10 +456,16 @@ already named for GSTIN specifically (`receipt_template_config`'s row note, Cont
 
 No independent `tenant_id`/RLS — access is via `sale_id` join; a line item is never queried
 directly across tenants.
-**Indexes:** `(sale_id)` — assembling a sale/invoice. The `(product_id)` index this document
-previously claimed for top/slow product reports ([FR-073](../03-functional-requirements/functional-requirements.md))
-was never actually built — named as real, deferred follow-up work in the same audit, not fixed
-speculatively in a documentation-only pass.
+**Indexes:** `(sale_id)` — assembling a sale/invoice.
+
+**Correction, found building the follow-up sprint the previous audit named (2026-08-25):** the
+`(product_id)` index this document previously claimed for top/slow product reports
+([FR-073](../03-functional-requirements/functional-requirements.md)) is not, in fact, a real gap —
+it was Sprint 69's own mistake, not caught until actually reaching for it. `FR-073` is explicitly
+`Fully offline`; Sprint 37 built it entirely as a local Drift aggregation on the mobile device (see
+`docs/18-implementation/implementation-log.md`'s own Sprint 37 entry), with no server Postgres query
+of any kind — confirmed here by grepping `apps/web/src` for any `saleLineItem.findMany`/`groupBy`/
+`aggregate` call, of which there are none. No index is needed because no query exists to serve.
 
 ### `sale_payments` — Tier 2
 **Module:** Sales & Invoices (Split Payment, [FR-028](../03-functional-requirements/functional-requirements.md)).
@@ -623,3 +637,4 @@ omission.
 | 0.1.3 | 2026-08-17 | Sprint 39 (backlog.md M4 item 4): `receipt_template_config`'s row note now names its actual shape (`{ footer_message: string }`, the only field the module accepts); `printer_config`'s row note now names why it stays unused — a paired printer is per-device data, resolved as a new mobile-local-only table instead of a write to this column. |
 | 0.1.4 | 2026-08-20 | Sprint 55: `devices` built, exactly as designed. `id` confirmed server-generated (`randomUUID()`), a deliberate exception to this document's blanket client-generated-id convention for a table no offline client write ever creates directly. |
 | 0.1.5 | 2026-08-25 | Sprint 69 (Phase 07 documentation audit, no code change): the first line-by-line reconciliation of this document against the live schema since it was written. Found `device_id` documented as a real, `NOT NULL` column on `stock_movements`/`trading_days`/`sales` — none of the three ever actually got it, `devices` (Sprint 55) having been built many sprints after all three, and never retrofitted; `trading_days`' whole per-device scoping paragraph was corrected to the real `(tenant_id, store_id)` scoping Sprint 26 built and already named as a dated deviation in `trading-day/specification.md §1`, just never carried back here — this document's own stated source-of-truth rule. Found `client_operation_id` documented as a real column on `stock_movements`/`sales`/`returns`; none of the three built it — `id` alone is the idempotency key on all three, already correctly reasoned in `returns`' own Prisma model comment but never corrected here. Found and added three tables built during implementation, never in the original design: `invoice_sequences` (Sprint 24), `customer_field_conflicts` (Sprint 35), `rate_limit_buckets` (Sprint 45) — the intro's table count corrected from 22 to 25 (21 actually built, 4 named stubs unchanged). Found and corrected: `sales.trading_day_id` (`NOT NULL`, actually nullable per Sprint 26), `sales.financial_year` (missing from the column list entirely), `products.category_id`/`unit_id` (`NOT NULL`, actually nullable per Sprint 19), `customers.erased_at`/`updated_by` (missing, Sprints 46/35), `sale_line_items.quantity`/`stock_movements.quantity_delta` type (`NUMERIC(14,3)`, actually `INTEGER`). Found and **named as real, deferred gaps rather than fixed speculatively** (a documentation-only pass should not add production migrations without their own dedicated verification): four indexes this document claims but that were never actually built — `sales(customer_id)` (customer purchase history), `sale_line_items(product_id)` (top/slow product reports), `products(tenant_id, name text_pattern_ops)` and `products(tenant_id, category_id)` (both genuinely used by `GET /api/v1/products`'s real `search`/`category_id` filters); and one column, `sale_line_items.hsn_sac_code_at_sale`, documented but never built (only the unsnapshotted `products.hsn_sac_code` exists). This audit was bounded deliberately — it does not claim to be exhaustive across all 25 tables, only that every discrepancy found while working through Context 2 (Catalogue), 3 (Inventory), 4 (Customers), 5 (Sales), and 6 (Returns) in detail was corrected or named; Context 1 (Identity & Tenancy) and 7 (Settings & Sync) were checked only for the specific issues this pass was already tracking, not re-audited from scratch. |
+| 0.1.6 | 2026-08-25 | Sprint 70 (real fix, migration `20260825175448_add_missing_indexes`): built 2 of the 4 indexes Sprint 69 named — `sales(tenant_id, customer_id, completed_at)` (customer purchase history) and `products(tenant_id, category_id)` (category filtering), both confirmed against live query code first. Found Sprint 69's own `sale_line_items(product_id)` finding was itself wrong — FR-073 (the report it was meant to serve) is `Fully offline`, has no server query at all, needs no index — corrected in the same pass. Found the `products` text-search index was never going to be fixed by the plain B-tree/`text_pattern_ops` form this document originally claimed either — the real query is a `contains` (`%text%`) scan, which needs a `pg_trgm` GIN index, a materially different and larger change; correctly re-scoped rather than built with the wrong tool. `sale_line_items.hsn_sac_code_at_sale` remains unaddressed — a feature-shaped fix (a new column plus sale-creation snapshot logic), not an index, left for its own sprint. |
