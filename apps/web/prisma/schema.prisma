@@ -216,6 +216,10 @@ model Product {
   @@unique([tenantId, sku])
   @@unique([tenantId, barcode])
   @@index([tenantId])
+  /// Sprint 70 — schema-server.md has documented a `(tenant_id, category_id)` index for the real,
+  /// live `categoryId` filter `GET /api/v1/products` (products/repository.ts#listProducts) applies
+  /// since it was written; never actually built.
+  @@index([tenantId, categoryId])
   @@map("products")
 }
 
@@ -285,6 +289,11 @@ model Sale {
   @@unique([tenantId, provisionalInvoiceNumber])
   @@unique([tenantId, financialYear, canonicalInvoiceNumber])
   @@index([tenantId, storeId, completedAt])
+  /// Sprint 70 — schema-server.md has documented a `(customer_id)` index for
+  /// `listPurchaseHistory`'s real, live query since it was written; never actually built. Composite
+  /// on the query's real shape (WHERE tenantId+customerId, ORDER BY completedAt DESC), a more
+  /// precise index than the doc's own bare `customer_id` column ever specified.
+  @@index([tenantId, customerId, completedAt])
   @@map("sales")
 }
 
