@@ -47,8 +47,11 @@
 > `eslint` 10.9.0 breaks `eslint-plugin-react`'s rule-context API). Sprint 72 then built the `pg_trgm`
 > trigram GIN indexes on `products.name`/`sku` Sprint 70 had correctly re-scoped rather than build
 > with the wrong tool. Sprint 73 then built the last one, `sale_line_items.hsn_sac_code_at_sale` —
-> every real, buildable finding from Sprint 69's original audit is now closed.
-> **Version:** 0.77.0
+> every real, buildable finding from Sprint 69's original audit is now closed. Sprint 74 then found
+> `authentication/specification.md` had gone uncorrected since Sprint 06 despite Sprints 23/55/56
+> building nearly everything it still described as unbuilt — corrected comprehensively, narrowed to
+> the one genuinely remaining gap (a device-list/revocation UI screen, confirmed unbuilt).
+> **Version:** 0.78.0
 > **Last updated:** 2026-08-26
 > **Owner:** CTO / All engineering roles
 
@@ -248,6 +251,21 @@ Invoice-document rendering (FR-055/056) remains deferred to Receipt & Printing. 
 buildable finding from Sprint 69's original audit is now closed — four sprints (69/70/72/73), one
 originating audit, nothing left unaddressed.
 
+**Sprint 74 — a wider staleness audit, one module deep this time.** A bounded grep for "not yet
+built" across every module spec (not just Phase 07) found `authentication/specification.md`
+unchanged since Sprint 06 (2026-08-02) — 55+ sprints, over 400 hours of project time — despite
+Sprint 23 (Roles & Permissions), Sprint 55 (device registration/revocation, server), and Sprint 56
+(device registration/revocation, mobile) each building nearly everything this document still
+described as unbuilt across almost all 11 sections. Verified against real code before correcting:
+`core/auth/session.ts#requireSession` genuinely runs all four evaluation-order steps; all three
+device routes exist with their actual permission gating. The one claim confirmed still accurate:
+no device-list/revocation UI screen exists anywhere on mobile — the real, narrower gap that remains,
+distinct from the now-corrected backend. Also corrected three smaller, related echoes of the same
+staleness: `modules/README.md`'s own Authentication/Roles & Permissions/Trading Day rows,
+`sync-engine/specification.md`'s Sprint 36 Reports note, and a second stale claim in
+`pos/specification.md §1`. Two other hits checked and confirmed still accurate, left unchanged. No
+code change.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -329,3 +347,4 @@ originating audit, nothing left unaddressed.
 | 0.75.0 | 2026-08-26 | Sprint 71 (routine Dependabot triage, not milestone work): triaged 7 new PRs from `dependabot.yml`'s first weekly scan since Sprint 65. Merged 5 clean (`@supabase/ssr`, `next` 16, mobile build tooling, `zod` 4, `sqlite3` patch). Left 2 open with confirmed genuine upstream blockers: `typescript` 7.0 (`@typescript-eslint` support pending) and `eslint` 10.9.0 (`eslint-plugin-react` breaks on its rule-context API). No workaround attempted for either. |
 | 0.76.0 | 2026-08-26 | Sprint 72 (real fix, migration `20260825183908_add_products_trgm_search_index`): built `pg_trgm` trigram GIN indexes on `products.name`/`sku`, the real fix for the text-search gap Sprint 70 correctly re-scoped rather than built with the wrong tool. Hand-edited SQL, matching the `trading_days_one_open_per_store` convention. No application-code change. `lint`/`typecheck`/`test` (227/227) verified clean; `fast-integration` verified in CI. Only `hsn_sac_code_at_sale` remains from Sprint 69's original findings. |
 | 0.77.0 | 2026-08-26 | Sprint 73 (real fix, migration `20260825185330_add_sale_line_item_hsn_sac_code_snapshot`): built `sale_line_items.hsn_sac_code_at_sale`, the last item from Sprint 69's audit. `pos/service.ts#createSale` snapshots `product.hsnSacCode` at sale-creation time. `formatSale` exposes it additively, all consumers unaffected. `lint`/`typecheck`/`test` (229/229, 2 new) verified clean; `fast-integration` verified in CI. Every real, buildable finding from Sprint 69's audit is now closed. |
+| 0.78.0 | 2026-08-26 | Sprint 74 (module-registry staleness audit, no code change): `authentication/specification.md` unchanged since Sprint 06 despite Sprints 23/55/56 building nearly everything it still described as unbuilt — corrected across all 11 sections, narrowed to the one genuinely remaining gap (device-list/revocation UI screen, confirmed unbuilt by direct grep). Also corrected `modules/README.md`'s Authentication/Roles & Permissions/Trading Day rows, `sync-engine/specification.md`'s Sprint 36 Reports note, and a second stale claim in `pos/specification.md §1`. |
