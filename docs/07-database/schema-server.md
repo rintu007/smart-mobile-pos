@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 07 — Database Design
-> **Version:** 0.1.6
-> **Last updated:** 2026-08-25
+> **Version:** 0.1.7
+> **Last updated:** 2026-08-26
 > **Owner:** PostgreSQL Architect
 > **Approved by:** _pending_
 
@@ -202,15 +202,16 @@ constraint, not the partial (`WHERE deactivated_at IS NULL`) form originally doc
 `(tenant_id, category_id)` — category filtering ([FR-036](../03-functional-requirements/functional-requirements.md)),
 built Sprint 70, closing a real gap found in the prior audit.
 
-**Correction, found building Sprint 70 (2026-08-25):** the `(tenant_id, name text_pattern_ops)`
-text-search index this document claimed for FR-025 was never a real fix for the query it names —
-`products/repository.ts#listProducts`'s actual search is `name`/`sku` `contains` (case-insensitive,
-i.e. `ILIKE '%text%'`), not a left-anchored prefix match. `text_pattern_ops` only accelerates
-left-anchored patterns (`LIKE 'text%'`); it does nothing for a `%text%` scan regardless of whether
-it's built. A real fix needs a trigram (`pg_trgm`) GIN index instead — a different, larger change
-(enabling a Postgres extension, a different index type, its own verification against a live
-database) than the plain B-tree index this document had assumed would work. Left unbuilt and
-correctly re-scoped, not fixed with the wrong tool in this pass.
+`name`/`sku` trigram GIN indexes (`pg_trgm`, built Sprint 72), serving the real `search` filter
+([FR-025](../03-functional-requirements/functional-requirements.md)) — `listProducts`'s actual
+search is a middle-match `contains` (case-insensitive, `ILIKE '%text%'`) scan against `name` OR
+`sku`, not a left-anchored prefix match. This document originally claimed a plain
+`(tenant_id, name text_pattern_ops)` index for this row (Sprint 70's own audit found `text_pattern_ops`
+only accelerates left-anchored `LIKE 'text%'` patterns, doing nothing for a `%text%` scan regardless
+of whether it's built); the real fix needed the `pg_trgm` extension and trigram GIN indexes on both
+searched columns instead, a hand-edited migration (Prisma's schema DSL has no operator-class syntax)
+outside `schema.prisma`'s own declared indexes, the same convention `trading_days_one_open_per_store`
+already established.
 **RLS:** tenant-scoped.
 
 ### `product_variants` — Tier 1, **V2+ stub, no V1 write path**
@@ -638,3 +639,4 @@ omission.
 | 0.1.4 | 2026-08-20 | Sprint 55: `devices` built, exactly as designed. `id` confirmed server-generated (`randomUUID()`), a deliberate exception to this document's blanket client-generated-id convention for a table no offline client write ever creates directly. |
 | 0.1.5 | 2026-08-25 | Sprint 69 (Phase 07 documentation audit, no code change): the first line-by-line reconciliation of this document against the live schema since it was written. Found `device_id` documented as a real, `NOT NULL` column on `stock_movements`/`trading_days`/`sales` — none of the three ever actually got it, `devices` (Sprint 55) having been built many sprints after all three, and never retrofitted; `trading_days`' whole per-device scoping paragraph was corrected to the real `(tenant_id, store_id)` scoping Sprint 26 built and already named as a dated deviation in `trading-day/specification.md §1`, just never carried back here — this document's own stated source-of-truth rule. Found `client_operation_id` documented as a real column on `stock_movements`/`sales`/`returns`; none of the three built it — `id` alone is the idempotency key on all three, already correctly reasoned in `returns`' own Prisma model comment but never corrected here. Found and added three tables built during implementation, never in the original design: `invoice_sequences` (Sprint 24), `customer_field_conflicts` (Sprint 35), `rate_limit_buckets` (Sprint 45) — the intro's table count corrected from 22 to 25 (21 actually built, 4 named stubs unchanged). Found and corrected: `sales.trading_day_id` (`NOT NULL`, actually nullable per Sprint 26), `sales.financial_year` (missing from the column list entirely), `products.category_id`/`unit_id` (`NOT NULL`, actually nullable per Sprint 19), `customers.erased_at`/`updated_by` (missing, Sprints 46/35), `sale_line_items.quantity`/`stock_movements.quantity_delta` type (`NUMERIC(14,3)`, actually `INTEGER`). Found and **named as real, deferred gaps rather than fixed speculatively** (a documentation-only pass should not add production migrations without their own dedicated verification): four indexes this document claims but that were never actually built — `sales(customer_id)` (customer purchase history), `sale_line_items(product_id)` (top/slow product reports), `products(tenant_id, name text_pattern_ops)` and `products(tenant_id, category_id)` (both genuinely used by `GET /api/v1/products`'s real `search`/`category_id` filters); and one column, `sale_line_items.hsn_sac_code_at_sale`, documented but never built (only the unsnapshotted `products.hsn_sac_code` exists). This audit was bounded deliberately — it does not claim to be exhaustive across all 25 tables, only that every discrepancy found while working through Context 2 (Catalogue), 3 (Inventory), 4 (Customers), 5 (Sales), and 6 (Returns) in detail was corrected or named; Context 1 (Identity & Tenancy) and 7 (Settings & Sync) were checked only for the specific issues this pass was already tracking, not re-audited from scratch. |
 | 0.1.6 | 2026-08-25 | Sprint 70 (real fix, migration `20260825175448_add_missing_indexes`): built 2 of the 4 indexes Sprint 69 named — `sales(tenant_id, customer_id, completed_at)` (customer purchase history) and `products(tenant_id, category_id)` (category filtering), both confirmed against live query code first. Found Sprint 69's own `sale_line_items(product_id)` finding was itself wrong — FR-073 (the report it was meant to serve) is `Fully offline`, has no server query at all, needs no index — corrected in the same pass. Found the `products` text-search index was never going to be fixed by the plain B-tree/`text_pattern_ops` form this document originally claimed either — the real query is a `contains` (`%text%`) scan, which needs a `pg_trgm` GIN index, a materially different and larger change; correctly re-scoped rather than built with the wrong tool. `sale_line_items.hsn_sac_code_at_sale` remains unaddressed — a feature-shaped fix (a new column plus sale-creation snapshot logic), not an index, left for its own sprint. |
+| 0.1.7 | 2026-08-26 | Sprint 72 (real fix, migration `20260825183908_add_products_trgm_search_index`): built the `pg_trgm` trigram GIN indexes on `products.name`/`sku` Sprint 70 correctly re-scoped rather than built with the wrong tool. Hand-edited SQL (`CREATE EXTENSION IF NOT EXISTS pg_trgm` plus two `CREATE INDEX ... USING GIN (... gin_trgm_ops)` statements) outside `schema.prisma`'s own declared indexes, matching the `trading_days_one_open_per_store` convention for anything Prisma's schema DSL can't express. No application-code change — `listProducts`'s existing `contains`/`insensitive` filter already produces exactly the pattern these indexes accelerate. Verified via `fast-integration`'s `prisma migrate deploy` against a real ephemeral Postgres, confirming the extension is actually available in the standard `postgres:15` image. `sale_line_items.hsn_sac_code_at_sale` remains the last named gap from Sprint 69's original audit. |
