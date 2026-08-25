@@ -54,6 +54,7 @@ export interface CreateSaleInput {
     taxRateBasisPoints: number;
     lineTaxMinorUnits: bigint;
     lineTotalMinorUnits: bigint;
+    hsnSacCodeAtSale: string | null;
   }[];
   // Sprint 29 (backlog.md M2 item 5) — was a single `payment` field; loosened to a to-many array,
   // matching `sale_payments`' own always-to-many relation (§1's own note that no schema change was
@@ -116,6 +117,7 @@ export function createSale(input: CreateSaleInput) {
             taxRateBasisPoints: item.taxRateBasisPoints,
             lineTaxMinorUnits: item.lineTaxMinorUnits,
             lineTotalMinorUnits: item.lineTotalMinorUnits,
+            hsnSacCodeAtSale: item.hsnSacCodeAtSale,
           })),
         },
         payments: {
