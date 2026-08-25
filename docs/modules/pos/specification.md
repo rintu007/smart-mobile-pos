@@ -3,8 +3,8 @@
 > **Status:** 🟢 Approved
 > **Module:** POS
 > **Slice:** V1 — this document scopes only M0's minimal first cut, not the full V1 shape (§1)
-> **Version:** 0.10.2
-> **Last updated:** 2026-08-16
+> **Version:** 0.10.3
+> **Last updated:** 2026-08-26
 > **Owner:** CTO
 > **Approved by:** CTO (self-reviewed against completeness of all 11 sections — solo-founder compensating control, per [repository-setup.md §3](../../15-github-project/repository-setup.md#3-the-honest-gap--solo-founder-review-stated-plainly-rather-than-worked-around))
 
@@ -240,14 +240,28 @@ this sprint implements only a subset of each table's full column list.
 `canonical_invoice_number`/`financial_year` (Sprint 24), `status` (always `'completed'` this
 sprint), `provisional_invoice_number`, `subtotal_minor_units`, `discount_total_minor_units`
 (Sprint 27), `tax_total_minor_units`/`tax_registration_type_at_sale` (new, Sprint 28),
-`grand_total_minor_units`, `completed_at`, `created_at`, `created_by`. **Not yet built:**
-`device_id`, `customer_id` — added once device-registration/Customers exist.
+`grand_total_minor_units`, `completed_at`, `created_at`, `created_by`, `customer_id` (Sprint 32).
+**Correction, Sprint 73 (schema-server.md's own Phase 07 audit):** `device_id` was never "not yet
+built" pending device registration — no such column exists on `sales` at all in the actual design;
+`schema-server.md`'s own claim of one was itself corrected. This paragraph's prior wording implied
+it was still coming; it never was.
 
 `sale_line_items`: `id`, `sale_id`, `product_id`, `quantity`, `unit_price_minor_units`,
 `line_discount_minor_units` (Sprint 27), `line_tax_minor_units`/`tax_rate_basis_points` (new,
-Sprint 28, both `DEFAULT 0`), `line_total_minor_units`. **Not yet built:** `variant_id` (V2+ stub),
-`hsn_sac_code_at_sale` (informational only per RR-003, not needed for the tax computation itself —
-deferred alongside FR-055/056's document-rendering scope, §1).
+Sprint 28, both `DEFAULT 0`), `line_total_minor_units`, `hsn_sac_code_at_sale` (Sprint 73 — see
+below). **Not yet built:** `variant_id` (V2+ stub).
+
+**Closed, Sprint 73 (schema-server.md's own Phase 07 audit found this column documented but never
+built):** `hsn_sac_code_at_sale`, a snapshot of `products.hsn_sac_code` taken at sale-creation time
+— the same "never a live join, an already-completed sale must not change" reasoning
+`tax_registration_type_at_sale` (Sprint 28) already established, applied to RR-003's per-line GST
+field specifically. Nullable, mirroring `products.hsn_sac_code`'s own nullability (FR-033: flagged,
+not blocked, if missing — a sale of a product with no code snapshots null, not an error). **Still
+explicitly deferred, unchanged by this sprint:** FR-055/FR-056's actual invoice-document rendering
+(GSTIN, the HSN/SAC breakup *display*, Bill-of-Supply vs. Tax-Invoice layout) — this sprint stores
+the correct number per line, the same "computes the numbers, not the document" scope Sprint 28's own
+tax-computation work already drew; no GSTIN field exists anywhere yet, and document rendering
+remains Receipt & Printing's scope, not POS's.
 
 `sale_payments`: `id`, `sale_id`, `method` (`'cash'`/`'card'`/`'other'` all live as of Sprint 29 —
 [schema-server.md](../../07-database/schema-server.md)'s full enum was already accepted by the Zod
@@ -556,3 +570,4 @@ invoice-document rendering (§1).
 | 0.10.0 | 2026-08-16 | Sprint 32 (backlog.md M3 item 2, Customers mobile): `POST /sales` gains an optional `customer_id`, validated against the caller's tenant when supplied (`NOT_FOUND` otherwise, the same `category_id`/`unit_id` existence-check shape products/service.ts already established) — see [customers/specification.md §1a](../customers/specification.md#1a-sprint-32--customers-mobile-m3-item-2) for the full mobile picker/attach design. |
 | 0.10.1 | 2026-08-16 | Sprint 33 (backlog.md M3 item 3, Returns server): no request/response contract change — `pos/service.ts` gains two exports, `getCompletedSaleForReturn` (a read-only, `status = 'completed'`-only lookup) and `roundFraction` (the existing private BigInt-rounding helper, made public), both reused by `returnsService` via the sanctioned service-to-service path rather than a repository-layer reach-through — see [returns/specification.md §1](../returns/specification.md#1-purpose-and-business-context). |
 | 0.10.2 | 2026-08-16 | Sprint 34 (backlog.md M3 item 4, Returns mobile): found and fixed a real, blocking gap — `formatSale`'s `line_items` mapping never exposed each line item's own `id`, which the mobile Returns client needs to submit `POST /returns`' `original_sale_line_item_id`. Added additively (`id` alongside every existing field); every consumer (`GET /sales/{id}`, `GET /sales/lookup`, `POST /sales`'s own response) already tolerates extra response fields, so this is not a breaking change to an already-shipped contract. See [returns/specification.md §1b](../returns/specification.md#1b-sprint-34--returns--refund-mobile-m3-item-4). |
+| 0.10.3 | 2026-08-26 | Sprint 73 (schema-server.md's own Phase 07 audit found this column documented but never built): `sale_line_items.hsn_sac_code_at_sale` built — a snapshot of `products.hsn_sac_code` taken at sale-creation time, RR-003's per-line GST field. Additive response field, `formatSale`'s existing consumers unaffected. Also corrected this document's own stale `sales` table note, which still implied `customer_id` (built Sprint 32) and `device_id` (never actually part of the real design at all, per schema-server.md's own Sprint 69 correction) were both "not yet built" pending future work. Invoice-document rendering (GSTIN, HSN/SAC breakup display) remains explicitly deferred to Receipt & Printing, unchanged. |

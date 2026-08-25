@@ -46,8 +46,9 @@
 > open on confirmed genuine upstream blockers (`typescript` 7.0 needs `@typescript-eslint` support;
 > `eslint` 10.9.0 breaks `eslint-plugin-react`'s rule-context API). Sprint 72 then built the `pg_trgm`
 > trigram GIN indexes on `products.name`/`sku` Sprint 70 had correctly re-scoped rather than build
-> with the wrong tool — the last real gap from Sprint 69's audit besides `hsn_sac_code_at_sale`.
-> **Version:** 0.76.0
+> with the wrong tool. Sprint 73 then built the last one, `sale_line_items.hsn_sac_code_at_sale` —
+> every real, buildable finding from Sprint 69's original audit is now closed.
+> **Version:** 0.77.0
 > **Last updated:** 2026-08-26
 > **Owner:** CTO / All engineering roles
 
@@ -237,6 +238,16 @@ the pattern these indexes accelerate. Verified via CI's `fast-integration`, conf
 actually available in the standard `postgres:15` image. Only `sale_line_items.hsn_sac_code_at_sale`
 remains from Sprint 69's original four-index-plus-one-column finding list.
 
+**Sprint 73 — the last one.** Built `sale_line_items.hsn_sac_code_at_sale`, migration
+`20260825185330_add_sale_line_item_hsn_sac_code_snapshot`. `pos/service.ts#createSale` snapshots
+`product.hsnSacCode` onto each line item at sale-creation time, the same never-a-live-join pattern
+`tax_registration_type_at_sale` (Sprint 28) already established. Nullable, mirroring
+`products.hsn_sac_code`'s own nullability. `formatSale` exposes it additively — every existing
+consumer (`GET /sales/{id}`, `GET /sales/lookup`, `POST /sales`, `GET /sync/pull`) needed no change.
+Invoice-document rendering (FR-055/056) remains deferred to Receipt & Printing. Every real,
+buildable finding from Sprint 69's original audit is now closed — four sprints (69/70/72/73), one
+originating audit, nothing left unaddressed.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -317,3 +328,4 @@ remains from Sprint 69's original four-index-plus-one-column finding list.
 | 0.74.0 | 2026-08-26 | Sprint 70 (real fix, migration `20260825175448_add_missing_indexes`): re-verified Sprint 69's 4 named index findings against live query code before building anything. Found `sale_line_items(product_id)` was itself a mistake (FR-073 is fully offline, no server query exists). Built the 2 real ones: `sales(tenant_id, customer_id, completed_at)`, `products(tenant_id, category_id)`. Found the `products` text-search index needs `pg_trgm`, not the originally-documented plain B-tree form — re-scoped as separate follow-up work. `lint`/`typecheck`/`test` (227/227)/`build` verified clean locally; `fast-integration` verified in CI. `hsn_sac_code_at_sale` remains open for a dedicated sprint. |
 | 0.75.0 | 2026-08-26 | Sprint 71 (routine Dependabot triage, not milestone work): triaged 7 new PRs from `dependabot.yml`'s first weekly scan since Sprint 65. Merged 5 clean (`@supabase/ssr`, `next` 16, mobile build tooling, `zod` 4, `sqlite3` patch). Left 2 open with confirmed genuine upstream blockers: `typescript` 7.0 (`@typescript-eslint` support pending) and `eslint` 10.9.0 (`eslint-plugin-react` breaks on its rule-context API). No workaround attempted for either. |
 | 0.76.0 | 2026-08-26 | Sprint 72 (real fix, migration `20260825183908_add_products_trgm_search_index`): built `pg_trgm` trigram GIN indexes on `products.name`/`sku`, the real fix for the text-search gap Sprint 70 correctly re-scoped rather than built with the wrong tool. Hand-edited SQL, matching the `trading_days_one_open_per_store` convention. No application-code change. `lint`/`typecheck`/`test` (227/227) verified clean; `fast-integration` verified in CI. Only `hsn_sac_code_at_sale` remains from Sprint 69's original findings. |
+| 0.77.0 | 2026-08-26 | Sprint 73 (real fix, migration `20260825185330_add_sale_line_item_hsn_sac_code_snapshot`): built `sale_line_items.hsn_sac_code_at_sale`, the last item from Sprint 69's audit. `pos/service.ts#createSale` snapshots `product.hsnSacCode` at sale-creation time. `formatSale` exposes it additively, all consumers unaffected. `lint`/`typecheck`/`test` (229/229, 2 new) verified clean; `fast-integration` verified in CI. Every real, buildable finding from Sprint 69's audit is now closed. |

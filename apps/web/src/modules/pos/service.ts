@@ -148,6 +148,7 @@ export function formatSale(sale: {
     taxRateBasisPoints: number;
     lineTaxMinorUnits: bigint;
     lineTotalMinorUnits: bigint;
+    hsnSacCodeAtSale: string | null;
   }[];
   payments: { method: string; amountMinorUnits: bigint }[];
 }) {
@@ -181,6 +182,8 @@ export function formatSale(sale: {
       tax_rate_basis_points: item.taxRateBasisPoints,
       tax_minor_units: Number(item.lineTaxMinorUnits),
       line_total_minor_units: Number(item.lineTotalMinorUnits),
+      // Added Sprint 73 — RR-003's per-line GST snapshot, docs/07-database/schema-server.md.
+      hsn_sac_code_at_sale: item.hsnSacCodeAtSale,
     })),
     payments: sale.payments.map((payment) => ({
       method: payment.method,
@@ -279,6 +282,7 @@ export async function createSale(
       taxRateBasisPoints,
       lineTaxMinorUnits: tax,
       lineTotalMinorUnits: taxableValue + tax,
+      hsnSacCodeAtSale: product.hsnSacCode,
     };
   });
 

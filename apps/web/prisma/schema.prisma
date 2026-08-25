@@ -401,6 +401,13 @@ model SaleLineItem {
   taxRateBasisPoints     Int    @default(0) @map("tax_rate_basis_points")
   lineTaxMinorUnits      BigInt @default(0) @map("line_tax_minor_units")
   lineTotalMinorUnits    BigInt @map("line_total_minor_units")
+  /// Added Sprint 73 — RR-003's per-line GST snapshot (schema-server.md's own documented column,
+  /// found never actually built during Sprint 69's audit). A snapshot of `products.hsnSacCode` at
+  /// the moment this line was sold, the same "never a live join, a shop-wide/product-wide rate
+  /// change must not alter an already-completed sale" reasoning `taxRateBasisPoints` above already
+  /// established. Nullable, mirroring `products.hsnSacCode`'s own nullability (FR-033: flagged, not
+  /// blocked, if missing) — a sale of a product with no HSN/SAC code snapshots null, not an error.
+  hsnSacCodeAtSale       String? @map("hsn_sac_code_at_sale")
 
   sale            Sale             @relation(fields: [saleId], references: [id], onDelete: Restrict)
   product         Product          @relation(fields: [productId], references: [id], onDelete: Restrict)

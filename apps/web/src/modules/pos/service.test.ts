@@ -26,6 +26,7 @@ const product = {
   tenantId,
   name: "Test Product",
   priceMinorUnits: BigInt(2800),
+  hsnSacCode: null,
   deactivatedAt: null,
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -118,6 +119,65 @@ describe("createSale", () => {
     expect(result.line_items[0]?.id).toBe("line-item-1");
     expect(result.canonical_invoice_number).toBe(1);
     expect(result.financial_year).toBe("2026");
+  });
+
+  it("snapshots the product's hsn_sac_code onto the line item at sale time (RR-003)", async () => {
+    vi.mocked(repository.findProductsByIds).mockResolvedValue([
+      { ...product, hsnSacCode: "1234" },
+    ] as never);
+    vi.mocked(repository.createSale).mockResolvedValue(
+      createdSale({
+        lineItems: [
+          {
+            id: "line-item-1",
+            productId,
+            quantity: 2,
+            unitPriceMinorUnits: BigInt(2800),
+            lineDiscountMinorUnits: BigInt(0),
+            lineTotalMinorUnits: BigInt(5600),
+            hsnSacCodeAtSale: "1234",
+          },
+        ],
+        payments: [{ method: "cash", amountMinorUnits: BigInt(5600) }],
+      }) as never,
+    );
+
+    const result = await createSale(authUserId, tenantId, input);
+
+    expect(repository.createSale).toHaveBeenCalledWith(
+      expect.objectContaining({
+        lineItems: [expect.objectContaining({ hsnSacCodeAtSale: "1234" })],
+      }),
+    );
+    expect(result.line_items[0]?.hsn_sac_code_at_sale).toBe("1234");
+  });
+
+  it("snapshots null when the product has no hsn_sac_code", async () => {
+    // Default `product` mock already has hsnSacCode: null.
+    vi.mocked(repository.createSale).mockResolvedValue(
+      createdSale({
+        lineItems: [
+          {
+            id: "line-item-1",
+            productId,
+            quantity: 2,
+            unitPriceMinorUnits: BigInt(2800),
+            lineDiscountMinorUnits: BigInt(0),
+            lineTotalMinorUnits: BigInt(5600),
+            hsnSacCodeAtSale: null,
+          },
+        ],
+        payments: [{ method: "cash", amountMinorUnits: BigInt(5600) }],
+      }) as never,
+    );
+
+    await createSale(authUserId, tenantId, input);
+
+    expect(repository.createSale).toHaveBeenCalledWith(
+      expect.objectContaining({
+        lineItems: [expect.objectContaining({ hsnSacCodeAtSale: null })],
+      }),
+    );
   });
 
   it("rejects a stale client price with PRICE_MISMATCH and writes nothing", async () => {
