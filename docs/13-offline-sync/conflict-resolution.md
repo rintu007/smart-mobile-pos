@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 13 — Offline Synchronisation
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-31
+> **Version:** 0.1.1
+> **Last updated:** 2026-08-26
 > **Owner:** CTO / Principal Flutter Engineer
 > **Approved by:** _pending_
 
@@ -11,6 +11,20 @@ Per-entity-class policy with worked examples, for every entity
 [entity-classification.md](entity-classification.md) marked **client-editable**:
 `categories`, `units`, `products`, `customers`, `shop_settings`. (`trading_days` needs no policy at
 all — conflict-free by construction, per [entity-classification.md §3](entity-classification.md#3-finding-2-resolved--restated-here-as-this-phases-own-record-not-just-phase-07s).)
+
+**Build-status correction (2026-08-26):** §3's field-edit-collision merge policy below is designed
+for all five entities but **only actually built for `customers`** (`customer.update`, Sprint 35 —
+this sync engine's first `.update` operation type of any kind, confirmed by grep: no
+`category.update`/`unit.update`/`product.update` exists anywhere in `sync/service.ts` or
+`sync/schema.ts`). `categories`/`units`/`products` have no edit endpoint at all yet, online or
+offline — an already-named, still-accurate gap tracked in each module's own spec and
+`modules/README.md` ("`PATCH`/`DELETE` still deferred"), not new here, but never previously stated
+*in this document*, which reads as if the policy below already applies uniformly. `shop_settings`
+never goes through this sync-push mechanism at all — it's `PATCH /settings`, a direct REST
+endpoint with its own whole-row optimistic-concurrency check (§4 below is independently accurate).
+So of the five entities this document scopes itself to, one (`customers`) has the described policy
+built, one (`shop_settings`) has a different, also-real policy built, and three
+(`categories`/`units`/`products`) have no edit path of any kind to conflict on yet.
 
 ---
 
@@ -94,3 +108,4 @@ touch the same customer or product record independently in a real shop.
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-31 | Two conflict shapes (creation, field-edit) resolved distinctly; base-version field-level merge policy with the exit criterion's own worked example; shop_settings' whole-row reject-and-retry exception justified by field interdependence. |
+| 0.1.1 | 2026-08-26 | Sprint 76 (offline-sync staleness audit): corrected the intro's implied uniform coverage — the field-edit-collision merge policy is designed for all 5 client-editable entities but only actually built for `customers` (`customer.update`, Sprint 35, this sync engine's only `.update` operation type). `categories`/`units`/`products` have no edit endpoint at all yet (already-known, still-accurate gap, just never stated in this specific document); `shop_settings` uses a separate, independently-real REST mechanism (§4), not this sync path. |

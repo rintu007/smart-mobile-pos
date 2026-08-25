@@ -54,8 +54,11 @@
 > found the largest gap yet: the OpenAPI-driven client/server contract-generation mechanism
 > `shared-contracts.md` designs was never built across 74+ sprints — corrected across four documents,
 > naming the real hand-written-plus-cross-referencing mechanism actually in use, and the explicit
-> decision not to build the designed one now.
-> **Version:** 0.79.0
+> decision not to build the designed one now. Sprint 76 then found a real, load-bearing false safety
+> claim — `trading_days` was documented as "conflict-free by construction" in three places, but the
+> real mechanism is a database-level unique-index guard against a genuine concurrent-open race, not
+> the race being structurally impossible — corrected everywhere it was repeated.
+> **Version:** 0.80.0
 > **Last updated:** 2026-08-26
 > **Owner:** CTO / All engineering roles
 
@@ -285,6 +288,18 @@ scale of already-working, already-verified production code it would mean migrati
 "premature generality" reasoning this project applied before to Play Console distribution (Sprint
 61). Corrected the same false-as-fact claim across four documents. No code change.
 
+**Sprint 76 — a real false safety claim, not just staleness.** `entity-classification.md §3` said
+`trading_days` was "conflict-free by construction" because it was scoped per-device — never true;
+Sprint 26 scoped it per-store, and `schema-server.md` was itself corrected on this exact point
+Sprint 69, but that correction never propagated outward. Under the real scoping, two devices at the
+same store genuinely can race to open the same trading day — Sprint 26's real answer is a database-
+level partial unique index (`trading_days_one_open_per_store`, confirmed directly in its migration
+file), not the race being impossible. The same false claim was traced to and corrected in three
+documents (`entity-classification.md`, `schema-local.md` ×2, `conflict-resolution.md`'s own related
+finding). Also corrected `idempotency_keys`/`sync_rejections` (never built at all, mischaracterized
+as "server-only") and added 3 tables missing from `entity-classification.md`'s own completeness
+claim. `offline-workflows.md` checked and confirmed accurate. No code change.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -368,3 +383,4 @@ scale of already-working, already-verified production code it would mean migrati
 | 0.77.0 | 2026-08-26 | Sprint 73 (real fix, migration `20260825185330_add_sale_line_item_hsn_sac_code_snapshot`): built `sale_line_items.hsn_sac_code_at_sale`, the last item from Sprint 69's audit. `pos/service.ts#createSale` snapshots `product.hsnSacCode` at sale-creation time. `formatSale` exposes it additively, all consumers unaffected. `lint`/`typecheck`/`test` (229/229, 2 new) verified clean; `fast-integration` verified in CI. Every real, buildable finding from Sprint 69's audit is now closed. |
 | 0.78.0 | 2026-08-26 | Sprint 74 (module-registry staleness audit, no code change): `authentication/specification.md` unchanged since Sprint 06 despite Sprints 23/55/56 building nearly everything it still described as unbuilt — corrected across all 11 sections, narrowed to the one genuinely remaining gap (device-list/revocation UI screen, confirmed unbuilt by direct grep). Also corrected `modules/README.md`'s Authentication/Roles & Permissions/Trading Day rows, `sync-engine/specification.md`'s Sprint 36 Reports note, and a second stale claim in `pos/specification.md §1`. |
 | 0.79.0 | 2026-08-26 | Sprint 75 (security-docs staleness audit extended to Phase 08, no code change): found the OpenAPI-driven client/server contract-generation mechanism `shared-contracts.md` designs was never built across 74+ sprints and ~35 real endpoints — `packages/contracts/` holds only a stub, `docs/11-api/openapi.yaml` stale since Sprint 01, never documented as a decision. Named the real mechanism in use (hand-written Zod/Dart, cross-referencing discipline) and the explicit call not to build the designed mechanism now. Corrected `input-validation.md` (§1/§3/§4), `mobile-structure.md`, `monorepo-layout.md`. |
+| 0.80.0 | 2026-08-26 | Sprint 76 (offline-sync staleness audit, no code change): found `trading_days` was documented as "conflict-free by construction" (per-device scoping) in three places, never true — real scoping is per-store (Sprint 26), guarded by a real database-level unique index against a genuine concurrent-open race, confirmed in the migration file. Corrected `entity-classification.md`, `schema-local.md` (×2), `conflict-resolution.md`. Also fixed `idempotency_keys`/`sync_rejections` mischaracterization and added 3 tables missing from `entity-classification.md`'s completeness claim. |
