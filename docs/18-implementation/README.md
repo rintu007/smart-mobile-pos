@@ -41,8 +41,11 @@
 > follow-up work. Sprint 70 then re-verified those 4 findings against real query code before
 > building anything, found one was itself wrong (`sale_line_items(product_id)` — no server query
 > exists to serve it), and built the 2 that were real (`sales(tenant_id, customer_id, completed_at)`,
-> `products(tenant_id, category_id)`), via migration `20260825175448_add_missing_indexes`.
-> **Version:** 0.74.0
+> `products(tenant_id, category_id)`), via migration `20260825175448_add_missing_indexes`. Sprint 71
+> triaged `dependabot.yml`'s first weekly scan since Sprint 65 (7 new PRs) — 5 merged clean, 2 left
+> open on confirmed genuine upstream blockers (`typescript` 7.0 needs `@typescript-eslint` support;
+> `eslint` 10.9.0 breaks `eslint-plugin-react`'s rule-context API).
+> **Version:** 0.75.0
 > **Last updated:** 2026-08-26
 > **Owner:** CTO / All engineering roles
 
@@ -214,6 +217,15 @@ scan, which no ordinary B-tree variant accelerates — correctly re-scoped as se
 rather than built with the wrong tool. `hsn_sac_code_at_sale` remains open, a feature-shaped fix
 distinct from an index addition.
 
+**Sprint 71 — routine Dependabot triage.** `dependabot.yml`'s weekly scan fired for the first time
+since Sprint 65, opening 7 new PRs. 5 passed CI clean and merged — including two major bumps that
+turned out non-breaking in practice (`next` 16, `zod` 4) — the other two (`@supabase/ssr`, mobile
+build tooling). 2 hit genuine upstream compatibility gaps, confirmed from their own failing CI logs:
+`typescript` 7.0.2 (`@typescript-eslint` doesn't support TS 7.0 yet) and `eslint` 10.9.0
+(`eslint-plugin-react`, bundled via `eslint-config-next`, breaks on ESLint 10's rule-context API).
+Both left open — neither is fixable from this repository's own configuration, only by the upstream
+package catching up.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -292,3 +304,4 @@ distinct from an index addition.
 | 0.72.0 | 2026-08-25 | Sprint 68 (repository-tooling fix, not milestone work): closed the last Dependabot PR, #60 (Prisma 7) — the one with real runtime blast radius. `schema.prisma`'s datasource block lost `url`/`directUrl`; new `prisma.config.ts` holds `DIRECT_URL` for CLI/migrate, `core/db/client.ts` builds an explicit `@prisma/adapter-pg` adapter from `DATABASE_URL` for runtime, matching Prisma 7's mandatory-adapter requirement. Kept the deprecated-but-functional `prisma-client-js` generator, avoiding a 12-file import-path change. Fixed two further real gaps: Dependabot's own PR left `@prisma/client` mismatched at `6.19.3` against `prisma@7.9.1`; the official migration guide's `dotenv/config` example doesn't load this project's `.env.local` convention. `lint`/`typecheck`/`test` (227/227)/`build` verified clean locally with DB env vars unset; `fast-integration` verified in CI. All 12 Dependabot PRs from the Sprint 65 triage are now resolved. |
 | 0.73.0 | 2026-08-25 | Sprint 69 (Phase 07 documentation audit, no code change): re-audited `docs/07-database/schema-server.md` against the live schema — the first such reconciliation since it was written. Corrected a false `device_id` column/scoping narrative on `stock_movements`/`trading_days`/`sales` (real Sprint 26 deviation, already reasoned in `trading-day/specification.md`, never carried back here) and a false `client_operation_id` column on `stock_movements`/`sales`/`returns`. Added 3 real built tables never in the original design (`invoice_sequences`, `customer_field_conflicts`, `rate_limit_buckets`); table count corrected 22→25. Fixed five smaller column/type drifts. Named, not fixed: 4 real unindexed live query paths and 1 undbuilt column, confirmed against actual repository code, left for a dedicated follow-up sprint. |
 | 0.74.0 | 2026-08-26 | Sprint 70 (real fix, migration `20260825175448_add_missing_indexes`): re-verified Sprint 69's 4 named index findings against live query code before building anything. Found `sale_line_items(product_id)` was itself a mistake (FR-073 is fully offline, no server query exists). Built the 2 real ones: `sales(tenant_id, customer_id, completed_at)`, `products(tenant_id, category_id)`. Found the `products` text-search index needs `pg_trgm`, not the originally-documented plain B-tree form — re-scoped as separate follow-up work. `lint`/`typecheck`/`test` (227/227)/`build` verified clean locally; `fast-integration` verified in CI. `hsn_sac_code_at_sale` remains open for a dedicated sprint. |
+| 0.75.0 | 2026-08-26 | Sprint 71 (routine Dependabot triage, not milestone work): triaged 7 new PRs from `dependabot.yml`'s first weekly scan since Sprint 65. Merged 5 clean (`@supabase/ssr`, `next` 16, mobile build tooling, `zod` 4, `sqlite3` patch). Left 2 open with confirmed genuine upstream blockers: `typescript` 7.0 (`@typescript-eslint` support pending) and `eslint` 10.9.0 (`eslint-plugin-react` breaks on its rule-context API). No workaround attempted for either. |
