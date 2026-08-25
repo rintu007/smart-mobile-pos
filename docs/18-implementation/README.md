@@ -50,8 +50,12 @@
 > every real, buildable finding from Sprint 69's original audit is now closed. Sprint 74 then found
 > `authentication/specification.md` had gone uncorrected since Sprint 06 despite Sprints 23/55/56
 > building nearly everything it still described as unbuilt — corrected comprehensively, narrowed to
-> the one genuinely remaining gap (a device-list/revocation UI screen, confirmed unbuilt).
-> **Version:** 0.78.0
+> the one genuinely remaining gap (a device-list/revocation UI screen, confirmed unbuilt). Sprint 75
+> found the largest gap yet: the OpenAPI-driven client/server contract-generation mechanism
+> `shared-contracts.md` designs was never built across 74+ sprints — corrected across four documents,
+> naming the real hand-written-plus-cross-referencing mechanism actually in use, and the explicit
+> decision not to build the designed one now.
+> **Version:** 0.79.0
 > **Last updated:** 2026-08-26
 > **Owner:** CTO / All engineering roles
 
@@ -266,6 +270,21 @@ staleness: `modules/README.md`'s own Authentication/Roles & Permissions/Trading 
 `pos/specification.md §1`. Two other hits checked and confirmed still accurate, left unchanged. No
 code change.
 
+**Sprint 75 — the largest gap this whole run of audits found.** Starting from one specific claim in
+`input-validation.md` ("mobile validation via Dart types generated from `openapi.yaml`"), found that
+the entire OpenAPI-driven contract-generation mechanism `shared-contracts.md` designs — the actual
+way this project intended to keep `apps/web` and `apps/mobile` type-consistent — was fully designed
+at Phase 08 and never built at all, across 74+ sprints and roughly 35 real API endpoints.
+`packages/contracts/` holds only a stub `package.json`; `docs/11-api/openapi.yaml` has been stale
+since Sprint 01 (12 documented paths against ~35 real ones); `implementation-log.md` mentions
+`packages/contracts` exactly once, in Sprint 01's own scaffold entry, never again — this was never a
+documented pivot, simply never revisited. Named what actually happened instead (hand-written
+Zod/Dart per module, kept consistent by this project's own established cross-referencing discipline)
+and made the explicit judgment call not to build the originally-designed mechanism now, given the
+scale of already-working, already-verified production code it would mean migrating — the same
+"premature generality" reasoning this project applied before to Play Console distribution (Sprint
+61). Corrected the same false-as-fact claim across four documents. No code change.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -348,3 +367,4 @@ code change.
 | 0.76.0 | 2026-08-26 | Sprint 72 (real fix, migration `20260825183908_add_products_trgm_search_index`): built `pg_trgm` trigram GIN indexes on `products.name`/`sku`, the real fix for the text-search gap Sprint 70 correctly re-scoped rather than built with the wrong tool. Hand-edited SQL, matching the `trading_days_one_open_per_store` convention. No application-code change. `lint`/`typecheck`/`test` (227/227) verified clean; `fast-integration` verified in CI. Only `hsn_sac_code_at_sale` remains from Sprint 69's original findings. |
 | 0.77.0 | 2026-08-26 | Sprint 73 (real fix, migration `20260825185330_add_sale_line_item_hsn_sac_code_snapshot`): built `sale_line_items.hsn_sac_code_at_sale`, the last item from Sprint 69's audit. `pos/service.ts#createSale` snapshots `product.hsnSacCode` at sale-creation time. `formatSale` exposes it additively, all consumers unaffected. `lint`/`typecheck`/`test` (229/229, 2 new) verified clean; `fast-integration` verified in CI. Every real, buildable finding from Sprint 69's audit is now closed. |
 | 0.78.0 | 2026-08-26 | Sprint 74 (module-registry staleness audit, no code change): `authentication/specification.md` unchanged since Sprint 06 despite Sprints 23/55/56 building nearly everything it still described as unbuilt — corrected across all 11 sections, narrowed to the one genuinely remaining gap (device-list/revocation UI screen, confirmed unbuilt by direct grep). Also corrected `modules/README.md`'s Authentication/Roles & Permissions/Trading Day rows, `sync-engine/specification.md`'s Sprint 36 Reports note, and a second stale claim in `pos/specification.md §1`. |
+| 0.79.0 | 2026-08-26 | Sprint 75 (security-docs staleness audit extended to Phase 08, no code change): found the OpenAPI-driven client/server contract-generation mechanism `shared-contracts.md` designs was never built across 74+ sprints and ~35 real endpoints — `packages/contracts/` holds only a stub, `docs/11-api/openapi.yaml` stale since Sprint 01, never documented as a decision. Named the real mechanism in use (hand-written Zod/Dart, cross-referencing discipline) and the explicit call not to build the designed mechanism now. Corrected `input-validation.md` (§1/§3/§4), `mobile-structure.md`, `monorepo-layout.md`. |

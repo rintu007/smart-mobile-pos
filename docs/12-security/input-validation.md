@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 12 — Security Design
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-30
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-26
 > **Owner:** Security Engineer / CTO
 > **Approved by:** _pending_
 
@@ -18,11 +18,15 @@ Every Route Handler validates its request body against that module's Zod schema
 ([backend-structure.md](../08-folder-structure/backend-structure.md)'s `schema.ts`) **before**
 calling the service layer — per that document's layering rule, a Route Handler that lets malformed
 data reach `service.ts` is a layering violation, not just a validation gap. The mobile client
-performs the same validation locally (via the equivalent Dart types generated from
-[openapi.yaml](../11-api/openapi.yaml), per [shared-contracts.md](../08-folder-structure/shared-contracts.md))
-so a Cashier sees a validation problem immediately, offline, rather than discovering it only at
-sync time — but the server-side check is authoritative and never skipped on the assumption the
-client already validated, per this phase's fail-closed rule.
+performs the same validation locally — **correction (Sprint 75): not via generated Dart types**, as
+originally written here. [shared-contracts.md](../08-folder-structure/shared-contracts.md)'s own
+OpenAPI-codegen mechanism was designed but never implemented (see that document's own §0); mobile
+validation is hand-written Dart, kept consistent with the server's Zod rules by this project's own
+established cross-referencing discipline rather than shared codegen. The practical guarantee this
+paragraph cares about — a Cashier sees a validation problem immediately, offline, rather than
+discovering it only at sync time — still holds; only the mechanism achieving it was misdescribed.
+The server-side check is authoritative and never skipped on the assumption the client already
+validated, per this phase's fail-closed rule — this part was never in question.
 
 ## 2. Reject, never silently coerce
 
@@ -36,21 +40,26 @@ the Cashier needed to see and correct, not have quietly absorbed.
 
 Every database query goes through Prisma ([backend-structure.md](../08-folder-structure/backend-structure.md)'s
 repository layer), which parameterises queries by construction — there is no code path that builds
-a SQL string by concatenating user input. Raw SQL (`$queryRawUnsafe` or equivalent) is a banned
-pattern enforced by a lint rule in CI, the same enforcement style already used for the import-
-boundary rules in [layering-rules.md](../08-folder-structure/layering-rules.md) — this is treated as
-a structural guarantee the codebase's shape provides, not a review checklist item that depends on
-every future contributor remembering it.
+a SQL string by concatenating user input, confirmed by grep: zero uses of `$queryRawUnsafe` or
+equivalent anywhere in `apps/web/src`. **Correction (Sprint 75):** no lint rule actually enforces
+this — checked directly against `apps/web/eslint.config.mjs`, no such rule exists, the same "never
+actually built" status `layering-rules.md`'s own Dart import-boundary rule and `ci-workflows.md`'s
+own `import-boundaries` CI job already admit for themselves. The guarantee holds today because
+nobody has written the pattern, not because tooling would catch it if someone did — a discipline
+dependency this section originally claimed didn't exist.
 
-## 4. What the shared OpenAPI schema buys specifically
+## 4. What the shared OpenAPI schema was supposed to buy — corrected, Sprint 75
 
-[openapi.yaml](../11-api/openapi.yaml) is the single source both the Zod schemas (server) and the
-generated Dart types (client) are ultimately kept consistent with, per
+This section originally described [openapi.yaml](../11-api/openapi.yaml) as the single source both
+the Zod schemas (server) and generated Dart types (client) are kept consistent with, per
 [shared-contracts.md](../08-folder-structure/shared-contracts.md)'s "generated, not committed"
-decision. This means a validation rule (e.g. `quantity` must be a positive decimal string) is
-authored once, in one place, rather than risking the client and server's validation logic silently
-drifting apart — a drift that would otherwise let a request the client considers valid arrive at a
-server that disagrees, or vice versa, for no reason traceable to an actual business-rule change.
+decision — a real design, never built (see that document's own §0). `openapi.yaml` itself has been
+stale since Sprint 01 and does not describe the real API. In practice, a validation rule (e.g.
+`quantity` must be a positive decimal string) is authored independently in each language's own
+hand-written code, not once in a shared spec — the risk this section originally named (client and
+server validation logic silently drifting apart) is real and structurally unmitigated today, not
+closed the way this section previously claimed. Named honestly here rather than left implying a
+protection that doesn't exist.
 
 ## 5. File uploads — path traversal is structurally avoided, not filtered
 
@@ -73,3 +82,4 @@ so no exception exists yet.
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Validation boundary and reject-not-coerce policy stated; SQL injection, path traversal, and XSS each closed structurally rather than by review discipline alone. |
+| 0.2.0 | 2026-08-26 | Sprint 75: corrected §1 and §4, which both described the OpenAPI-generated-Dart-types mechanism as real and operative — it was designed (`shared-contracts.md`) but never built, found and named there in the same pass. §4's specific claim (validation rules authored once, drift structurally prevented) is now known to be false in practice — the risk it described as closed is real and open, named honestly rather than left implying a protection that doesn't exist. Also corrected §3: no CI lint rule actually bans raw SQL (`$queryRawUnsafe`), confirmed against `eslint.config.mjs` directly — the guarantee holds today only because nobody has written the pattern, the same "designed, never built" status this project's own Dart import-boundary lint rule and `import-boundaries` CI job already admit for themselves. |
