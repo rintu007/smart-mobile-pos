@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 08 — Folder Structure
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-30
+> **Version:** 0.1.1
+> **Last updated:** 2026-08-26
 > **Owner:** Chief Software Architect
 > **Approved by:** _pending_
 
@@ -55,10 +55,12 @@ internal package emerges (unlikely before V4).
 
 ## 3. `packages/contracts`
 
-The one shared package, holding the OpenAPI specification and its generated TypeScript and Dart
-output — full detail in [shared-contracts.md](shared-contracts.md). It has no business logic; it
-exists solely so both `apps/mobile` and `apps/web` depend on **one** definition of the API shape,
-never on each other.
+The one shared package, **designed** to hold the OpenAPI specification and its generated TypeScript
+and Dart output — full detail, including a Sprint 75 correction naming what actually exists there
+today (a stub `package.json` only), in [shared-contracts.md](shared-contracts.md) §0.
+It has no business logic; it exists solely so both `apps/mobile` and `apps/web` would depend on
+**one** definition of the API shape, never on each other — the intent behind the design, not yet
+the reality.
 
 ## 4. Why not a shared `packages/ui` or `packages/utils`?
 
@@ -83,3 +85,4 @@ Full detail in their own documents — this is the map, not the territory:
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial monorepo layout: pnpm workspaces for TS side, single-package Flutter app, one shared contracts package. |
+| 0.1.1 | 2026-08-26 | Sprint 75: §3's `packages/contracts` description reworded from a bare factual claim to "designed" — the OpenAPI codegen mechanism it describes was never built (`shared-contracts.md §0`); the package holds only a stub `package.json` today. |

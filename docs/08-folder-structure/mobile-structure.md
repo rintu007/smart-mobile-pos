@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 08 — Folder Structure
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-30
+> **Version:** 0.1.1
+> **Last updated:** 2026-08-26
 > **Owner:** Principal Flutter Engineer
 > **Approved by:** _pending_
 
@@ -32,7 +32,8 @@ apps/mobile/lib/
 │   └── providers.dart        # Riverpod root providers (DI wiring)
 ├── core/                     # Cross-cutting primitives — see §3
 │   ├── database/             # Drift setup, schema, migrations (schema-local.md)
-│   ├── network/              # Dio client, interceptors, API contract types (from packages/contracts)
+│   ├── network/              # Dio client, interceptors, hand-written API contract types (not
+│   │                         #   generated — shared-contracts.md's own §0 corrects this, Sprint 75)
 │   ├── sync/                 # Offline sync engine — cross-cutting, not a feature (Phase 13)
 │   ├── money/                # Money value type (ADR-0006) and its arithmetic
 │   ├── auth/                 # Session/token primitives shared by every feature's data layer
@@ -119,3 +120,4 @@ V1's scale. Stated explicitly here so it isn't mistaken for a violation later.
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial feature-first structure: 11 feature folders, per-feature 3-layer anatomy, module mapping. |
+| 0.1.1 | 2026-08-26 | Sprint 75: corrected `core/network/`'s folder-tree comment, which said API contract types come "from packages/contracts" — that generation mechanism was designed but never built (`shared-contracts.md §0`); the real folder holds hand-written types, confirmed by direct inspection (`api_client.dart`, `device_registration_api.dart`, no generated subdirectory). |

@@ -2,8 +2,8 @@
 
 > **Status:** 🔵 In review
 > **Phase:** 08 — Folder Structure
-> **Version:** 0.1.0
-> **Last updated:** 2026-07-30
+> **Version:** 0.2.0
+> **Last updated:** 2026-08-26
 > **Owner:** Chief Software Architect
 > **Approved by:** _pending_
 
@@ -11,6 +11,49 @@ Dart and TypeScript share no type system — there is no way for `apps/mobile` t
 from `apps/web` directly. This document decides the mechanism that keeps them consistent anyway,
 satisfying this phase's exit criterion that the mechanism is decided **and its generation step is
 automated** — not left as a discipline of two engineers remembering to update both sides by hand.
+
+---
+
+## 0. Correction (2026-08-26) — this mechanism was fully designed, never implemented
+
+**This is a real, load-bearing finding, not a small drift.** §§1–4 below describe a real design,
+correctly decided at Phase 08 and never wrong *as a design* — but 74+ sprints of implementation
+since (Sprint 01 through the present) never built it. Checked directly, not assumed:
+
+- `packages/contracts/` contains only a `package.json` (with a `generate:ts` script that has never
+  been run in anger — its own `openapi-typescript` target points at `docs/11-api/openapi.yaml`, not
+  `packages/contracts/openapi.yaml` as this document's own §1 specifies) and `node_modules`. No
+  `openapi.yaml` inside `packages/contracts/` itself, no `generate.ts` orchestrator, no `generated/`
+  directory of any kind, no Dart generation of any kind — not even a chosen tool, despite this
+  document's own §3 flagging tool selection as something to "confirm... at Phase 18," which has now
+  been underway for 74+ sprints.
+- The root `package.json` has no `generate:contracts` script. No CI job generates or checks
+  contracts. `apps/web/package.json` doesn't even list `@smart-pos/contracts` as a dependency, and
+  neither `apps/web/src` nor `apps/mobile/lib` imports from it anywhere (`grep`-confirmed).
+- `docs/11-api/openapi.yaml` — the document this whole mechanism is supposed to be authored
+  against — was itself last touched in Sprint 01 (`git log`-confirmed) and documents 12 paths,
+  against roughly 35 real routes that exist in `apps/web/src/app/api/v1/` today. It has not
+  described the real API's actual shape for the overwhelming majority of this project's history.
+
+**What actually happened instead, and has worked for 74+ sprints:** every module hand-writes its
+own Zod schema (`modules/<name>/schema.ts`, server-side) and the mobile client hand-writes its own
+Dio-based API client code (`core/network/*.dart`) and Freezed/Drift models — matching, not
+generating from, each other. Consistency between the two is kept by this project's own established
+cross-referencing discipline, not automated codegen: sprint docs and module specs routinely state
+things like "matches schema-server.md's own documented column exactly" or "the same shape the server
+already returns" as an explicit, checked claim, the same discipline this entire run of sprints
+(Sprints 50–61, 66–75) has repeatedly used to catch drift *between documentation and code* — applied
+here, informally, *between the two client implementations themselves*, sprint over sprint, without
+ever being named as the actual mechanism in place of the one this document specifies.
+
+**This was never a documented pivot — no sprint doc, ADR, or Change Log entry anywhere in this
+project ever states "we are not building OpenAPI codegen, here is what we do instead."** It reads as
+a decision that was simply never revisited once Phase 08 finished, the same class of silent
+abandonment Sprint 74 already found once in `authentication/specification.md`, here applied to a
+foundational cross-cutting mechanism rather than a single module. Not fixed in this pass — see the
+Retrospective in [sprint-75.md](../../17-sprints/sprint-75.md) for why building the designed
+mechanism now, 74 sprints and roughly 35 endpoints into the project, is a much bigger and more
+consequential decision than correcting the record about it.
 
 ---
 
@@ -87,3 +130,4 @@ consumed by both languages' test suites), a Phase 14 concern, not a contract-gen
 | Version | Date | Change |
 | --- | --- | --- |
 | 0.1.0 | 2026-07-30 | Initial mechanism: OpenAPI as source of truth, generated-not-committed output, orchestration script. Codegen tool names flagged for verification at Phase 18. |
+| 0.2.0 | 2026-08-26 | Sprint 75 (security-docs staleness audit, extended to Phase 08): found this entire mechanism was designed and never built, unrevisited for 74+ sprints — `packages/contracts/` holds only a stub `package.json`, no `openapi.yaml`, no orchestrator, no Dart generation, no CI wiring; `docs/11-api/openapi.yaml` itself has been stale since Sprint 01, documenting 12 of roughly 35 real routes. Added §0 naming what actually happened instead (hand-written Zod/Dart, kept consistent by this project's own established cross-referencing discipline) and why this pass corrects the record rather than builds the designed mechanism now. |
