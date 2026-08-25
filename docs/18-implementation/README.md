@@ -44,8 +44,10 @@
 > `products(tenant_id, category_id)`), via migration `20260825175448_add_missing_indexes`. Sprint 71
 > triaged `dependabot.yml`'s first weekly scan since Sprint 65 (7 new PRs) — 5 merged clean, 2 left
 > open on confirmed genuine upstream blockers (`typescript` 7.0 needs `@typescript-eslint` support;
-> `eslint` 10.9.0 breaks `eslint-plugin-react`'s rule-context API).
-> **Version:** 0.75.0
+> `eslint` 10.9.0 breaks `eslint-plugin-react`'s rule-context API). Sprint 72 then built the `pg_trgm`
+> trigram GIN indexes on `products.name`/`sku` Sprint 70 had correctly re-scoped rather than build
+> with the wrong tool — the last real gap from Sprint 69's audit besides `hsn_sac_code_at_sale`.
+> **Version:** 0.76.0
 > **Last updated:** 2026-08-26
 > **Owner:** CTO / All engineering roles
 
@@ -226,6 +228,15 @@ build tooling). 2 hit genuine upstream compatibility gaps, confirmed from their 
 Both left open — neither is fixable from this repository's own configuration, only by the upstream
 package catching up.
 
+**Sprint 72 — the real fix Sprint 70 correctly deferred.** Built `pg_trgm` trigram GIN indexes on
+`products.name`/`sku`, migration `20260825183908_add_products_trgm_search_index` — a hand-edited
+SQL-only migration (Prisma's schema DSL has no operator-class syntax), matching the
+`trading_days_one_open_per_store` convention already established for this exact situation. No
+application-code change: `listProducts`'s existing `contains`/`insensitive` filter already produces
+the pattern these indexes accelerate. Verified via CI's `fast-integration`, confirming `pg_trgm` is
+actually available in the standard `postgres:15` image. Only `sale_line_items.hsn_sac_code_at_sale`
+remains from Sprint 69's original four-index-plus-one-column finding list.
+
 ## Change Log
 
 | Version | Date | Change |
@@ -305,3 +316,4 @@ package catching up.
 | 0.73.0 | 2026-08-25 | Sprint 69 (Phase 07 documentation audit, no code change): re-audited `docs/07-database/schema-server.md` against the live schema — the first such reconciliation since it was written. Corrected a false `device_id` column/scoping narrative on `stock_movements`/`trading_days`/`sales` (real Sprint 26 deviation, already reasoned in `trading-day/specification.md`, never carried back here) and a false `client_operation_id` column on `stock_movements`/`sales`/`returns`. Added 3 real built tables never in the original design (`invoice_sequences`, `customer_field_conflicts`, `rate_limit_buckets`); table count corrected 22→25. Fixed five smaller column/type drifts. Named, not fixed: 4 real unindexed live query paths and 1 undbuilt column, confirmed against actual repository code, left for a dedicated follow-up sprint. |
 | 0.74.0 | 2026-08-26 | Sprint 70 (real fix, migration `20260825175448_add_missing_indexes`): re-verified Sprint 69's 4 named index findings against live query code before building anything. Found `sale_line_items(product_id)` was itself a mistake (FR-073 is fully offline, no server query exists). Built the 2 real ones: `sales(tenant_id, customer_id, completed_at)`, `products(tenant_id, category_id)`. Found the `products` text-search index needs `pg_trgm`, not the originally-documented plain B-tree form — re-scoped as separate follow-up work. `lint`/`typecheck`/`test` (227/227)/`build` verified clean locally; `fast-integration` verified in CI. `hsn_sac_code_at_sale` remains open for a dedicated sprint. |
 | 0.75.0 | 2026-08-26 | Sprint 71 (routine Dependabot triage, not milestone work): triaged 7 new PRs from `dependabot.yml`'s first weekly scan since Sprint 65. Merged 5 clean (`@supabase/ssr`, `next` 16, mobile build tooling, `zod` 4, `sqlite3` patch). Left 2 open with confirmed genuine upstream blockers: `typescript` 7.0 (`@typescript-eslint` support pending) and `eslint` 10.9.0 (`eslint-plugin-react` breaks on its rule-context API). No workaround attempted for either. |
+| 0.76.0 | 2026-08-26 | Sprint 72 (real fix, migration `20260825183908_add_products_trgm_search_index`): built `pg_trgm` trigram GIN indexes on `products.name`/`sku`, the real fix for the text-search gap Sprint 70 correctly re-scoped rather than built with the wrong tool. Hand-edited SQL, matching the `trading_days_one_open_per_store` convention. No application-code change. `lint`/`typecheck`/`test` (227/227) verified clean; `fast-integration` verified in CI. Only `hsn_sac_code_at_sale` remains from Sprint 69's original findings. |
